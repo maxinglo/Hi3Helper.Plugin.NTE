@@ -73,7 +73,11 @@ internal partial class WuwaGameManager : GameManagerBase
     {
         get
         {
+#if !USELIGHTWEIGHTJSONPARSER
             string? version = CurrentGameConfigNode.GetConfigValue<string?>("version");
+#else
+            string? version = CurrentGameConfigNode["version"]?.GetValue<string>();
+#endif
             if (version == null) return GameVersion.Empty;
 
             if (!GameVersion.TryParse(version, null, out GameVersion currentGameVersion))
@@ -81,7 +85,14 @@ internal partial class WuwaGameManager : GameManagerBase
 
             return currentGameVersion;
         }
-        set => CurrentGameConfigNode.SetConfigValue("version", value.ToString());
+        set
+        {
+#if !USELIGHTWEIGHTJSONPARSER
+            CurrentGameConfigNode.SetConfigValue("version", value.ToString());
+#else
+            CurrentGameConfigNode["version"] = value.ToString();
+#endif
+        }
     }
 
     protected override GameVersion ApiGameVersion
@@ -338,11 +349,7 @@ internal partial class WuwaGameManager : GameManagerBase
             try
             {
                 using FileStream fileStream = fileInfo.OpenRead();
-#if USELIGHTWEIGHTJSONPARSER
-            CurrentGameConfig = WuwaGameLauncherConfig.ParseFrom(fileStream);
-#else
             CurrentGameConfigNode = JsonNode.Parse(fileStream) as JsonObject ?? new JsonObject();
-#endif
                 SharedStatic.InstanceLogger.LogTrace(
                     "[WuwaGameManager::LoadConfig] Loaded app-game-config.json from directory: {Dir}",
                     CurrentGameInstallPath);

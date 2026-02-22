@@ -63,6 +63,7 @@ internal partial class WuwaGlobalLauncherApiNews(string apiResponseBaseUrl, stri
                         "information",
                         "en.json");
 
+#if !USELIGHTWEIGHTJSONPARSER
         ApiResponseSocialMedia = await ApiResponseHttpClient
                .GetApiResponseFromJsonAsync(
                         requestSocialUrl,
@@ -74,6 +75,19 @@ internal partial class WuwaGlobalLauncherApiNews(string apiResponseBaseUrl, stri
                         requestNewsUrl,
                         WuwaApiResponseContext.Default.WuwaApiResponseNews,
                         token);
+#else
+        await using var socialStream = await ApiResponseHttpClient.GetStreamAsync(requestSocialUrl, token);
+        ApiResponseSocialMedia = await System.Text.Json.JsonSerializer.DeserializeAsync(
+                        socialStream,
+                        WuwaApiResponseContext.Default.WuwaApiResponseSocial,
+                        token);
+
+        await using var newsStream = await ApiResponseHttpClient.GetStreamAsync(requestNewsUrl, token);
+        ApiResponseNewsAndCarousel = await System.Text.Json.JsonSerializer.DeserializeAsync(
+                        newsStream,
+                        WuwaApiResponseContext.Default.WuwaApiResponseNews,
+                        token);
+#endif
 
         return 0;
     }

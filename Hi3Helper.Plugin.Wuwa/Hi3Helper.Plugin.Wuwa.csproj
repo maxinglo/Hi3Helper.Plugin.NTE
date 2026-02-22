@@ -20,8 +20,18 @@
 		<Copyright>Copyright 2022-2025 $(Company)</Copyright>
 		<Version>0.5.2</Version>
 		<ApplicationIcon>icon.ico</ApplicationIcon>
-        <Configurations>Debug;Release</Configurations>
+        <Configurations>Debug;Release;DebugNoReflection;ReleaseNoReflection</Configurations>
     </PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)'=='DebugNoReflection'">
+		<DefineConstants>$(DefineConstants);DEBUG;USELIGHTWEIGHTJSONPARSER</DefineConstants>
+		<Optimize>false</Optimize>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)'=='ReleaseNoReflection'">
+		<DefineConstants>$(DefineConstants);USELIGHTWEIGHTJSONPARSER</DefineConstants>
+		<Optimize>true</Optimize>
+	</PropertyGroup>
 
 	<ItemGroup>
 		<ProjectReference Include="..\Hi3Helper.Plugin.Core\Hi3Helper.Plugin.Core.csproj" />

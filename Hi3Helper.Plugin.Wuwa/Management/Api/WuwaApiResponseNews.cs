@@ -1,4 +1,6 @@
-﻿using Hi3Helper.Plugin.Core.Utility.Json.Converters;
+﻿#if !USELIGHTWEIGHTJSONPARSER
+using Hi3Helper.Plugin.Core.Utility.Json.Converters;
+#endif
 using System.Text.Json.Serialization;
 // ReSharper disable IdentifierTypo
 
@@ -52,7 +54,9 @@ public class WuwaApiResponseCarouselEntry
     public string? ClickUrl { get; set; }
 
     [JsonPropertyName("md5")]
+#if !USELIGHTWEIGHTJSONPARSER
     [JsonConverter(typeof(HexStringToArrayJsonConverter<byte>))]
+#endif
     public byte[] ImageHashMd5 { get; set; } = [];
 
     public string? Description  { get; set; }

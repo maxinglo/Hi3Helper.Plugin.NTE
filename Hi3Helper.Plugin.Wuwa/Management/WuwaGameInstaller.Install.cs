@@ -185,7 +185,7 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                 installProgress.TotalStateToComplete = totalCountToDownload;
                 installProgress.DownloadedCount = alreadyDownloadedCount;
                 installProgress.TotalCountToDownload = totalCountToDownload;
-                installProgress.DownloadedBytes = await _owner.CalculateDownloadedBytesAsync(token).ConfigureAwait(false);
+                installProgress.DownloadedBytes = 0;
                 installProgress.TotalBytesToDownload = totalBytesToDownload;
 
                 int lastLoggedDownloadedCount = -1;

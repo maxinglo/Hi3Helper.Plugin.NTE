@@ -1,5 +1,5 @@
 using Hi3Helper.Plugin.Core.Management;
-using Hi3Helper.Plugin.Core.Utility.Json.Converters;
+using Hi3Helper.Plugin.Wuwa.Utils;
 using System.Text.Json.Serialization;
 // ReSharper disable InconsistentNaming
 // ReSharper disable IdentifierTypo
@@ -12,7 +12,7 @@ public class WuwaApiResponseGameConfigRef
     public string? IndexFile { get; set; }
 
     [JsonPropertyName("version")] // Mapping: root -> default -> config -> version
-    [JsonConverter(typeof(Utf8SpanParsableJsonConverter<GameVersion>))]
+    [JsonConverter(typeof(GameVersionJsonConverter))]
     public GameVersion CurrentVersion { get; set; }
 
     [JsonPropertyName("patchType")] // Mapping: root -> default -> config -> patchType
