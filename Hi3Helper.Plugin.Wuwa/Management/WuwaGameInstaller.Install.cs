@@ -98,6 +98,17 @@ namespace Hi3Helper.Plugin.Wuwa.Management
     #if DEBUG
                 SharedStatic.InstanceLogger.LogDebug("[WuwaGameInstaller::StartInstallCoreAsync] Computed total file count from index: {TotalCount}", allTargets.Count);
     #endif
+                // Deduplicate by relative path (case-insensitive on Windows) to prevent parallel tasks from writing the same .tmp file
+                {
+                    var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    int beforeDedup = allTargets.Count;
+                    allTargets.RemoveAll(kv => !seen.Add(kv.Key));
+                    if (allTargets.Count < beforeDedup)
+                    {
+                        SharedStatic.InstanceLogger.LogWarning("[WuwaGameInstaller::StartInstallCoreAsync] Removed {Removed} duplicate entries from index (before={Before}, after={After})", beforeDedup - allTargets.Count, beforeDedup, allTargets.Count);
+                    }
+                }
+
                 // If this is an update, filter targets to only those that changed (MD5 mismatch or size mismatch or missing)
                 var downloadList = new List<KeyValuePair<string, WuwaApiResponseResourceEntry>>(allTargets.Count);
                 int alreadyDownloadedCount = 0;
@@ -237,14 +248,7 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                 void DownloadBytesCallback(long delta)
                 {
                     if (delta == 0) return;
-                    long current = Interlocked.Add(ref installProgress.DownloadedBytes, delta);
-                    long total = Interlocked.Read(ref installProgress.TotalBytesToDownload);
-                    if (current > total)
-                    {
-                        SharedStatic.InstanceLogger.LogError(
-                            "[BUG] DownloadedBytes ({Current}) exceeded TotalBytesToDownload ({Total}) by {Excess}",
-                            current, total, current - total);
-                    }
+                    Interlocked.Add(ref installProgress.DownloadedBytes, delta);
                     ReportProgress(InstallProgressState.Download);
                 }
 
@@ -281,6 +285,31 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                             }
                         }
                         catch { /* ignore, re-download */ }
+                    }
+
+                    // Check for a .tmp from a previous session that is already fully downloaded.
+                    // This avoids a wasted Range request → 416 → full re-download cycle.
+                    string pendingTmpPath = outputPath + ".tmp";
+                    if (entry.Size > 0 && File.Exists(pendingTmpPath))
+                    {
+                        try
+                        {
+                            var tmpFi = new FileInfo(pendingTmpPath);
+                            if (tmpFi.Length == (long)entry.Size)
+                            {
+                                // Tmp is already complete — promote it directly
+                                if (File.Exists(outputPath))
+                                    File.Delete(outputPath);
+                                File.Move(pendingTmpPath, outputPath);
+                                SharedStatic.InstanceLogger.LogDebug("[WuwaGameInstaller::StartInstallCoreAsync] Reused complete .tmp from previous session: {Path} ({Size} bytes)", outputPath, tmpFi.Length);
+                                Interlocked.Add(ref installProgress.DownloadedBytes, tmpFi.Length);
+                                Interlocked.Increment(ref installProgress.StateCount);
+                                Interlocked.Increment(ref installProgress.DownloadedCount);
+                                ReportProgress(InstallProgressState.Download);
+                                return;
+                            }
+                        }
+                        catch { /* ignore, fall through to normal download */ }
                     }
 
                     // Build original file URI
@@ -606,9 +635,9 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                     await DownloadWholeFileAsync(originalUri, outputPath, token, progressCallback).ConfigureAwait(false);
                     return;
                 }
-                catch (HttpRequestException hre)
+                catch (Exception ex) when (ex is HttpRequestException or IOException)
                 {
-                    SharedStatic.InstanceLogger.LogWarning("[WuwaGameInstaller::TryDownloadWholeFileWithFallbacksAsync] Primary download failed: {Uri}. Reason: {Msg}", originalUri, hre.Message);
+                    SharedStatic.InstanceLogger.LogWarning("[WuwaGameInstaller::TryDownloadWholeFileWithFallbacksAsync] Primary download failed: {Uri}. Reason: {Msg}", originalUri, ex.Message);
                     // fall through to fallback attempts
                 }
 
@@ -625,9 +654,9 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                     await DownloadWholeFileAsync(fallbackUri, outputPath, token, progressCallback).ConfigureAwait(false);
                     return;
                 }
-                catch (HttpRequestException hre)
+                catch (Exception ex) when (ex is HttpRequestException or IOException)
                 {
-                    SharedStatic.InstanceLogger.LogWarning("[WuwaGameInstaller::TryDownloadWholeFileWithFallbacksAsync] Encoded concatenation fallback failed: {Msg}", hre.Message);
+                    SharedStatic.InstanceLogger.LogWarning("[WuwaGameInstaller::TryDownloadWholeFileWithFallbacksAsync] Encoded concatenation fallback failed: {Msg}", ex.Message);
                 }
 
                 // Fallback 2: try using a simple concatenation (encoded)
@@ -644,9 +673,9 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                     await DownloadWholeFileAsync(fallbackUri2, outputPath, token, progressCallback).ConfigureAwait(false);
                     return;
                 }
-                catch (HttpRequestException hre)
+                catch (Exception ex) when (ex is HttpRequestException or IOException)
                 {
-                    SharedStatic.InstanceLogger.LogWarning("[WuwaGameInstaller::TryDownloadWholeFileWithFallbacksAsync] Authority+dir fallback failed: {Msg}", hre.Message);
+                    SharedStatic.InstanceLogger.LogWarning("[WuwaGameInstaller::TryDownloadWholeFileWithFallbacksAsync] Authority+dir fallback failed: {Msg}", ex.Message);
                 }
 
                 // No more fallbacks
@@ -661,9 +690,9 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                     await DownloadChunkedFileAsync(originalUri, outputPath, chunkInfos, token, progressCallback).ConfigureAwait(false);
                     return;
                 }
-                catch (HttpRequestException hre)
+                catch (Exception ex) when (ex is HttpRequestException or IOException)
                 {
-                    SharedStatic.InstanceLogger.LogWarning("[WuwaGameInstaller::TryDownloadChunkedFileWithFallbacksAsync] Primary chunked download failed: {Uri}. Reason: {Msg}", originalUri, hre.Message);
+                    SharedStatic.InstanceLogger.LogWarning("[WuwaGameInstaller::TryDownloadChunkedFileWithFallbacksAsync] Primary chunked download failed: {Uri}. Reason: {Msg}", originalUri, ex.Message);
                     // fall through to fallback attempts
                 }
 
@@ -680,9 +709,9 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                     await DownloadChunkedFileAsync(fallbackUri, outputPath, chunkInfos, token, progressCallback).ConfigureAwait(false);
                     return;
                 }
-                catch (HttpRequestException hre)
+                catch (Exception ex) when (ex is HttpRequestException or IOException)
                 {
-                    SharedStatic.InstanceLogger.LogWarning("[WuwaGameInstaller::TryDownloadChunkedFileWithFallbacksAsync] Encoded concatenation fallback failed: {Msg}", hre.Message);
+                    SharedStatic.InstanceLogger.LogWarning("[WuwaGameInstaller::TryDownloadChunkedFileWithFallbacksAsync] Encoded concatenation fallback failed: {Msg}", ex.Message);
                 }
 
                 // Fallback 2: authority+dir + encoded path
@@ -699,9 +728,9 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                     await DownloadChunkedFileAsync(fallbackUri2, outputPath, chunkInfos, token, progressCallback).ConfigureAwait(false);
                     return;
                 }
-                catch (HttpRequestException hre)
+                catch (Exception ex) when (ex is HttpRequestException or IOException)
                 {
-                    SharedStatic.InstanceLogger.LogWarning("[WuwaGameInstaller::TryDownloadChunkedFileWithFallbacksAsync] Authority+dir fallback failed: {Msg}", hre.Message);
+                    SharedStatic.InstanceLogger.LogWarning("[WuwaGameInstaller::TryDownloadChunkedFileWithFallbacksAsync] Authority+dir fallback failed: {Msg}", ex.Message);
                 }
 
                 throw new HttpRequestException($"All chunked download attempts failed for: {rawDest}");
@@ -728,60 +757,89 @@ namespace Hi3Helper.Plugin.Wuwa.Management
 
                 SharedStatic.InstanceLogger.LogTrace("[WuwaGameInstaller::DownloadWholeFileAsync] Downloading {Uri} -> {Temp} (resume from {Existing} bytes)", uri, tempPath, existingLength);
 
-                var request = new HttpRequestMessage(HttpMethod.Get, uri);
-                if (existingLength > 0)
-                {
-                    request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(existingLength, null);
-                }
-
-                using var resp = await _owner._downloadHttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
-
-                // If the server doesn't support range requests, or returns the full content, start over
-                bool resuming = existingLength > 0 && resp.StatusCode == System.Net.HttpStatusCode.PartialContent;
-                if (!resuming && existingLength > 0)
-                {
-                    SharedStatic.InstanceLogger.LogTrace("[WuwaGameInstaller::DownloadWholeFileAsync] Server returned {Status} instead of 206; restarting download from scratch", resp.StatusCode);
-                    existingLength = 0;
-                }
-
-                if (!resp.IsSuccessStatusCode && resp.StatusCode != System.Net.HttpStatusCode.PartialContent)
-                {
-                    string body = string.Empty;
-                    try { body = await resp.Content.ReadAsStringAsync(token).ConfigureAwait(false); }
-                    catch
-                    {
-                        // ignored
-                    }
-
-                    SharedStatic.InstanceLogger.LogError("[WuwaGameInstaller::DownloadWholeFileAsync] Failed GET {Uri}: {Status}. Body preview: {BodyPreview}", uri, resp.StatusCode, body.Length > 200 ? body[..200] + "..." : body);
-                    throw new HttpRequestException($"Failed to GET {uri} : {(int)resp.StatusCode} {resp.StatusCode}", null, resp.StatusCode);
-                }
-
-                await using Stream content = await resp.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
-
-                // Open in append mode when resuming, otherwise create/overwrite
-                FileMode fileMode = resuming ? FileMode.Append : FileMode.Create;
-                await using FileStream fs = new(tempPath, fileMode, FileAccess.Write, FileShare.None, 81920, FileOptions.SequentialScan);
-
-                // Report resumed bytes as already-downloaded progress
-                if (resuming)
-                {
-                    progressCallback?.Invoke(existingLength);
-                }
-
-                byte[] buffer = ArrayPool<byte>.Shared.Rent(81920);
+                HttpResponseMessage? resp = null;
+                bool resuming = false;
                 try
                 {
-                    int read;
-                    while ((read = await content.ReadAsync(buffer, 0, buffer.Length, token).ConfigureAwait(false)) > 0)
+                    // Send initial request (with Range header if resuming)
+                    var request = new HttpRequestMessage(HttpMethod.Get, uri);
+                    if (existingLength > 0)
                     {
-                        await fs.WriteAsync(buffer, 0, read, token).ConfigureAwait(false);
-                        progressCallback?.Invoke(read);
+                        request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(existingLength, null);
+                    }
+
+                    resp = await _owner._downloadHttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
+
+                    if (existingLength > 0)
+                    {
+                        if (resp.StatusCode == System.Net.HttpStatusCode.PartialContent)
+                        {
+                            resuming = true;
+                        }
+                        else if (resp.StatusCode == System.Net.HttpStatusCode.RequestedRangeNotSatisfiable)
+                        {
+                            // Existing .tmp is at or beyond the remote file size (already complete or stale).
+                            // Delete it and re-download from scratch with a fresh request.
+                            SharedStatic.InstanceLogger.LogDebug("[WuwaGameInstaller::DownloadWholeFileAsync] Server returned 416 for Range: bytes={Existing}-; deleting stale .tmp and re-downloading from scratch", existingLength);
+                            resp.Dispose();
+                            resp = null;
+                            try { File.Delete(tempPath); } catch { }
+                            existingLength = 0;
+
+                            var freshRequest = new HttpRequestMessage(HttpMethod.Get, uri);
+                            resp = await _owner._downloadHttpClient.SendAsync(freshRequest, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            // Server returned 200 (full content) or unexpected status; overwrite from scratch.
+                            SharedStatic.InstanceLogger.LogTrace("[WuwaGameInstaller::DownloadWholeFileAsync] Server returned {Status} instead of 206; restarting download from scratch", resp.StatusCode);
+                            existingLength = 0;
+                        }
+                    }
+
+                    if (!resp.IsSuccessStatusCode && resp.StatusCode != System.Net.HttpStatusCode.PartialContent)
+                    {
+                        string body = string.Empty;
+                        try { body = await resp.Content.ReadAsStringAsync(token).ConfigureAwait(false); }
+                        catch
+                        {
+                            // ignored
+                        }
+
+                        SharedStatic.InstanceLogger.LogError("[WuwaGameInstaller::DownloadWholeFileAsync] Failed GET {Uri}: {Status}. Body preview: {BodyPreview}", uri, resp.StatusCode, body.Length > 200 ? body[..200] + "..." : body);
+                        throw new HttpRequestException($"Failed to GET {uri} : {(int)resp.StatusCode} {resp.StatusCode}", null, resp.StatusCode);
+                    }
+
+                    await using Stream content = await resp.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
+
+                    // Open in append mode when resuming, otherwise create/overwrite
+                    FileMode fileMode = resuming ? FileMode.Append : FileMode.Create;
+                    await using FileStream fs = new(tempPath, fileMode, FileAccess.Write, FileShare.None, 81920, FileOptions.SequentialScan);
+
+                    // Report resumed bytes as already-downloaded progress
+                    if (resuming)
+                    {
+                        progressCallback?.Invoke(existingLength);
+                    }
+
+                    byte[] buffer = ArrayPool<byte>.Shared.Rent(81920);
+                    try
+                    {
+                        int read;
+                        while ((read = await content.ReadAsync(buffer, 0, buffer.Length, token).ConfigureAwait(false)) > 0)
+                        {
+                            await fs.WriteAsync(buffer, 0, read, token).ConfigureAwait(false);
+                            progressCallback?.Invoke(read);
+                        }
+                    }
+                    finally
+                    {
+                        ArrayPool<byte>.Shared.Return(buffer);
                     }
                 }
                 finally
                 {
-                    ArrayPool<byte>.Shared.Return(buffer);
+                    resp?.Dispose();
                 }
 
                 // replace
