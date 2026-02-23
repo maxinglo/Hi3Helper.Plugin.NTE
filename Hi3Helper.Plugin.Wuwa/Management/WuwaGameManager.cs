@@ -132,8 +132,58 @@ internal partial class WuwaGameManager : GameManagerBase
      */
 	//protected override bool HasPreload => ApiPreloadGameVersion != GameVersion.Empty && !HasUpdate;
 	//protected override bool HasUpdate => IsInstalled && ApiGameVersion != CurrentGameVersion;
-	protected override bool HasPreload => false;
-    protected override bool HasUpdate => false;
+
+    private bool? _lastHasUpdate;
+    private bool? _lastHasPreload;
+
+	protected override bool HasPreload
+    {
+        get
+        {
+            bool result = IsInstalled && ApiPreloadGameVersion != GameVersion.Empty && !HasUpdate;
+            if (_lastHasPreload != result)
+            {
+                _lastHasPreload = result;
+                SharedStatic.InstanceLogger.LogDebug(
+                    "[WuwaGameManager::HasPreload] IsInstalled={IsInstalled}, ApiPreloadGameVersion={PreloadVer}, HasUpdate={HasUpdate} => HasPreload={Result}",
+                    IsInstalled, ApiPreloadGameVersion, HasUpdate, result);
+            }
+            return result;
+        }
+    }
+
+    protected override bool HasUpdate
+    {
+        get
+        {
+            bool result = IsInstalled && (ApiGameVersion != CurrentGameVersion || HasPendingPreloadPatch);
+            if (_lastHasUpdate != result)
+            {
+                _lastHasUpdate = result;
+                SharedStatic.InstanceLogger.LogDebug(
+                    "[WuwaGameManager::HasUpdate] IsInstalled={IsInstalled}, ApiGameVersion={ApiVer}, CurrentGameVersion={CurVer}, VersionMismatch={Mismatch}, HasPendingPreloadPatch={Pending} => HasUpdate={Result}",
+                    IsInstalled, ApiGameVersion, CurrentGameVersion, ApiGameVersion != CurrentGameVersion, HasPendingPreloadPatch, result);
+            }
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// Checks if preloaded patch files exist on disk and the predownload window has closed
+    /// (meaning the update has gone live and patches should be applied).
+    /// </summary>
+    internal bool HasPendingPreloadPatch
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(CurrentGameInstallPath)) return false;
+            string patchTempPath = Path.Combine(CurrentGameInstallPath, "TempPath", "TempPatchFiles");
+            if (!Directory.Exists(patchTempPath)) return false;
+
+            // Preload patches exist and predownload is no longer offered
+            return ApiPreloadGameVersion == GameVersion.Empty;
+        }
+    }
 
     protected override bool IsInstalled
     {
@@ -161,9 +211,9 @@ internal partial class WuwaGameManager : GameManagerBase
 			string executablePath4 = Path.Combine(CurrentGameInstallPath ?? string.Empty,
 				Path.Combine(CurrentGameInstallPath!, "app-game-config.json"));
 			return File.Exists(executablePath1) &&
-						   File.Exists(executablePath2) &&
-						   File.Exists(executablePath3) &&
-						   File.Exists(executablePath4);
+						File.Exists(executablePath2) &&
+						File.Exists(executablePath3) &&
+						File.Exists(executablePath4);
 		}
 	}
 
@@ -266,7 +316,40 @@ internal partial class WuwaGameManager : GameManagerBase
         ApiGameVersion = new GameVersion(ApiGameConfigResponse.Default.ConfigReference.CurrentVersion.ToString());
         IsInitialized = true;
 
+        SharedStatic.InstanceLogger.LogInformation(
+            "[WuwaGameManager::InitAsyncInner] Versions — ApiGameVersion={ApiVer}, CurrentGameVersion={CurVer}, InstallPath={Path}",
+            ApiGameVersion, CurrentGameVersion, CurrentGameInstallPath ?? "(null)");
+
+        // Set preload version from predownload config if available
+        if (ApiGameConfigResponse.Default?.PredownloadReference?.CurrentVersion is { } preloadVer
+            && preloadVer != GameVersion.Empty)
+        {
+            ApiPreloadGameVersion = preloadVer;
+            SharedStatic.InstanceLogger.LogInformation(
+                "[WuwaGameManager::InitAsyncInner] Preload version available: {Version}", preloadVer);
+        }
+        else
+        {
+            ApiPreloadGameVersion = GameVersion.Empty;
+        }
+
+        LogGameStateOnce();
         return 0;
+    }
+
+    private void LogGameStateOnce()
+    {
+        string patchTempPath = string.IsNullOrEmpty(CurrentGameInstallPath)
+            ? "(no install path)"
+            : Path.Combine(CurrentGameInstallPath, "TempPath", "TempPatchFiles");
+
+        SharedStatic.InstanceLogger.LogDebug(
+            "[WuwaGameManager::GameState] IsInstalled={IsInstalled}, ApiGameVersion={ApiVer}, CurrentGameVersion={CurVer}, " +
+            "ApiPreloadGameVersion={PreloadVer}, HasPendingPreloadPatch={PendingPatch}, PatchDir={PatchDir}, " +
+            "HasUpdate={HasUpdate}, HasPreload={HasPreload}",
+            IsInstalled, ApiGameVersion, CurrentGameVersion,
+            ApiPreloadGameVersion, HasPendingPreloadPatch, patchTempPath,
+            HasUpdate, HasPreload);
     }
 
     protected override Task DownloadAssetAsyncInner(HttpClient? client, string fileUrl, Stream outputStream,
@@ -353,6 +436,10 @@ internal partial class WuwaGameManager : GameManagerBase
                 SharedStatic.InstanceLogger.LogTrace(
                     "[WuwaGameManager::LoadConfig] Loaded app-game-config.json from directory: {Dir}",
                     CurrentGameInstallPath);
+
+                // Cross-check against Kuro's launcherDownloadConfig.json to detect
+                // external updates (e.g. game updated via the official Kuro launcher).
+                TryCrossCheckKuroLauncherVersion();
                 return;
             }
             catch (Exception ex)
@@ -413,6 +500,72 @@ internal partial class WuwaGameManager : GameManagerBase
         {
             SharedStatic.InstanceLogger.LogWarning(
                 "[WuwaGameManager::LoadConfig] Recovery attempt failed: {Err}", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Reads Kuro's <c>launcherDownloadConfig.json</c> (written by the official launcher)
+    /// and updates <see cref="CurrentGameVersion"/> if the Kuro file reports a newer version
+    /// than <c>app-game-config.json</c>. This handles the case where the game was updated
+    /// externally (via the official Kuro launcher) without Collapse knowing about it.
+    /// </summary>
+    private void TryCrossCheckKuroLauncherVersion()
+    {
+        const string kuroConfigFileName = "launcherDownloadConfig.json";
+
+        if (string.IsNullOrEmpty(CurrentGameInstallPath))
+            return;
+
+        string kuroConfigPath = Path.Combine(CurrentGameInstallPath, kuroConfigFileName);
+        if (!File.Exists(kuroConfigPath))
+        {
+            SharedStatic.InstanceLogger.LogTrace(
+                "[WuwaGameManager::TryCrossCheckKuroLauncherVersion] {File} not found at {Dir}, skipping cross-check.",
+                kuroConfigFileName, CurrentGameInstallPath);
+            return;
+        }
+
+        try
+        {
+            using FileStream fs = File.OpenRead(kuroConfigPath);
+            WuwaLauncherDownloadConfig? kuroConfig = JsonSerializer.Deserialize(fs,
+                WuwaApiResponseContext.Default.WuwaLauncherDownloadConfig);
+
+            if (kuroConfig?.Version == null ||
+                !GameVersion.TryParse(kuroConfig.Version, null, out GameVersion kuroVersion) ||
+                kuroVersion == GameVersion.Empty)
+            {
+                SharedStatic.InstanceLogger.LogTrace(
+                    "[WuwaGameManager::TryCrossCheckKuroLauncherVersion] Could not parse version from {File}.",
+                    kuroConfigFileName);
+                return;
+            }
+
+            GameVersion currentVersion = CurrentGameVersion;
+            if (kuroVersion > currentVersion)
+            {
+                SharedStatic.InstanceLogger.LogInformation(
+                    "[WuwaGameManager::TryCrossCheckKuroLauncherVersion] Kuro launcher reports version {KuroVer} " +
+                    "which is newer than app-game-config version {CurVer}. " +
+                    "Game was likely updated externally. Updating local version.",
+                    kuroVersion, currentVersion);
+
+                CurrentGameVersion = kuroVersion;
+                SaveConfig();
+            }
+            else
+            {
+                SharedStatic.InstanceLogger.LogDebug(
+                    "[WuwaGameManager::TryCrossCheckKuroLauncherVersion] Versions match or app-game-config is newer. " +
+                    "Kuro={KuroVer}, Local={CurVer}. No action needed.",
+                    kuroVersion, currentVersion);
+            }
+        }
+        catch (Exception ex)
+        {
+            SharedStatic.InstanceLogger.LogWarning(
+                "[WuwaGameManager::TryCrossCheckKuroLauncherVersion] Failed to read {File}: {Err}",
+                kuroConfigFileName, ex.Message);
         }
     }
 
