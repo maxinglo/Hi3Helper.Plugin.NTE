@@ -610,13 +610,7 @@ internal partial class WuwaGameManager : GameManagerBase
         {
             installType = "unknown";
         }
-        CurrentGameConfigNode["InstallType"] = installType;
-#if !USELIGHTWEIGHTJSONPARSER
-        CurrentGameConfigNode.SetConfigValueIfEmpty("installType", installType);
-#else
-        if (!CurrentGameConfigNode.ContainsKey("installType"))
-            CurrentGameConfigNode["installType"] = installType;
-#endif
+        CurrentGameConfigNode["installType"] = installType;
 
         if (CurrentGameVersion == GameVersion.Empty)
         {
