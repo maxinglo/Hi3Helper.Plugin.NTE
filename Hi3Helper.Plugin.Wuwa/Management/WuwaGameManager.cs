@@ -431,8 +431,13 @@ internal partial class WuwaGameManager : GameManagerBase
         {
             try
             {
-                using FileStream fileStream = fileInfo.OpenRead();
-            CurrentGameConfigNode = JsonNode.Parse(fileStream) as JsonObject ?? new JsonObject();
+                // Scope the FileStream tightly so the file handle is released before
+                // TryCrossCheckKuroLauncherVersion(), which may call SaveConfig().
+                using (FileStream fileStream = fileInfo.OpenRead())
+                {
+                    CurrentGameConfigNode = JsonNode.Parse(fileStream) as JsonObject ?? new JsonObject();
+                }
+
                 SharedStatic.InstanceLogger.LogTrace(
                     "[WuwaGameManager::LoadConfig] Loaded app-game-config.json from directory: {Dir}",
                     CurrentGameInstallPath);
@@ -527,9 +532,12 @@ internal partial class WuwaGameManager : GameManagerBase
 
         try
         {
-            using FileStream fs = File.OpenRead(kuroConfigPath);
-            WuwaLauncherDownloadConfig? kuroConfig = JsonSerializer.Deserialize(fs,
-                WuwaApiResponseContext.Default.WuwaLauncherDownloadConfig);
+            WuwaLauncherDownloadConfig? kuroConfig;
+            using (FileStream fs = File.OpenRead(kuroConfigPath))
+            {
+                kuroConfig = JsonSerializer.Deserialize(fs,
+                    WuwaApiResponseContext.Default.WuwaLauncherDownloadConfig);
+            }
 
             if (kuroConfig?.Version == null ||
                 !GameVersion.TryParse(kuroConfig.Version, null, out GameVersion kuroVersion) ||
@@ -583,6 +591,12 @@ internal partial class WuwaGameManager : GameManagerBase
         CurrentGameConfigNode.SetConfigValueIfEmpty("name",
             ApiGameConfigResponse?.KeyFileCheckList?[2] ??
             Path.GetFileNameWithoutExtension(CurrentGameExecutableByPreset));
+#else
+        if (!CurrentGameConfigNode.ContainsKey("version"))
+            CurrentGameConfigNode["version"] = CurrentGameVersion.ToString();
+        if (!CurrentGameConfigNode.ContainsKey("name"))
+            CurrentGameConfigNode["name"] = ApiGameConfigResponse?.KeyFileCheckList?[2] ??
+                Path.GetFileNameWithoutExtension(CurrentGameExecutableByPreset);
 #endif
 
         string installType;
@@ -599,6 +613,9 @@ internal partial class WuwaGameManager : GameManagerBase
         CurrentGameConfigNode["InstallType"] = installType;
 #if !USELIGHTWEIGHTJSONPARSER
         CurrentGameConfigNode.SetConfigValueIfEmpty("installType", installType);
+#else
+        if (!CurrentGameConfigNode.ContainsKey("installType"))
+            CurrentGameConfigNode["installType"] = installType;
 #endif
 
         if (CurrentGameVersion == GameVersion.Empty)
@@ -613,6 +630,7 @@ internal partial class WuwaGameManager : GameManagerBase
         try
         {
             string configPath = Path.Combine(CurrentGameInstallPath, "app-game-config.json");
+            string tempPath = configPath + ".tmp";
             Directory.CreateDirectory(CurrentGameInstallPath);
 
             var writerOptions = new JsonWriterOptions
@@ -621,19 +639,17 @@ internal partial class WuwaGameManager : GameManagerBase
                 Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
             };
 
-#if !USELIGHTWEIGHTJSONPARSER
-            using (var fs = new FileStream(configPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            // Write to temp file first, then atomically replace to avoid corruption.
+            using (var fs = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
             using (var writer = new Utf8JsonWriter(fs, writerOptions))
             {
-                // JsonObject supports WriteTo(Utf8JsonWriter)
                 CurrentGameConfigNode.WriteTo(writer);
                 writer.Flush();
             }
-            SharedStatic.InstanceLogger.LogInformation("[WuwaGameManager::SaveConfig] Wrote app-game-config.json to {Path}", configPath);
-#else
-            // If lightweight parser is used, add equivalent persistence here
-            SharedStatic.InstanceLogger.LogWarning("[WuwaGameManager::SaveConfig] Lightweight JSON parser enabled: persistence not implemented.");
-#endif
+
+            File.Move(tempPath, configPath, overwrite: true);
+            SharedStatic.InstanceLogger.LogInformation(
+                "[WuwaGameManager::SaveConfig] Wrote app-game-config.json to {Path}", configPath);
         }
         catch (Exception ex)
         {
