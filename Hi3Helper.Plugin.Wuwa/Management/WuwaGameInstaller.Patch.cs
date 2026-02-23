@@ -81,19 +81,34 @@ namespace Hi3Helper.Plugin.Wuwa.Management
 
             ulong total = 0;
             int krpCount = 0;
+            int fullCount = 0;
             foreach (var entry in patchIndex.Resource)
             {
-                if (!string.IsNullOrEmpty(entry.Dest) &&
-                    entry.Dest.EndsWith(".krpdiff", StringComparison.OrdinalIgnoreCase))
-                {
-                    total += entry.Size;
+                if (string.IsNullOrEmpty(entry.Dest))
+                    continue;
+
+                if (entry.Dest.EndsWith(".krpdiff", StringComparison.OrdinalIgnoreCase))
                     krpCount++;
-                }
+                else
+                    fullCount++;
+            }
+
+            // If there are krpdiff entries, sum only those (small diffs).
+            // If there are none (old-style patch), sum the full-replacement entries instead.
+            bool hasKrpdiffs = krpCount > 0;
+            foreach (var entry in patchIndex.Resource)
+            {
+                if (string.IsNullOrEmpty(entry.Dest))
+                    continue;
+
+                bool isKrpdiff = entry.Dest.EndsWith(".krpdiff", StringComparison.OrdinalIgnoreCase);
+                if (hasKrpdiffs ? isKrpdiff : !isKrpdiff)
+                    total += entry.Size;
             }
 
             SharedStatic.InstanceLogger.LogInformation(
-                "[WuwaGameInstaller::CalculatePatchSizeAsync] Computed patch size: {Size} bytes from {Count} krpdiff entries (version {Version})",
-                total, krpCount, currentVersion);
+                "[WuwaGameInstaller::CalculatePatchSizeAsync] Computed patch size: {Size} bytes — {KrpCount} krpdiff, {FullCount} full-replacement entries (version {Version})",
+                total, krpCount, fullCount, currentVersion);
 
             return total > long.MaxValue ? long.MaxValue : (long)total;
         }
@@ -373,14 +388,26 @@ namespace Hi3Helper.Plugin.Wuwa.Management
 
                 // Initialize progress tracking
                 var installProgress = new InstallProgress();
+                var currentProgressState = InstallProgressState.Idle;
 
                 void ReportProgress()
                 {
-                    progressDelegate?.Invoke(in installProgress);
+                    // Build a snapshot so the host/COM layer sees fully-consistent memory
+                    InstallProgress snap = default;
+                    snap.StateCount           = Volatile.Read(ref installProgress.StateCount);
+                    snap.TotalStateToComplete = Volatile.Read(ref installProgress.TotalStateToComplete);
+                    snap.DownloadedCount      = Volatile.Read(ref installProgress.DownloadedCount);
+                    snap.TotalCountToDownload = Volatile.Read(ref installProgress.TotalCountToDownload);
+                    snap.DownloadedBytes      = Interlocked.Read(ref installProgress.DownloadedBytes);
+                    snap.TotalBytesToDownload = Interlocked.Read(ref installProgress.TotalBytesToDownload);
+
+                    progressDelegate?.Invoke(in snap);
+                    progressStateDelegate?.Invoke(currentProgressState);
                 }
 
                 // ── Step 1: Resolve the correct patch config ──
-                progressStateDelegate?.Invoke(InstallProgressState.Preparing);
+                currentProgressState = InstallProgressState.Preparing;
+                ReportProgress();
 
                 manager.GetCurrentGameVersion(out GameVersion currentVersion);
 
@@ -435,6 +462,42 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                 // externally) but all files on disk are already at the target version.
                 if (!onlyDownload && patchIndex.GroupInfos.Length > 0)
                 {
+                    currentProgressState = InstallProgressState.Verify;
+
+                    // Count total file pairs and total bytes (via fast metadata stat)
+                    // for smooth progress during large-file hashing.
+                    int totalPreflightPairs = 0;
+                    long totalPreflightBytes = 0;
+                    foreach (var g in patchIndex.GroupInfos)
+                    {
+                        int pairs = Math.Min(g.SrcFiles.Length, g.DstFiles.Length);
+                        totalPreflightPairs += pairs;
+                        for (int pi = 0; pi < pairs; pi++)
+                        {
+                            var dst = g.DstFiles[pi];
+                            if (string.IsNullOrEmpty(dst.Dest) || string.IsNullOrEmpty(dst.Md5))
+                                continue;
+                            string p = Path.Combine(installPath,
+                                dst.Dest.Replace('/', Path.DirectorySeparatorChar));
+                            if (File.Exists(p))
+                                totalPreflightBytes += new FileInfo(p).Length;
+                        }
+                    }
+
+                    // State tracks file count (displayed by host as counter text).
+                    // Bytes track hashed data with mid-file granularity for smooth progress.
+                    installProgress.TotalCountToDownload = totalPreflightPairs;
+                    installProgress.DownloadedCount = 0;
+                    installProgress.TotalStateToComplete = totalPreflightPairs;
+                    installProgress.StateCount = 0;
+                    installProgress.TotalBytesToDownload = totalPreflightBytes;
+                    installProgress.DownloadedBytes = 0;
+                    ReportProgress();
+
+                    SharedStatic.InstanceLogger.LogInformation(
+                        "[Patch::RunAsync] Pre-flight validation: checking {FileCount} files across {GroupCount} groups against target hashes...",
+                        totalPreflightPairs, patchIndex.GroupInfos.Length);
+
                     bool allDestinationsMatch = true;
                     int checkedCount = 0;
 
@@ -454,6 +517,8 @@ namespace Hi3Helper.Plugin.Wuwa.Management
 
                             if (!File.Exists(dstPath))
                             {
+                                SharedStatic.InstanceLogger.LogDebug(
+                                    "[Patch::RunAsync] Pre-flight: file missing, will patch: {File}", dstRef.Dest);
                                 allDestinationsMatch = false;
                                 break;
                             }
@@ -462,22 +527,48 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                             var fi = new FileInfo(dstPath);
                             if (dstRef.Size > 0 && (ulong)fi.Length != dstRef.Size)
                             {
+                                SharedStatic.InstanceLogger.LogDebug(
+                                    "[Patch::RunAsync] Pre-flight: size mismatch for {File} (expected={Expected}, actual={Actual}), will patch.",
+                                    dstRef.Dest, dstRef.Size, fi.Length);
                                 allDestinationsMatch = false;
                                 break;
                             }
 
                             // MD5 check
+                            SharedStatic.InstanceLogger.LogDebug(
+                                "[Patch::RunAsync] Pre-flight: hashing {File} ({Size})...",
+                                dstRef.Dest, fi.Length);
+
                             await using (var fs = File.OpenRead(dstPath))
                             {
-                                string md5 = await WuwaUtils.ComputeMd5HexAsync(fs, token).ConfigureAwait(false);
+                                long hashBytesAccum = 0;
+                                const long reportThreshold = 4 << 20; // report every ~4 MiB
+
+                                string md5 = await WuwaUtils.ComputeMd5HexAsync(fs, bytesRead =>
+                                {
+                                    Interlocked.Add(ref installProgress.DownloadedBytes, bytesRead);
+                                    hashBytesAccum += bytesRead;
+                                    if (hashBytesAccum >= reportThreshold)
+                                    {
+                                        ReportProgress();
+                                        hashBytesAccum = 0;
+                                    }
+                                }, token).ConfigureAwait(false);
+
                                 if (!string.Equals(md5, dstRef.Md5, StringComparison.OrdinalIgnoreCase))
                                 {
+                                    SharedStatic.InstanceLogger.LogDebug(
+                                        "[Patch::RunAsync] Pre-flight: MD5 mismatch for {File}, will patch.",
+                                        dstRef.Dest);
                                     allDestinationsMatch = false;
                                     break;
                                 }
                             }
 
                             checkedCount++;
+                            Interlocked.Increment(ref installProgress.DownloadedCount);
+                            Interlocked.Increment(ref installProgress.StateCount);
+                            ReportProgress();
                         }
 
                         if (!allDestinationsMatch)
@@ -499,6 +590,16 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                             manager.GetApiGameVersion(out preflightTargetVer);
 
                         manager.SetCurrentGameVersion(preflightTargetVer);
+
+                        // Clear DEBUG downgrade flags so the spoofed version doesn't
+                        // re-trigger another update cycle on next init/LoadConfig.
+                        if (manager.DEBUG_AllowDowngrade)
+                        {
+                            SharedStatic.InstanceLogger.LogInformation(
+                                "[Patch::RunAsync] Clearing DEBUG_AllowDowngrade after successful pre-flight.");
+                            manager.DEBUG_AllowDowngrade = false;
+                        }
+
                         manager.SaveConfig();
 
                         // Clean up any leftover preload temp files
@@ -509,7 +610,8 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                         }
                         catch { /* best-effort */ }
 
-                        progressStateDelegate?.Invoke(InstallProgressState.Completed);
+                        currentProgressState = InstallProgressState.Completed;
+                        ReportProgress();
                         return;
                     }
 
@@ -549,18 +651,39 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                         patchTempPath, krpdiffEntries.Length);
                 }
 
-                // ── Step 5: Download krpdiff files (if not pre-downloaded) ──
-                if (!hasPredownloadedFiles && krpdiffEntries.Length > 0)
+                // ── Step 5: Download patch files ──
+                // If krpdiff entries exist, download only those (small diffs applied via groupInfos).
+                // If no krpdiff entries exist (old-style patch), download the full replacement entries.
+                WuwaApiResponseResourceEntry[] downloadEntries;
+                if (krpdiffEntries.Length > 0)
                 {
-                    progressStateDelegate?.Invoke(InstallProgressState.Download);
+                    downloadEntries = hasPredownloadedFiles
+                        ? []   // already pre-downloaded
+                        : krpdiffEntries;
+                }
+                else
+                {
+                    // Old-style patch: all resources are full replacement files
+                    downloadEntries = patchIndex.Resource
+                        .Where(e => !string.IsNullOrEmpty(e.Dest))
+                        .ToArray();
+
+                    SharedStatic.InstanceLogger.LogInformation(
+                        "[Patch::RunAsync] No krpdiff entries found — old-style patch. Downloading {Count} full replacement files.",
+                        downloadEntries.Length);
+                }
+
+                if (downloadEntries.Length > 0)
+                {
+                    currentProgressState = InstallProgressState.Download;
 
                     // Calculate total bytes and set progress
                     ulong totalBytes = 0;
-                    foreach (var e in krpdiffEntries)
+                    foreach (var e in downloadEntries)
                         totalBytes += e.Size;
 
                     installProgress.TotalBytesToDownload = totalBytes > long.MaxValue ? long.MaxValue : (long)totalBytes;
-                    installProgress.TotalCountToDownload = krpdiffEntries.Length;
+                    installProgress.TotalCountToDownload = downloadEntries.Length;
                     installProgress.DownloadedBytes = 0;
                     installProgress.DownloadedCount = 0;
                     ReportProgress();
@@ -574,7 +697,7 @@ namespace Hi3Helper.Plugin.Wuwa.Management
 
                     Directory.CreateDirectory(patchTempPath);
 
-                    await Parallel.ForEachAsync(krpdiffEntries,
+                    await Parallel.ForEachAsync(downloadEntries,
                         new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount, CancellationToken = token },
                         async (entry, ct) =>
                         {
@@ -617,13 +740,14 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                         }).ConfigureAwait(false);
 
                     SharedStatic.InstanceLogger.LogInformation(
-                        "[Patch::RunAsync] Download phase complete. Downloaded {Count} krpdiff files.",
-                        krpdiffEntries.Length);
+                        "[Patch::RunAsync] Download phase complete. Downloaded {Count} files.",
+                        downloadEntries.Length);
                 }
 
                 // ── Step 6: Verify downloaded files ──
-                progressStateDelegate?.Invoke(InstallProgressState.Verify);
-                foreach (var entry in krpdiffEntries)
+                currentProgressState = InstallProgressState.Verify;
+                ReportProgress();
+                foreach (var entry in downloadEntries)
                 {
                     token.ThrowIfCancellationRequested();
                     if (string.IsNullOrEmpty(entry.Dest))
@@ -635,7 +759,7 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                     if (!File.Exists(filePath))
                     {
                         throw new FileNotFoundException(
-                            $"KRPDiff file missing after download: {entry.Dest}", filePath);
+                            $"Patch file missing after download: {entry.Dest}", filePath);
                     }
 
                     var fileInfo = new FileInfo(filePath);
@@ -654,7 +778,7 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                         if (!string.Equals(computedMd5, entry.Md5, StringComparison.OrdinalIgnoreCase))
                         {
                             throw new InvalidOperationException(
-                                $"MD5 mismatch for downloaded krpdiff {entry.Dest}: expected={entry.Md5}, computed={computedMd5}");
+                                $"MD5 mismatch for downloaded file {entry.Dest}: expected={entry.Md5}, computed={computedMd5}");
                         }
                     }
                 }
@@ -670,7 +794,8 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                     string markerPath = Path.Combine(patchTempPath, ".version");
                     await File.WriteAllTextAsync(markerPath, targetVersion.ToString(), token).ConfigureAwait(false);
 
-                    progressStateDelegate?.Invoke(InstallProgressState.Completed);
+                    currentProgressState = InstallProgressState.Completed;
+                    ReportProgress();
                     SharedStatic.InstanceLogger.LogInformation(
                         "[Patch::RunAsync] Preload download complete. Files saved to {Path}. Target version: {Version}",
                         patchTempPath, targetVersion);
@@ -680,7 +805,8 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                 // ── Step 8: Delete files from deleteFiles list ──
                 if (patchIndex.DeleteFiles.Length > 0)
                 {
-                    progressStateDelegate?.Invoke(InstallProgressState.Removing);
+                    currentProgressState = InstallProgressState.Removing;
+                    ReportProgress();
                     foreach (var deleteEntry in patchIndex.DeleteFiles)
                     {
                         if (string.IsNullOrEmpty(deleteEntry.Dest))
@@ -710,7 +836,7 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                 // ── Step 9: Apply patches from groupInfos ──
                 if (patchIndex.GroupInfos.Length > 0)
                 {
-                    progressStateDelegate?.Invoke(InstallProgressState.Updating);
+                    currentProgressState = InstallProgressState.Updating;
 
                     // Count total file pairs across all groups for accurate progress tracking
                     int totalFilePairs = 0;
@@ -907,9 +1033,20 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                 }
 
                 manager.SetCurrentGameVersion(targetVer);
+
+                // Clear DEBUG downgrade flags so the spoofed version doesn't re-trigger
+                // another update cycle on next init.
+                if (manager.DEBUG_AllowDowngrade)
+                {
+                    SharedStatic.InstanceLogger.LogInformation(
+                        "[Patch::RunAsync] Clearing DEBUG_AllowDowngrade after successful patch.");
+                    manager.DEBUG_AllowDowngrade = false;
+                }
+
                 manager.SaveConfig();
 
-                progressStateDelegate?.Invoke(InstallProgressState.Completed);
+                currentProgressState = InstallProgressState.Completed;
+                ReportProgress();
                 SharedStatic.InstanceLogger.LogInformation(
                     "[Patch::RunAsync] Patch complete. Game updated to version {Version}.", targetVer);
             }

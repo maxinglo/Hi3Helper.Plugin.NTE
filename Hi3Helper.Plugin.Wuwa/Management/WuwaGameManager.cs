@@ -67,12 +67,33 @@ internal partial class WuwaGameManager : GameManagerBase
     internal string? GameResourceBaseUrl { get; set; }
     internal string? GameResourceBasisPath { get; set; }
     private bool IsInitialized { get; set; }
-    
+
+    /// <summary>
+    /// When true, <see cref="CurrentGameVersion"/> returns <see cref="DEBUG_DowngradeVersionTarget"/>
+    /// instead of the real on-disk version so the update/patch system treats the install as
+    /// being at the downgrade target and re-applies the patch from that version.
+    /// Persisted as <c>DEBUG_allowDowngrade</c> in <c>app-game-config.json</c>.
+    /// The key is never written by default — add it manually to the JSON to enable.
+    /// </summary>
+    internal bool DEBUG_AllowDowngrade { get; set; }
+
+    /// <summary>
+    /// The version to "pretend" the game is at when <see cref="DEBUG_AllowDowngrade"/> is true.
+    /// Ignored when <see cref="DEBUG_AllowDowngrade"/> is false.
+    /// Persisted as <c>DEBUG_downgradeVersionTarget</c> in <c>app-game-config.json</c>.
+    /// The key is never written by default — add it manually to the JSON to enable.
+    /// </summary>
+    internal GameVersion DEBUG_DowngradeVersionTarget { get; set; } = GameVersion.Empty;
 
     protected override GameVersion CurrentGameVersion
     {
         get
         {
+            // If downgrade is enabled and the target is valid, report that version
+            // so the update/patch flow treats the install as being at the older version.
+            if (DEBUG_AllowDowngrade && DEBUG_DowngradeVersionTarget != GameVersion.Empty)
+                return DEBUG_DowngradeVersionTarget;
+
 #if !USELIGHTWEIGHTJSONPARSER
             string? version = CurrentGameConfigNode.GetConfigValue<string?>("version");
 #else
@@ -346,10 +367,10 @@ internal partial class WuwaGameManager : GameManagerBase
         SharedStatic.InstanceLogger.LogDebug(
             "[WuwaGameManager::GameState] IsInstalled={IsInstalled}, ApiGameVersion={ApiVer}, CurrentGameVersion={CurVer}, " +
             "ApiPreloadGameVersion={PreloadVer}, HasPendingPreloadPatch={PendingPatch}, PatchDir={PatchDir}, " +
-            "HasUpdate={HasUpdate}, HasPreload={HasPreload}",
+            "HasUpdate={HasUpdate}, HasPreload={HasPreload}, DEBUG_AllowDowngrade={AllowDowngrade}, DEBUG_DowngradeVersionTarget={DowngradeTarget}",
             IsInstalled, ApiGameVersion, CurrentGameVersion,
             ApiPreloadGameVersion, HasPendingPreloadPatch, patchTempPath,
-            HasUpdate, HasPreload);
+            HasUpdate, HasPreload, DEBUG_AllowDowngrade, DEBUG_DowngradeVersionTarget);
     }
 
     protected override Task DownloadAssetAsyncInner(HttpClient? client, string fileUrl, Stream outputStream,
@@ -438,6 +459,9 @@ internal partial class WuwaGameManager : GameManagerBase
                     CurrentGameConfigNode = JsonNode.Parse(fileStream) as JsonObject ?? new JsonObject();
                 }
 
+                // Read DEBUG_allowDowngrade and DEBUG_downgradeVersionTarget from the config
+                LoadDowngradeSettings();
+
                 SharedStatic.InstanceLogger.LogTrace(
                     "[WuwaGameManager::LoadConfig] Loaded app-game-config.json from directory: {Dir}",
                     CurrentGameInstallPath);
@@ -505,6 +529,41 @@ internal partial class WuwaGameManager : GameManagerBase
         {
             SharedStatic.InstanceLogger.LogWarning(
                 "[WuwaGameManager::LoadConfig] Recovery attempt failed: {Err}", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Reads <c>DEBUG_allowDowngrade</c> and <c>DEBUG_downgradeVersionTarget</c> from
+    /// <see cref="CurrentGameConfigNode"/> and populates the corresponding in-memory properties.
+    /// Called once from <see cref="LoadConfig"/> after the JSON has been parsed.
+    /// These keys are never written by default — they must be added manually to the JSON.
+    /// </summary>
+    private void LoadDowngradeSettings()
+    {
+#if !USELIGHTWEIGHTJSONPARSER
+        DEBUG_AllowDowngrade = CurrentGameConfigNode.GetConfigValue<bool?>("DEBUG_allowDowngrade") ?? false;
+        string? targetStr = CurrentGameConfigNode.GetConfigValue<string?>("DEBUG_downgradeVersionTarget");
+#else
+        DEBUG_AllowDowngrade = CurrentGameConfigNode["DEBUG_allowDowngrade"]?.GetValue<bool>() ?? false;
+        string? targetStr = CurrentGameConfigNode["DEBUG_downgradeVersionTarget"]?.GetValue<string>();
+#endif
+
+        if (!string.IsNullOrEmpty(targetStr) &&
+            GameVersion.TryParse(targetStr, null, out GameVersion parsed) &&
+            parsed != GameVersion.Empty)
+        {
+            DEBUG_DowngradeVersionTarget = parsed;
+        }
+        else
+        {
+            DEBUG_DowngradeVersionTarget = GameVersion.Empty;
+        }
+
+        if (DEBUG_AllowDowngrade)
+        {
+            SharedStatic.InstanceLogger.LogWarning(
+                "[WuwaGameManager::LoadDowngradeSettings] Downgrade enabled. Target version: {Ver}",
+                DEBUG_DowngradeVersionTarget);
         }
     }
 
@@ -611,6 +670,18 @@ internal partial class WuwaGameManager : GameManagerBase
             installType = "unknown";
         }
         CurrentGameConfigNode["installType"] = installType;
+
+        // Re-persist downgrade settings only if the keys already exist in the config.
+        // These are debug-only keys — never written by default; the user must add them manually.
+        if (CurrentGameConfigNode.ContainsKey("DEBUG_allowDowngrade"))
+            CurrentGameConfigNode["DEBUG_allowDowngrade"] = DEBUG_AllowDowngrade;
+        if (CurrentGameConfigNode.ContainsKey("DEBUG_downgradeVersionTarget"))
+        {
+            if (DEBUG_DowngradeVersionTarget != GameVersion.Empty)
+                CurrentGameConfigNode["DEBUG_downgradeVersionTarget"] = DEBUG_DowngradeVersionTarget.ToString();
+            else
+                CurrentGameConfigNode.Remove("DEBUG_downgradeVersionTarget");
+        }
 
         if (CurrentGameVersion == GameVersion.Empty)
         {

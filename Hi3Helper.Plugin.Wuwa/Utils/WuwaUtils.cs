@@ -231,6 +231,15 @@ internal static class WuwaUtils
 
     internal static async ValueTask<string> ComputeMd5HexAsync(Stream stream, CancellationToken token = default)
     {
+        return await ComputeMd5HexAsync(stream, null, token).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Computes the MD5 hash of a stream, optionally reporting byte progress via a callback
+    /// invoked after each chunk read.
+    /// </summary>
+    internal static async ValueTask<string> ComputeMd5HexAsync(Stream stream, Action<long>? bytesReadCallback, CancellationToken token = default)
+    {
         stream.Seek(0, SeekOrigin.Begin);
         using var md5 = MD5.Create();
 
@@ -241,6 +250,7 @@ internal static class WuwaUtils
             while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, token).ConfigureAwait(false)) > 0)
             {
                 md5.TransformBlock(buffer, 0, bytesRead, null, 0);
+                bytesReadCallback?.Invoke(bytesRead);
             }
             md5.TransformFinalBlock(buffer, 0, 0);
 
