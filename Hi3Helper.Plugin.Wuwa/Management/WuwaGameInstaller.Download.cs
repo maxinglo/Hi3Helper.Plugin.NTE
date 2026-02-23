@@ -27,40 +27,18 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                 SharedStatic.InstanceLogger.LogWarning("[WuwaGameInstaller::TryDownloadWholeFileWithFallbacksAsync] Primary download failed: {Uri}. Reason: {Msg}", originalUri, ex.Message);
             }
 
-            string encodedPath = EncodePathSegments(rawDest);
-
-            // Fallback 1: encoded concatenation using the Path portion of the original URI
+            // Fallback 1: Re-encode each path segment of the original URI to handle special chars
             try
             {
-                var basePath = originalUri.GetLeftPart(UriPartial.Path);
-                string encodedConcatUrl = basePath.TrimEnd('/') + "/" + encodedPath;
-                SharedStatic.InstanceLogger.LogDebug("[WuwaGameInstaller::TryDownloadWholeFileWithFallbacksAsync] Trying encoded concatenation fallback URI: {Uri}", encodedConcatUrl);
-                Uri fallbackUri = new Uri(encodedConcatUrl, UriKind.Absolute);
+                string reEncodedUrl = ReEncodeUriPathSegments(originalUri);
+                SharedStatic.InstanceLogger.LogDebug("[WuwaGameInstaller::TryDownloadWholeFileWithFallbacksAsync] Trying re-encoded fallback URI: {Uri}", reEncodedUrl);
+                Uri fallbackUri = new Uri(reEncodedUrl, UriKind.Absolute);
                 await DownloadWholeFileAsync(fallbackUri, outputPath, token, progressCallback).ConfigureAwait(false);
                 return;
             }
             catch (Exception ex) when (ex is HttpRequestException or IOException)
             {
-                SharedStatic.InstanceLogger.LogWarning("[WuwaGameInstaller::TryDownloadWholeFileWithFallbacksAsync] Encoded concatenation fallback failed: {Msg}", ex.Message);
-            }
-
-            // Fallback 2: try using a simple concatenation (encoded)
-            try
-            {
-                var baseAuthority = originalUri.GetLeftPart(UriPartial.Authority);
-                var baseDir = originalUri.AbsolutePath;
-                int lastSlash = baseDir.LastIndexOf('/');
-                if (lastSlash >= 0)
-                    baseDir = baseDir[..(lastSlash + 1)];
-                string tryUrl = baseAuthority + baseDir + encodedPath;
-                SharedStatic.InstanceLogger.LogDebug("[WuwaGameInstaller::TryDownloadWholeFileWithFallbacksAsync] Trying authority+dir fallback URI: {Uri}", tryUrl);
-                Uri fallbackUri2 = new Uri(tryUrl, UriKind.Absolute);
-                await DownloadWholeFileAsync(fallbackUri2, outputPath, token, progressCallback).ConfigureAwait(false);
-                return;
-            }
-            catch (Exception ex) when (ex is HttpRequestException or IOException)
-            {
-                SharedStatic.InstanceLogger.LogWarning("[WuwaGameInstaller::TryDownloadWholeFileWithFallbacksAsync] Authority+dir fallback failed: {Msg}", ex.Message);
+                SharedStatic.InstanceLogger.LogWarning("[WuwaGameInstaller::TryDownloadWholeFileWithFallbacksAsync] Re-encoded fallback failed: {Msg}", ex.Message);
             }
 
             throw new HttpRequestException($"All download attempts failed for: {rawDest}");
@@ -79,40 +57,18 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                 SharedStatic.InstanceLogger.LogWarning("[WuwaGameInstaller::TryDownloadChunkedFileWithFallbacksAsync] Primary chunked download failed: {Uri}. Reason: {Msg}", originalUri, ex.Message);
             }
 
-            string encodedPath = EncodePathSegments(rawDest);
-
-            // Fallback 1: encoded concatenation using the Path portion of the original URI
+            // Fallback 1: Re-encode each path segment of the original URI to handle special chars
             try
             {
-                var basePath = originalUri.GetLeftPart(UriPartial.Path);
-                string encodedConcatUrl = basePath.TrimEnd('/') + "/" + encodedPath;
-                SharedStatic.InstanceLogger.LogDebug("[WuwaGameInstaller::TryDownloadChunkedFileWithFallbacksAsync] Trying encoded concatenation fallback URI: {Uri}", encodedConcatUrl);
-                Uri fallbackUri = new Uri(encodedConcatUrl, UriKind.Absolute);
+                string reEncodedUrl = ReEncodeUriPathSegments(originalUri);
+                SharedStatic.InstanceLogger.LogDebug("[WuwaGameInstaller::TryDownloadChunkedFileWithFallbacksAsync] Trying re-encoded fallback URI: {Uri}", reEncodedUrl);
+                Uri fallbackUri = new Uri(reEncodedUrl, UriKind.Absolute);
                 await DownloadChunkedFileAsync(fallbackUri, outputPath, chunkInfos, token, progressCallback).ConfigureAwait(false);
                 return;
             }
             catch (Exception ex) when (ex is HttpRequestException or IOException)
             {
-                SharedStatic.InstanceLogger.LogWarning("[WuwaGameInstaller::TryDownloadChunkedFileWithFallbacksAsync] Encoded concatenation fallback failed: {Msg}", ex.Message);
-            }
-
-            // Fallback 2: authority+dir + encoded path
-            try
-            {
-                var baseAuthority = originalUri.GetLeftPart(UriPartial.Authority);
-                var baseDir = originalUri.AbsolutePath;
-                int lastSlash = baseDir.LastIndexOf('/');
-                if (lastSlash >= 0)
-                    baseDir = baseDir[..(lastSlash + 1)];
-                string tryUrl = baseAuthority + baseDir + encodedPath;
-                SharedStatic.InstanceLogger.LogDebug("[WuwaGameInstaller::TryDownloadChunkedFileWithFallbacksAsync] Trying authority+dir fallback URI: {Uri}", tryUrl);
-                Uri fallbackUri2 = new Uri(tryUrl, UriKind.Absolute);
-                await DownloadChunkedFileAsync(fallbackUri2, outputPath, chunkInfos, token, progressCallback).ConfigureAwait(false);
-                return;
-            }
-            catch (Exception ex) when (ex is HttpRequestException or IOException)
-            {
-                SharedStatic.InstanceLogger.LogWarning("[WuwaGameInstaller::TryDownloadChunkedFileWithFallbacksAsync] Authority+dir fallback failed: {Msg}", ex.Message);
+                SharedStatic.InstanceLogger.LogWarning("[WuwaGameInstaller::TryDownloadChunkedFileWithFallbacksAsync] Re-encoded fallback failed: {Msg}", ex.Message);
             }
 
             throw new HttpRequestException($"All chunked download attempts failed for: {rawDest}");
@@ -124,6 +80,22 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                 return path;
             string[] parts = path.Split(['/'], StringSplitOptions.RemoveEmptyEntries);
             return string.Join("/", parts.Select(Uri.EscapeDataString));
+        }
+
+        /// <summary>
+        /// Re-encodes each path segment of an existing URI. This handles cases where
+        /// the original URI has un-encoded special characters (spaces, CJK, etc.)
+        /// that cause the CDN to 404. Does NOT produce a doubled path — it only
+        /// re-encodes what's already in the URI.
+        /// </summary>
+        internal static string ReEncodeUriPathSegments(Uri uri)
+        {
+            string authority = uri.GetLeftPart(UriPartial.Authority);
+            // Use decoded AbsolutePath so we get the raw characters, then re-encode each segment
+            string decodedPath = Uri.UnescapeDataString(uri.AbsolutePath);
+            string[] segments = decodedPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            string encodedPath = string.Join("/", segments.Select(Uri.EscapeDataString));
+            return $"{authority}/{encodedPath}";
         }
 
         internal async Task DownloadWholeFileAsync(Uri uri, string outputPath, CancellationToken token, Action<long>? progressCallback)

@@ -74,4 +74,67 @@ internal static class HPatchZNative
         SharedStatic.InstanceLogger.LogDebug(
             "[HPatchZNative::ApplyPatch] Patch applied successfully: {Output}", outputFilePath);
     }
+
+    /// <summary>
+    /// Apply a KRPDiff directory-level patch: the diff was built from a set of source files
+    /// under <paramref name="sourceDir"/> and produces a set of output files under
+    /// <paramref name="outputDir"/>. SharpHDiffPatch.Core auto-detects directory mode from
+    /// the diff header and resolves internal file references relative to the supplied paths.
+    /// </summary>
+    /// <param name="sourceDir">Root directory containing the original (old) files.</param>
+    /// <param name="diffFilePath">Path to the .krpdiff file (directory-level diff).</param>
+    /// <param name="outputDir">Directory where patched (new) files will be written.</param>
+    /// <param name="writeBytesDelegate">Optional callback invoked with the number of bytes
+    /// written during patching, for progress reporting.</param>
+    /// <param name="token">Cancellation token.</param>
+    /// <exception cref="DirectoryNotFoundException">Thrown if source directory does not exist.</exception>
+    /// <exception cref="FileNotFoundException">Thrown if diff file does not exist.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if patching fails.</exception>
+    internal static void ApplyDirPatch(string sourceDir, string diffFilePath, string outputDir,
+        Action<long>? writeBytesDelegate = null, CancellationToken token = default)
+    {
+        if (!Directory.Exists(sourceDir))
+            throw new DirectoryNotFoundException($"Source directory for patching not found: {sourceDir}");
+        if (!File.Exists(diffFilePath))
+            throw new FileNotFoundException("Diff file for patching not found.", diffFilePath);
+
+        Directory.CreateDirectory(outputDir);
+
+        SharedStatic.InstanceLogger.LogDebug(
+            "[HPatchZNative::ApplyDirPatch] Applying dir patch: srcDir={Source}, diff={Diff}, outDir={Output}",
+            sourceDir, diffFilePath, outputDir);
+
+        try
+        {
+            var patcher = new HDiffPatch();
+            patcher.Initialize(diffFilePath);
+            if (writeBytesDelegate != null)
+                patcher.Patch(sourceDir, outputDir, useBufferedPatch: true,
+                    writeBytesDelegate, token: token, useFullBuffer: false, useFastBuffer: true);
+            else
+                patcher.Patch(sourceDir, outputDir, useBufferedPatch: true, token: token,
+                    useFullBuffer: false, useFastBuffer: true);
+        }
+        catch (OperationCanceledException)
+        {
+            try { if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true); }
+            catch { /* ignore cleanup errors */ }
+            throw;
+        }
+        catch (Exception ex)
+        {
+            SharedStatic.InstanceLogger.LogError(
+                "[HPatchZNative::ApplyDirPatch] Dir patch failed for {Source}: {Error}",
+                sourceDir, ex.Message);
+
+            try { if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true); }
+            catch { /* ignore cleanup errors */ }
+
+            throw new InvalidOperationException(
+                $"HDiff dir patch application failed for sourceDir: {sourceDir}, diff: {diffFilePath}", ex);
+        }
+
+        SharedStatic.InstanceLogger.LogDebug(
+            "[HPatchZNative::ApplyDirPatch] Dir patch applied successfully: {Output}", outputDir);
+    }
 }
