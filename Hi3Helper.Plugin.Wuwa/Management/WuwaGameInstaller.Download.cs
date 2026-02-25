@@ -1,4 +1,5 @@
 using Hi3Helper.Plugin.Core;
+using Hi3Helper.Plugin.Core.Utility;
 using Hi3Helper.Plugin.Wuwa.Management.Api;
 using Microsoft.Extensions.Logging;
 using System;
@@ -167,6 +168,7 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                 }
 
                 byte[] buffer = ArrayPool<byte>.Shared.Rent(81920);
+                nint speedLimiterContext = SpeedLimiterService.CreateServiceContext();
                 try
                 {
                     int read;
@@ -174,10 +176,12 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                     {
                         await fs.WriteAsync(buffer, 0, read, token).ConfigureAwait(false);
                         progressCallback?.Invoke(read);
+                        await SpeedLimiterService.AddBytesOrWaitAsync(speedLimiterContext, read, token).ConfigureAwait(false);
                     }
                 }
                 finally
                 {
+                    SpeedLimiterService.FreeServiceContext(speedLimiterContext);
                     ArrayPool<byte>.Shared.Return(buffer);
                 }
             }
@@ -208,6 +212,7 @@ namespace Hi3Helper.Plugin.Wuwa.Management
             await using (var fs = new FileStream(tempPath, fileMode, FileAccess.Write, FileShare.None, 81920, FileOptions.SequentialScan))
             {
                 byte[] buffer = ArrayPool<byte>.Shared.Rent(81920);
+                nint speedLimiterContext = SpeedLimiterService.CreateServiceContext();
                 try
                 {
                     foreach (var chunk in chunkInfos)
@@ -254,6 +259,7 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                         {
                             await fs.WriteAsync(buffer, 0, read, token).ConfigureAwait(false);
                             progressCallback?.Invoke(read);
+                            await SpeedLimiterService.AddBytesOrWaitAsync(speedLimiterContext, read, token).ConfigureAwait(false);
                         }
 
                         SharedStatic.InstanceLogger.LogTrace("[WuwaGameInstaller::DownloadChunkedFileAsync] Wrote chunk {Start}-{End} to temp", start, end);
@@ -261,6 +267,7 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                 }
                 finally
                 {
+                    SpeedLimiterService.FreeServiceContext(speedLimiterContext);
                     ArrayPool<byte>.Shared.Return(buffer);
                 }
             }
