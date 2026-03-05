@@ -364,7 +364,6 @@ internal partial class WuwaGameManager : GameManagerBase
             ApiPreloadGameVersion = GameVersion.Empty;
         }
 
-        LogGameStateOnce();
         return 0;
     }
 
@@ -479,6 +478,7 @@ internal partial class WuwaGameManager : GameManagerBase
                 // Cross-check against Kuro's launcherDownloadConfig.json to detect
                 // external updates (e.g. game updated via the official Kuro launcher).
                 TryCrossCheckKuroLauncherVersion();
+                LogGameStateOnce();
                 return;
             }
             catch (Exception ex)
