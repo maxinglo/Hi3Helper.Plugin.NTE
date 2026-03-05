@@ -1132,9 +1132,11 @@ namespace Hi3Helper.Plugin.Wuwa.Management
 
                 if (patchIndex.GroupInfos.Length > 0)
                 {
-                    currentProgressState = InstallProgressState.Install;
+                    currentProgressState = InstallProgressState.Updating;
 
-                    // Count total destination files and bytes across all groups
+                    // Count total destination files and bytes across all groups.
+                    // Fall back to group count when DstFiles are empty (e.g. API parsing
+                    // returned no dest entries) so we never report a total of 0.
                     int totalDstFiles = 0;
                     long totalPatchBytes = 0;
                     foreach (var g in patchIndex.GroupInfos)
@@ -1144,10 +1146,14 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                             totalPatchBytes += (long)d.Size;
                     }
 
-                    installProgress.TotalStateToComplete = totalDstFiles;
+                    // If every group has no DstFiles, fall back to the group count
+                    // so the progress counter shows "0/N groups" rather than "0/0".
+                    int effectiveTotal = totalDstFiles > 0 ? totalDstFiles : patchIndex.GroupInfos.Length;
+
+                    installProgress.TotalStateToComplete = effectiveTotal;
                     installProgress.StateCount = 0;
                     installProgress.TotalBytesToDownload = totalPatchBytes;
-                    installProgress.TotalCountToDownload = totalDstFiles;
+                    installProgress.TotalCountToDownload = effectiveTotal;
                     installProgress.DownloadedBytes = 0;
                     installProgress.DownloadedCount = 0;
                     ReportProgress();
@@ -1161,7 +1167,18 @@ namespace Hi3Helper.Plugin.Wuwa.Management
 
                         var group = patchIndex.GroupInfos[groupIdx];
                         if (group.DstFiles.Length == 0)
+                        {
+                            // When the fallback total is group-based (totalDstFiles == 0),
+                            // advance the counter by 1 per group so progress is visible.
+                            if (totalDstFiles == 0)
+                            {
+                                Interlocked.Increment(ref installProgress.StateCount);
+                                Interlocked.Increment(ref installProgress.DownloadedCount);
+                                ReportProgress();
+                            }
+                            completedGroups++;
                             continue;
+                        }
 
                         // Pre-compute expected byte total for this group
                         long groupExpectedBytes = 0;
