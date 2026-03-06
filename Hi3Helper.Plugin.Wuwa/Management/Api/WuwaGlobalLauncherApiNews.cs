@@ -63,17 +63,28 @@ internal partial class WuwaGlobalLauncherApiNews(string apiResponseBaseUrl, stri
                         "information",
                         "en.json");
 
-        // Fetch social and news independently so one failing doesn't block the other.
+        // Fetch social and news in parallel so one failing doesn't delay the other.
+        await Task.WhenAll(
+            FetchSocialAsync(requestSocialUrl, token),
+            FetchNewsAsync(requestNewsUrl, token));
+
+        return 0;
+    }
+
+    private async Task FetchSocialAsync(string url, CancellationToken token)
+    {
         try
         {
+            SharedStatic.InstanceLogger.LogDebug(
+                "[WuwaGlobalLauncherApiNews::FetchSocialAsync] Requesting: {Url}", url);
 #if !USELIGHTWEIGHTJSONPARSER
             ApiResponseSocialMedia = await ApiResponseHttpClient
                    .GetApiResponseFromJsonAsync(
-                            requestSocialUrl,
+                            url,
                             WuwaApiResponseContext.Default.WuwaApiResponseSocial,
                             token);
 #else
-            await using var socialStream = await ApiResponseHttpClient.GetStreamAsync(requestSocialUrl, token);
+            await using var socialStream = await ApiResponseHttpClient.GetStreamAsync(url, token);
             ApiResponseSocialMedia = await System.Text.Json.JsonSerializer.DeserializeAsync(
                             socialStream,
                             WuwaApiResponseContext.Default.WuwaApiResponseSocial,
@@ -84,20 +95,25 @@ internal partial class WuwaGlobalLauncherApiNews(string apiResponseBaseUrl, stri
         catch (Exception ex)
         {
             SharedStatic.InstanceLogger.LogWarning(
-                "[WuwaGlobalLauncherApiNews::InitAsync] Failed to load social media entries: {Error}",
-                ex.Message);
+                "[WuwaGlobalLauncherApiNews::FetchSocialAsync] Failed to load social media entries from {Url}: {Error}",
+                url, ex.Message);
         }
+    }
 
+    private async Task FetchNewsAsync(string url, CancellationToken token)
+    {
         try
         {
+            SharedStatic.InstanceLogger.LogDebug(
+                "[WuwaGlobalLauncherApiNews::FetchNewsAsync] Requesting: {Url}", url);
 #if !USELIGHTWEIGHTJSONPARSER
             ApiResponseNewsAndCarousel = await ApiResponseHttpClient
                    .GetApiResponseFromJsonAsync(
-                            requestNewsUrl,
+                            url,
                             WuwaApiResponseContext.Default.WuwaApiResponseNews,
                             token);
 #else
-            await using var newsStream = await ApiResponseHttpClient.GetStreamAsync(requestNewsUrl, token);
+            await using var newsStream = await ApiResponseHttpClient.GetStreamAsync(url, token);
             ApiResponseNewsAndCarousel = await System.Text.Json.JsonSerializer.DeserializeAsync(
                             newsStream,
                             WuwaApiResponseContext.Default.WuwaApiResponseNews,
@@ -108,11 +124,9 @@ internal partial class WuwaGlobalLauncherApiNews(string apiResponseBaseUrl, stri
         catch (Exception ex)
         {
             SharedStatic.InstanceLogger.LogWarning(
-                "[WuwaGlobalLauncherApiNews::InitAsync] Failed to load news/carousel entries: {Error}",
-                ex.Message);
+                "[WuwaGlobalLauncherApiNews::FetchNewsAsync] Failed to load news/carousel entries from {Url}: {Error}",
+                url, ex.Message);
         }
-
-        return 0;
     }
 
     public override void GetNewsEntries(out nint handle, out int count, out bool isDisposable, out bool isAllocated)
