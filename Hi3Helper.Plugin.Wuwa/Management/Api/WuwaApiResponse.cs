@@ -10,4 +10,5 @@ namespace Hi3Helper.Plugin.Wuwa.Management.Api;
 [JsonSerializable(typeof(WuwaApiResponsePatchIndex))]
 [JsonSerializable(typeof(WuwaLauncherDownloadConfig))]
 [JsonSerializable(typeof(WuwaApiResponseResourceIndex))]
+[JsonSerializable(typeof(WuwaApiResponseLauncherConfig))]
 public partial class WuwaApiResponseContext : JsonSerializerContext;

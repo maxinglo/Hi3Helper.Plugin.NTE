@@ -44,9 +44,6 @@ internal static class WuwaUtils
             case "news":
                 builder.SetBaseUrl(apiBaseUrl.CombineUrlFromString("launcher", authCdnToken, gameTag, "information", "en.json"));
                 break;
-            case "bg":
-                builder.SetBaseUrl(apiBaseUrl.CombineUrlFromString("launcher", authCdnToken, gameTag, "background", hash1, "en.json"));
-                break;
             case "media":
                 builder.SetBaseUrl(apiBaseUrl.CombineUrlFromString("launcher", gameTag, authCdnToken, "social", "en.json"));
                 break;

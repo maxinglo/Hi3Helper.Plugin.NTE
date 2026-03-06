@@ -1,4 +1,8 @@
-﻿using Hi3Helper.Plugin.Core;
+﻿// Endpoint discovery and core implementation idea credit: DynamiByte
+// References:
+//   https://gist.github.com/DynamiByte/d839bf9f671c975b6666d0f6e6634641
+//   https://github.com/Cheu3172/Wuwa-Web-Request
+using Hi3Helper.Plugin.Core;
 using Hi3Helper.Plugin.Core.Management.Api;
 using Hi3Helper.Plugin.Core.Utility;
 using Hi3Helper.Plugin.Wuwa.Utils;
@@ -17,11 +21,12 @@ using Microsoft.Extensions.Logging;
 namespace Hi3Helper.Plugin.Wuwa.Management.Api;
 
 [GeneratedComClass]
-internal partial class WuwaGlobalLauncherApiMedia(string apiResponseBaseUrl, string gameTag, string authenticationHash, string apiOptions, string hash1) : LauncherApiMediaBase
+internal partial class WuwaGlobalLauncherApiMedia(string apiResponseBaseUrl, string gameTag, string authenticationHash) : LauncherApiMediaBase
 {
     [field: AllowNull, MaybeNull]
-    protected override HttpClient ApiResponseHttpClient { 
-        get => field ??= WuwaUtils.CreateApiHttpClient(ApiResponseBaseUrl, gameTag.AeonPlsHelpMe(), authenticationHash.AeonPlsHelpMe(), apiOptions, hash1.AeonPlsHelpMe());
+    protected override HttpClient ApiResponseHttpClient
+    {
+        get => field ??= WuwaUtils.CreateApiHttpClient(ApiResponseBaseUrl);
         set;
     }
 
@@ -72,57 +77,105 @@ internal partial class WuwaGlobalLauncherApiMedia(string apiResponseBaseUrl, str
     }
 
     public override void GetBackgroundFlag(out LauncherBackgroundFlag result)
-        => result = LauncherBackgroundFlag.TypeIsVideo | LauncherBackgroundFlag.TypeIsImage;
+        // backgroundFileType == 2 indicates a video background; everything else is an image.
+        => result = ApiResponse?.BackgroundFileType == 2
+            ? LauncherBackgroundFlag.TypeIsVideo
+            : LauncherBackgroundFlag.TypeIsImage;
 
     public override void GetLogoFlag(out LauncherBackgroundFlag result)
-        => result = LauncherBackgroundFlag.None;
+        => result = ApiResponse?.SloganUrl != null
+            ? LauncherBackgroundFlag.TypeIsImage
+            : LauncherBackgroundFlag.None;
 
     public override void GetLogoOverlayEntries(out nint handle, out int count, out bool isDisposable, out bool isAllocated)
     {
-        isDisposable = false;
-        handle = nint.Zero;
-        count = 0;
-        isAllocated = false;
+        if (ApiResponse?.SloganUrl == null)
+        {
+            isDisposable = false;
+            handle = nint.Zero;
+            count = 0;
+            isAllocated = false;
+            return;
+        }
+
+        using (ThisInstanceLock.EnterScope())
+        {
+            PluginDisposableMemory<LauncherPathEntry> logoEntries = PluginDisposableMemory<LauncherPathEntry>.Alloc();
+            ref LauncherPathEntry entry = ref logoEntries[0];
+            entry.Write(ApiResponse.SloganUrl, Span<byte>.Empty);
+
+            isDisposable = logoEntries.IsDisposable == 1;
+            handle = logoEntries.AsSafePointer();
+            count = logoEntries.Length;
+            isAllocated = true;
+        }
     }
 
     protected override async Task<int> InitAsync(CancellationToken token)
     {
-		// Resolve request URL: prefer HttpClient.BaseAddress if set, otherwise fallback to ApiResponseBaseUrl
-		string requestUrl = ApiResponseHttpClient?.BaseAddress?.ToString() ?? ApiResponseBaseUrl;
+        string decodedAuthHash = authenticationHash.AeonPlsHelpMe();
+        string decodedGameTag  = gameTag.AeonPlsHelpMe();
+
+        // Step 1 — fetch the stable launcher-config endpoint to resolve the current (rotating) background hash.
+        // URL: {CDN}/launcher/launcher/{clientId}/{gameId}/index.json
+        string launcherConfigUrl = ApiResponseBaseUrl
+            .CombineUrlFromString("launcher", "launcher", decodedAuthHash, decodedGameTag, "index.json");
+
 #if DEBUG
-        SharedStatic.InstanceLogger.LogDebug("[WuwaGlobalLauncherApiMedia::InitAsync] Requesting media URL: {RequestUrl}", requestUrl);
+        SharedStatic.InstanceLogger.LogDebug(
+            "[WuwaGlobalLauncherApiMedia::InitAsync] Fetching launcher-config: {Url}", launcherConfigUrl);
 #endif
-		using HttpResponseMessage response = await ApiResponseHttpClient!.GetAsync(requestUrl, token);
 
-		// Log status and body on failure to aid debugging (but avoid reading unnecessarily on success)
-		if (!response.IsSuccessStatusCode)
-		{
-			string body = string.Empty;
-			try
-			{
-				body = await response.Content.ReadAsStringAsync(token);
-			}
-			catch (Exception ex)
-			{
-				SharedStatic.InstanceLogger.LogError(ex, "[WuwaGlobalLauncherApiMedia::InitAsync] Failed to read response body.");
-            }
+        using HttpResponseMessage configResponse = await ApiResponseHttpClient!.GetAsync(launcherConfigUrl, token);
+        if (!configResponse.IsSuccessStatusCode)
+        {
+            SharedStatic.InstanceLogger.LogError(
+                "[WuwaGlobalLauncherApiMedia::InitAsync] launcher-config request failed: {StatusCode}", (int)configResponse.StatusCode);
+        }
+        configResponse.EnsureSuccessStatusCode();
+
+        string configJson = await configResponse.Content.ReadAsStringAsync(token);
+        SharedStatic.InstanceLogger.LogTrace("[WuwaGlobalLauncherApiMedia::InitAsync] Launcher-config response: {Json}", configJson);
+
+        WuwaApiResponseLauncherConfig? launcherConfig = JsonSerializer.Deserialize(
+            configJson, WuwaApiResponseContext.Default.WuwaApiResponseLauncherConfig);
+
+        string? backgroundHash = launcherConfig?.FunctionCode?.Background;
+        if (string.IsNullOrEmpty(backgroundHash))
+            throw new InvalidOperationException(
+                "launcher-config response did not contain a valid functionCode.background hash.");
+
 #if DEBUG
-			SharedStatic.InstanceLogger.LogError(
-				"[WuwaGlobalLauncherApiMedia::InitAsync] Request to {RequestUrl} failed with status {StatusCode}. Response body: {ResponseBody}",
-				requestUrl, (int)response.StatusCode, body);
+        SharedStatic.InstanceLogger.LogDebug(
+            "[WuwaGlobalLauncherApiMedia::InitAsync] Resolved background hash: {Hash}", backgroundHash);
 #endif
-		}
 
-		response.EnsureSuccessStatusCode();
+        // Step 2 — fetch the wallpapers-slogan endpoint using the dynamic hash.
+        // URL: {CDN}/launcher/{clientId}/{gameId}/background/{hash}/en.json
+        string wallpaperUrl = ApiResponseBaseUrl
+            .CombineUrlFromString("launcher", decodedAuthHash, decodedGameTag, "background", backgroundHash, "en.json");
 
-		string jsonResponse = await response.Content.ReadAsStringAsync(token);
-		SharedStatic.InstanceLogger.LogTrace("API Media response: {JsonResponse}", jsonResponse);
-		ApiResponse = JsonSerializer.Deserialize<WuwaApiResponseMedia>(jsonResponse, WuwaApiResponseContext.Default.WuwaApiResponseMedia)
-					  ?? throw new NullReferenceException("Background Media API Returns null response!");
+#if DEBUG
+        SharedStatic.InstanceLogger.LogDebug(
+            "[WuwaGlobalLauncherApiMedia::InitAsync] Fetching wallpaper: {Url}", wallpaperUrl);
+#endif
 
-		// We don't have a way to check if the API response is valid, so we assume it is valid if we reach this point.
-		return 0;
-	}
+        using HttpResponseMessage wallpaperResponse = await ApiResponseHttpClient.GetAsync(wallpaperUrl, token);
+        if (!wallpaperResponse.IsSuccessStatusCode)
+        {
+            SharedStatic.InstanceLogger.LogError(
+                "[WuwaGlobalLauncherApiMedia::InitAsync] wallpaper request failed: {StatusCode}", (int)wallpaperResponse.StatusCode);
+        }
+        wallpaperResponse.EnsureSuccessStatusCode();
+
+        string wallpaperJson = await wallpaperResponse.Content.ReadAsStringAsync(token);
+        SharedStatic.InstanceLogger.LogTrace("[WuwaGlobalLauncherApiMedia::InitAsync] Wallpaper response: {Json}", wallpaperJson);
+
+        ApiResponse = JsonSerializer.Deserialize(wallpaperJson, WuwaApiResponseContext.Default.WuwaApiResponseMedia)
+                      ?? throw new NullReferenceException("Wallpaper API returned a null response!");
+
+        return 0;
+    }
 
     protected override async Task DownloadAssetAsyncInner(HttpClient? client, string fileUrl, Stream outputStream,
         PluginDisposableMemory<byte> fileChecksum, PluginFiles.FileReadProgressDelegate? downloadProgress, CancellationToken token)
@@ -134,12 +187,12 @@ internal partial class WuwaGlobalLauncherApiMedia(string apiResponseBaseUrl, str
     {
         if (IsDisposed)
             return;
-        
+
         using (ThisInstanceLock.EnterScope())
         {
             ApiResponseHttpClient.Dispose();
             ApiDownloadHttpClient.Dispose();
-            
+
             ApiResponse = null;
             base.Dispose();
         }

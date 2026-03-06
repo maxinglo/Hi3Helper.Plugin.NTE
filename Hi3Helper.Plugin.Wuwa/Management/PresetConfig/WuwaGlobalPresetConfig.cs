@@ -95,9 +95,9 @@ public partial class WuwaGlobalPresetConfig : WuwaPresetConfig
         "Spanish"
     ];
 
-    public override ILauncherApiMedia? LauncherApiMedia 
+    public override ILauncherApiMedia? LauncherApiMedia
     {
-        get => field ??= new WuwaGlobalLauncherApiMedia(ApiResponseUrl, CurrentTag, AuthenticationHash, "bg", Hash1);
+        get => field ??= new WuwaGlobalLauncherApiMedia(ApiResponseUrl, CurrentTag, AuthenticationHash);
         set;
     }
 
