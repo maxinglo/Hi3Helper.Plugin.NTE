@@ -380,6 +380,27 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                 InstallProgressStateDelegate? progressStateDelegate,
                 CancellationToken token)
             {
+                try
+                {
+                    await RunAsyncCore(kind, onlyDownload, progressDelegate, progressStateDelegate, token)
+                        .ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    SharedStatic.InstanceLogger.LogInformation(
+                        "[Patch::RunAsync] Patch operation cancelled by user.");
+                    // Re-throw so version doesn't get updated by calling code
+                    throw;
+                }
+            }
+
+            private async Task RunAsyncCore(
+                GameInstallerKind kind,
+                bool onlyDownload,
+                InstallProgressDelegate? progressDelegate,
+                InstallProgressStateDelegate? progressStateDelegate,
+                CancellationToken token)
+            {
                 var manager = _owner.GameManager as WuwaGameManager
                     ?? throw new InvalidOperationException("GameManager is not a WuwaGameManager.");
 
@@ -387,7 +408,14 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                 string patchTempPath = Path.Combine(installPath, "TempPath", PatchTempDirName);
 
                 // Initialize progress tracking
-                var installProgress = new InstallProgress();
+                var installProgress = new InstallProgress
+                {
+                    // Initialize totals to 1 so UI shows "0/1" instead of "0/0" if cancelled during Preparing
+                    TotalStateToComplete = 1,
+                    TotalCountToDownload = 1,
+                    StateCount = 0,
+                    DownloadedCount = 0
+                };
                 var currentProgressState = InstallProgressState.Idle;
 
                 int lastLoggedDownloadedCount = -1;
@@ -937,6 +965,8 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                     installProgress.TotalCountToDownload = downloadEntries.Length;
                     installProgress.DownloadedBytes = 0;
                     installProgress.DownloadedCount = 0;
+                    installProgress.StateCount = 0;
+                    installProgress.TotalStateToComplete = downloadEntries.Length;
                     ReportProgress();
 
                     // Build the absolute base download URLs:
@@ -987,6 +1017,7 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                                             entry.Dest);
                                         Interlocked.Add(ref installProgress.DownloadedBytes, fi.Length);
                                         Interlocked.Increment(ref installProgress.DownloadedCount);
+                                        Interlocked.Increment(ref installProgress.StateCount);
                                         ReportProgress();
                                         return;
                                     }
@@ -1027,6 +1058,7 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                             }
 
                             Interlocked.Increment(ref installProgress.DownloadedCount);
+                            Interlocked.Increment(ref installProgress.StateCount);
                             ReportProgress();
                         }).ConfigureAwait(false);
 
@@ -1352,18 +1384,45 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                             "[Patch::RunAsync] Applying group {Idx} dir patch: srcDir={Src}, diff={Diff}, outDir={Out}",
                             groupIdx, installPath, krpdiffPath, tempGroupDir);
 
+                        // Track StateCount before patching for exception recovery
+                        int stateCountBeforePatch = Volatile.Read(ref installProgress.StateCount);
+                        
                         try
                         {
                             // Use writeBytesDelegate for real-time byte progress during
                             // the (blocking) patch operation so the UI stays responsive.
+                            // Also increment StateCount proportionally based on bytes written
+                            // to show file-level progress (prevents "Updating 0/91" display).
                             long patchBytesAccum = 0;
+                            long totalBytesWritten = 0;
                             const long patchReportThreshold = 4 << 20; // ~4 MiB
+                            
+                            // Calculate bytes per file for proportional StateCount updates
+                            long bytesPerFile = groupExpectedBytes > 0 && group.DstFiles.Length > 0
+                                ? groupExpectedBytes / group.DstFiles.Length
+                                : 1;
+                            int lastReportedFileCount = 0;
 
                             HPatchZNative.ApplyDirPatch(installPath, krpdiffPath, tempGroupDir,
                                 writeBytesDelegate: bytesWritten =>
                                 {
                                     Interlocked.Add(ref installProgress.DownloadedBytes, bytesWritten);
+                                    totalBytesWritten += bytesWritten;
                                     patchBytesAccum += bytesWritten;
+                                    
+                                    // Estimate completed files based on bytes written
+                                    int estimatedFiles = bytesPerFile > 0
+                                        ? Math.Min((int)(totalBytesWritten / bytesPerFile), group.DstFiles.Length)
+                                        : 0;
+                                    
+                                    // Update StateCount incrementally as we estimate file completion
+                                    if (estimatedFiles > lastReportedFileCount)
+                                    {
+                                        int filesToAdd = estimatedFiles - lastReportedFileCount;
+                                        Interlocked.Add(ref installProgress.StateCount, filesToAdd);
+                                        lastReportedFileCount = estimatedFiles;
+                                    }
+                                    
                                     if (patchBytesAccum >= patchReportThreshold)
                                     {
                                         ReportProgress();
@@ -1433,19 +1492,25 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                                 "[Patch::RunAsync] Group {Idx}: patch failed but all destination " +
                                 "files already match target — skipping (already applied).",
                                 groupIdx);
+                            
+                            // Reset StateCount to pre-patch value (in case it was partially incremented)
+                            // then set it to reflect all files in this group
+                            int targetStateForGroup = stateCountBeforePatch + group.DstFiles.Length;
+                            Interlocked.Exchange(ref installProgress.StateCount, targetStateForGroup);
+                            
                             cumulativeExpectedBytes += groupExpectedBytes;
                             Interlocked.Exchange(ref installProgress.DownloadedBytes, cumulativeExpectedBytes);
-                            foreach (var dstRef in group.DstFiles)
-                            {
-                                Interlocked.Increment(ref installProgress.StateCount);
-                                Interlocked.Increment(ref installProgress.DownloadedCount);
-                            }
+                            
+                            // Update DownloadedCount to match StateCount
+                            Interlocked.Add(ref installProgress.DownloadedCount, group.DstFiles.Length);
+                            
                             ReportProgress();
                             completedGroups++;
                             continue;
                         }
 
                         // ─ Verify each output file and move to final location ─
+                        int verifiedFileCount = 0;
                         foreach (var dstRef in group.DstFiles)
                         {
                             if (string.IsNullOrEmpty(dstRef.Dest))
@@ -1488,13 +1553,30 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                                 File.Delete(finalDst);
                             File.Move(patchedFile, finalDst);
 
-                            Interlocked.Increment(ref installProgress.StateCount);
-                            Interlocked.Add(ref installProgress.DownloadedBytes, (long)dstRef.Size);
+                            // StateCount was already incremented during patch operation,
+                            // so just update DownloadedCount here
                             Interlocked.Increment(ref installProgress.DownloadedCount);
-                            ReportProgress();
+                            verifiedFileCount++;
+                            
+                            // Report progress periodically during verification
+                            if (verifiedFileCount % 10 == 0 || verifiedFileCount == group.DstFiles.Length)
+                                ReportProgress();
 
                             SharedStatic.InstanceLogger.LogDebug(
                                 "[Patch::RunAsync] Moved patched file: {Dst}", dstRef.Dest);
+                        }
+                        
+                        // Ensure StateCount matches exact file count (correct any estimation errors)
+                        int expectedStateCount = Volatile.Read(ref installProgress.StateCount);
+                        int targetStateCount = 0;
+                        for (int gi = 0; gi <= groupIdx; gi++)
+                        {
+                            if (gi < patchIndex.GroupInfos.Length)
+                                targetStateCount += patchIndex.GroupInfos[gi].DstFiles.Length;
+                        }
+                        if (expectedStateCount != targetStateCount)
+                        {
+                            Interlocked.Exchange(ref installProgress.StateCount, targetStateCount);
                         }
 
                         // Snap DownloadedBytes to exact expected value after the group
