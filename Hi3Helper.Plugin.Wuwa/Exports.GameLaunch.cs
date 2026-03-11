@@ -1,3 +1,4 @@
+using Hi3Helper.Plugin.Core;
 using Hi3Helper.Plugin.Core.Management.PresetConfig;
 using Hi3Helper.Plugin.Core.Utility;
 using Hi3Helper.Plugin.Wuwa.Management;
@@ -54,21 +55,13 @@ public partial class Exports
 				CancellationTokenSource gameLogReaderCts = new();
 				CancellationTokenSource coopCts = CancellationTokenSource.CreateLinkedTokenSource(token, gameLogReaderCts.Token);
 
-				if (!TryGetGameProcessFromContext(context, out Process? gameProcess))
-				{
-					return false;
-				}
-
 				// Run game log reader (Create a new thread)
 				_ = ReadGameLog(context, coopCts.Token);
 
 				_ = TryKillEpicLauncher(context, token);
 
-				// ReSharper disable once PossiblyMistakenUseOfCancellationToken
 				await process.WaitForExitAsync(token);
 				await gameLogReaderCts.CancelAsync();
-
-				gameProcess.Dispose();
 				return true;
 			}
 		}
@@ -83,7 +76,7 @@ public partial class Exports
 		string? startingExecutablePath = null;
 		string? gameExecutablePath = null;
 		if (!TryGetStartingExecutablePath(context, out startingExecutablePath)
-			&& !TryGetStartingExecutablePath(context, out gameExecutablePath))
+			&& !TryGetGameExecutablePath(context, out gameExecutablePath))
 		{
 			return true;
 		}
@@ -116,7 +109,7 @@ public partial class Exports
 			string? startingExecutablePath = null;
 			string? gameExecutablePath = null;
 			if (!TryGetStartingExecutablePath(context, out startingExecutablePath)
-				&& !TryGetStartingExecutablePath(context, out gameExecutablePath))
+				&& !TryGetGameExecutablePath(context, out gameExecutablePath))
 			{
 				return true;
 			}
@@ -168,10 +161,18 @@ public partial class Exports
 
 		foreach (Process process in processes)
 		{
-			if (process.MainModule?.FileName.StartsWith(executableDirPath, StringComparison.OrdinalIgnoreCase) ?? false)
+			try
 			{
-				returnProcess = process;
-				break;
+				if (process.MainModule?.FileName != null &&
+				    process.MainModule.FileName.StartsWith(executableDirPath, StringComparison.OrdinalIgnoreCase))
+				{
+					returnProcess = process;
+					break;
+				}
+			}
+			catch
+			{
+				// Ignore
 			}
 		}
 
@@ -216,8 +217,13 @@ public partial class Exports
 		process = null;
 		if (!TryGetGameExecutablePath(context, out string? gameExecutablePath))
 		{
+			SharedStatic.InstanceLogger.LogError(
+				"[Wuwa::TryGetGameProcessFromContext] Failed to get game executable path.");
 			return false;
 		}
+
+		SharedStatic.InstanceLogger.LogInformation(
+			"[Wuwa::TryGetGameProcessFromContext] Game executable path: {Path}", gameExecutablePath);
 
 		ProcessStartInfo startInfo = new ProcessStartInfo(gameExecutablePath);
 
@@ -233,6 +239,8 @@ public partial class Exports
 		startingExecutablePath = null;
 		if (context is not { GameManager: WuwaGameManager dnaGameManager, PresetConfig: WuwaPresetConfig presetConfig })
 		{
+			SharedStatic.InstanceLogger.LogError(
+				"[Wuwa::TryGetStartingExecutablePath] Invalid context or missing GameManager/PresetConfig.");
 			return false;
 		}
 
@@ -245,11 +253,22 @@ public partial class Exports
 		if (string.IsNullOrEmpty(gamePath)
 			|| string.IsNullOrEmpty(executablePath))
 		{
+			SharedStatic.InstanceLogger.LogError(
+				"[Wuwa::TryGetStartingExecutablePath] GamePath or ExecutablePath is null/empty. GamePath: {GamePath}, ExecutablePath: {ExecPath}",
+				gamePath ?? "<null>", executablePath ?? "<null>");
 			return false;
 		}
 
 		startingExecutablePath = Path.Combine(gamePath, executablePath);
-		return File.Exists(startingExecutablePath);
+		
+		if (!File.Exists(startingExecutablePath))
+		{
+			SharedStatic.InstanceLogger.LogError(
+				"[Wuwa::TryGetStartingExecutablePath] Starting executable not found at: {Path}", startingExecutablePath);
+			return false;
+		}
+		
+		return true;
 	}
 
 	private static bool TryGetStartingProcessFromContext(GameManagerExtension.RunGameFromGameManagerContext context, string? startArgument, [NotNullWhen(true)] out Process? process)
@@ -257,8 +276,13 @@ public partial class Exports
 		process = null;
 		if (!TryGetStartingExecutablePath(context, out string? startingExecutablePath))
 		{
+			SharedStatic.InstanceLogger.LogError(
+				"[Wuwa::TryGetStartingProcessFromContext] Failed to get starting executable path. Game cannot be launched.");
 			return false;
 		}
+
+		SharedStatic.InstanceLogger.LogInformation(
+			"[Wuwa::TryGetStartingProcessFromContext] Starting executable path: {Path}", startingExecutablePath);
 
 		ProcessStartInfo startInfo = string.IsNullOrEmpty(startArgument) ?
 			new ProcessStartInfo(startingExecutablePath) :
