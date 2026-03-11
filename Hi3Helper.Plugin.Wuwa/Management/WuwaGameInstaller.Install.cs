@@ -32,6 +32,22 @@ namespace Hi3Helper.Plugin.Wuwa.Management
 
             public async Task RunAsync(GameInstallerKind kind, InstallProgressDelegate? progressDelegate, InstallProgressStateDelegate? progressStateDelegate, CancellationToken token)
             {
+                try
+                {
+                    await RunAsyncCore(kind, progressDelegate, progressStateDelegate, token)
+                        .ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    SharedStatic.InstanceLogger.LogInformation(
+                        "[Install::RunAsync] Install operation cancelled by user.");
+                    // Re-throw so version doesn't get updated by calling code
+                    throw;
+                }
+            }
+
+            private async Task RunAsyncCore(GameInstallerKind kind, InstallProgressDelegate? progressDelegate, InstallProgressStateDelegate? progressStateDelegate, CancellationToken token)
+            {
                 SharedStatic.InstanceLogger.LogInformation("[WuwaGameInstaller::StartInstallCoreAsync] Starting installation routine. Mode={Mode}", kind);
 
                 if (_owner.GameAssetBaseUrl is null)
