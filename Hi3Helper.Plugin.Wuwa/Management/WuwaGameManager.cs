@@ -211,8 +211,25 @@ internal partial class WuwaGameManager : GameManagerBase
             string patchTempPath = Path.Combine(CurrentGameInstallPath, "TempPath", "TempPatchFiles");
             if (!Directory.Exists(patchTempPath)) return false;
 
+            // Check if there are actual preload files (version marker or krpdiff files)
+            string versionMarkerPath = Path.Combine(patchTempPath, ".version");
+            bool hasVersionMarker = File.Exists(versionMarkerPath);
+            bool hasKrpdiffFiles = Directory.EnumerateFiles(patchTempPath, "*.krpdiff", SearchOption.AllDirectories).Any();
+            
+            if (!hasVersionMarker && !hasKrpdiffFiles)
+            {
+                SharedStatic.InstanceLogger.LogDebug(
+                    "[WuwaGameManager::HasPendingPreloadPatch] Directory exists but no preload files found at: {Path}",
+                    patchTempPath);
+                return false;
+            }
+
             // Preload patches exist and predownload is no longer offered
-            return ApiPreloadGameVersion == GameVersion.Empty;
+            bool result = ApiPreloadGameVersion == GameVersion.Empty;
+            SharedStatic.InstanceLogger.LogDebug(
+                "[WuwaGameManager::HasPendingPreloadPatch] HasVersionMarker={Marker}, HasKrpdiff={Krpdiff}, ApiPreloadVersion={PreloadVer}, Result={Result}",
+                hasVersionMarker, hasKrpdiffFiles, ApiPreloadGameVersion, result);
+            return result;
         }
     }
 
@@ -352,7 +369,7 @@ internal partial class WuwaGameManager : GameManagerBase
             ApiGameVersion, CurrentGameVersion, CurrentGameInstallPath ?? "(null)");
 
         // Set preload version from predownload config if available
-        if (ApiGameConfigResponse.Default?.PredownloadReference?.CurrentVersion is { } preloadVer
+        if (ApiGameConfigResponse.PredownloadReference?.ConfigReference?.CurrentVersion is { } preloadVer
             && preloadVer != GameVersion.Empty)
         {
             ApiPreloadGameVersion = preloadVer;
@@ -863,13 +880,33 @@ internal partial class WuwaGameManager : GameManagerBase
     internal WuwaApiResponseGameConfigRef? GetPatchConfigForVersion(GameVersion fromVersion)
     {
         var patchConfigs = ApiGameConfigResponse?.Default?.ConfigReference?.PatchConfig;
-        if (patchConfigs == null) return null;
+        if (patchConfigs == null)
+        {
+            SharedStatic.InstanceLogger.LogWarning(
+                "[WuwaGameManager::GetPatchConfigForVersion] ConfigReference or PatchConfig is null");
+            return null;
+        }
+
+        SharedStatic.InstanceLogger.LogDebug(
+            "[WuwaGameManager::GetPatchConfigForVersion] Searching for version {Version} in {Count} patch configs",
+            fromVersion, patchConfigs.Length);
 
         foreach (var pc in patchConfigs)
         {
             if (pc.CurrentVersion == fromVersion)
+            {
+                SharedStatic.InstanceLogger.LogInformation(
+                    "[WuwaGameManager::GetPatchConfigForVersion] Found match: {Version} -> BaseUrl={BaseUrl}",
+                    fromVersion, pc.BaseUrl);
                 return pc;
+            }
         }
+
+        SharedStatic.InstanceLogger.LogWarning(
+            "[WuwaGameManager::GetPatchConfigForVersion] No patch config found for version {Version}. " +
+            "Available versions: {Versions}",
+            fromVersion,
+            string.Join(", ", patchConfigs.Select(p => p.CurrentVersion.ToString())));
         return null;
     }
 
@@ -878,14 +915,37 @@ internal partial class WuwaGameManager : GameManagerBase
     /// </summary>
     internal WuwaApiResponseGameConfigRef? GetPreloadPatchConfigForVersion(GameVersion fromVersion)
     {
-        var patchConfigs = ApiGameConfigResponse?.Default?.PredownloadReference?.PatchConfig;
-        if (patchConfigs == null) return null;
+        var patchConfigs = ApiGameConfigResponse?.PredownloadReference?.ConfigReference?.PatchConfig;
+        if (patchConfigs == null)
+        {
+            SharedStatic.InstanceLogger.LogWarning(
+                "[WuwaGameManager::GetPreloadPatchConfigForVersion] PredownloadReference or PatchConfig is null. " +
+                "PredownloadReference={HasPredownload}, ConfigReference={HasConfig}",
+                ApiGameConfigResponse?.PredownloadReference != null,
+                ApiGameConfigResponse?.PredownloadReference?.ConfigReference != null);
+            return null;
+        }
+
+        SharedStatic.InstanceLogger.LogDebug(
+            "[WuwaGameManager::GetPreloadPatchConfigForVersion] Searching for version {Version} in {Count} patch configs",
+            fromVersion, patchConfigs.Length);
 
         foreach (var pc in patchConfigs)
         {
             if (pc.CurrentVersion == fromVersion)
+            {
+                SharedStatic.InstanceLogger.LogInformation(
+                    "[WuwaGameManager::GetPreloadPatchConfigForVersion] Found match: {Version} -> BaseUrl={BaseUrl}",
+                    fromVersion, pc.BaseUrl);
                 return pc;
+            }
         }
+
+        SharedStatic.InstanceLogger.LogWarning(
+            "[WuwaGameManager::GetPreloadPatchConfigForVersion] No patch config found for version {Version}. " +
+            "Available versions: {Versions}",
+            fromVersion,
+            string.Join(", ", patchConfigs.Select(p => p.CurrentVersion.ToString())));
         return null;
     }
 
@@ -893,5 +953,5 @@ internal partial class WuwaGameManager : GameManagerBase
         => ApiGameConfigResponse?.Default?.ConfigReference;
 
     internal WuwaApiResponseGameConfigRef? ApiPredownloadReference
-        => ApiGameConfigResponse?.Default?.PredownloadReference;
+        => ApiGameConfigResponse?.PredownloadReference?.ConfigReference;
 }

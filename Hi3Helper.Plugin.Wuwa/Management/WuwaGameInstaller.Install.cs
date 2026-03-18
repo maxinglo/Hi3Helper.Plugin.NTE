@@ -331,16 +331,28 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                     // Build original file URI
                     Uri fileUri = new(new Uri(new Uri(_owner.ApiResponseAssetUrl!), _owner.GameResourceBasisPath! + "/"), entry.Dest ?? string.Empty);
 
+                    // Per-file progress tracking
+                    long perFileAccum = 0;
+                    long perFileTotal = (long)entry.Size;
+                    void EntryBytesCallback(long delta)
+                    {
+                        if (delta == 0) return;
+                        Interlocked.Add(ref installProgress.DownloadedBytes, delta);
+                        long currentBytes = Interlocked.Add(ref perFileAccum, delta);
+                        SharedStaticV1Ext.InvokePerFileProgress(currentBytes, perFileTotal);
+                        ReportProgress(InstallProgressState.Download);
+                    }
+
                     // Download (choose chunked or whole)
                     try
                     {
                         if (entry.ChunkInfos == null || entry.ChunkInfos.Length == 0)
                         {
-                            await TryDownloadWholeFileWithFallbacksAsync(fileUri, outputPath, entry.Dest ?? string.Empty, innerToken, DownloadBytesCallback).ConfigureAwait(false);
+                            await TryDownloadWholeFileWithFallbacksAsync(fileUri, outputPath, entry.Dest ?? string.Empty, innerToken, EntryBytesCallback).ConfigureAwait(false);
                         }
                         else
                         {
-                            await TryDownloadChunkedFileWithFallbacksAsync(fileUri, outputPath, entry.ChunkInfos, entry.Dest ?? string.Empty, innerToken, DownloadBytesCallback).ConfigureAwait(false);
+                            await TryDownloadChunkedFileWithFallbacksAsync(fileUri, outputPath, entry.ChunkInfos, entry.Dest ?? string.Empty, innerToken, EntryBytesCallback).ConfigureAwait(false);
                         }
                     }
                     catch (Exception ex)

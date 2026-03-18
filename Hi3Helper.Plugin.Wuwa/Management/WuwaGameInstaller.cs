@@ -81,13 +81,21 @@ internal partial class WuwaGameInstaller : GameInstallerBase
 
     protected override async Task<long> GetGameDownloadedSizeAsyncInner(GameInstallerKind gameInstallerKind, CancellationToken token)
     {
+        SharedStatic.InstanceLogger.LogInformation(
+            "[WuwaGameInstaller::GetGameDownloadedSizeAsyncInner] Called with kind={Kind}, GameAssetBaseUrl={HasUrl}",
+            gameInstallerKind, GameAssetBaseUrl != null);
+
         if (GameAssetBaseUrl is null)
+        {
+            SharedStatic.InstanceLogger.LogWarning("[WuwaGameInstaller::GetGameDownloadedSizeAsyncInner] GameAssetBaseUrl is null, returning 0");
             return 0L;
+        }
 
         // Ensure API/init is ready
         await InitAsync(token).ConfigureAwait(false);
+        SharedStatic.InstanceLogger.LogDebug("[WuwaGameInstaller::GetGameDownloadedSizeAsyncInner] InitAsync completed");
 
-        return gameInstallerKind switch
+        long result = gameInstallerKind switch
         {
             GameInstallerKind.None => 0L,
             GameInstallerKind.Update or GameInstallerKind.Preload =>
@@ -96,19 +104,36 @@ internal partial class WuwaGameInstaller : GameInstallerBase
                 await CalculateDownloadedBytesAsync(token).ConfigureAwait(false),
             _ => 0L,
         };
+
+        SharedStatic.InstanceLogger.LogInformation(
+            "[WuwaGameInstaller::GetGameDownloadedSizeAsyncInner] Returning {Size} bytes for kind={Kind}",
+            result, gameInstallerKind);
+
+        return result;
 	}
 
     protected override async Task<long> GetGameSizeAsyncInner(GameInstallerKind gameInstallerKind, CancellationToken token)
     {
+        SharedStatic.InstanceLogger.LogInformation(
+            "[WuwaGameInstaller::GetGameSizeAsyncInner] Called with kind={Kind}, GameAssetBaseUrl={HasUrl}",
+            gameInstallerKind, GameAssetBaseUrl != null);
+
         if (GameAssetBaseUrl is null)
+        {
+            SharedStatic.InstanceLogger.LogWarning("[WuwaGameInstaller::GetGameSizeAsyncInner] GameAssetBaseUrl is null, returning 0");
             return 0L;
+        }
 
         // Ensure API/init is ready
         await InitAsync(token).ConfigureAwait(false);
+        SharedStatic.InstanceLogger.LogDebug("[WuwaGameInstaller::GetGameSizeAsyncInner] InitAsync completed");
 
         // For update/preload, compute from patch index instead of full resource index
         if (gameInstallerKind is GameInstallerKind.Update or GameInstallerKind.Preload)
         {
+            SharedStatic.InstanceLogger.LogInformation(
+                "[WuwaGameInstaller::GetGameSizeAsyncInner] Calling CalculatePatchSizeAsync for kind={Kind}",
+                gameInstallerKind);
             return await CalculatePatchSizeAsync(gameInstallerKind, token).ConfigureAwait(false);
         }
 
@@ -146,6 +171,7 @@ internal partial class WuwaGameInstaller : GameInstallerBase
 
     protected override Task StartPreloadAsyncInner(InstallProgressDelegate? progressDelegate, InstallProgressStateDelegate? progressStateDelegate, CancellationToken token)
     {
+        SharedStatic.InstanceLogger.LogInformation("[WuwaGameInstaller::StartPreloadAsyncInner] Starting preload download");
         // Preload: download krpdiff files but do not apply them yet
         return StartPatchCoreAsync(GameInstallerKind.Preload, onlyDownload: true, progressDelegate, progressStateDelegate, token);
     }
@@ -193,14 +219,42 @@ internal partial class WuwaGameInstaller : GameInstallerBase
         {
             GameManager.GetGamePath(out string? installPath);
             if (string.IsNullOrEmpty(installPath))
+            {
+                SharedStatic.InstanceLogger.LogDebug("[WuwaGameInstaller::CalculatePatchDownloadedBytesAsync] InstallPath is null/empty, returning 0");
                 return Task.FromResult(0L);
+            }
 
             string patchTempPath = Path.Combine(installPath, "TempPath", PatchTempDirName);
+            SharedStatic.InstanceLogger.LogInformation(
+                "[WuwaGameInstaller::CalculatePatchDownloadedBytesAsync] Checking path: {Path}, Exists={Exists}",
+                patchTempPath, Directory.Exists(patchTempPath));
+
             if (!Directory.Exists(patchTempPath))
                 return Task.FromResult(0L);
 
+            var files = Directory.EnumerateFiles(patchTempPath, "*", SearchOption.AllDirectories).ToList();
+            SharedStatic.InstanceLogger.LogInformation(
+                "[WuwaGameInstaller::CalculatePatchDownloadedBytesAsync] Found {Count} files in patch directory",
+                files.Count);
+
+            if (files.Count > 0)
+            {
+                foreach (var file in files.Take(10))
+                {
+                    SharedStatic.InstanceLogger.LogDebug(
+                        "[WuwaGameInstaller::CalculatePatchDownloadedBytesAsync] File: {FileName}",
+                        Path.GetFileName(file));
+                }
+                if (files.Count > 10)
+                {
+                    SharedStatic.InstanceLogger.LogDebug(
+                        "[WuwaGameInstaller::CalculatePatchDownloadedBytesAsync] ... and {Count} more files",
+                        files.Count - 10);
+                }
+            }
+
             long total = 0L;
-            foreach (string file in Directory.EnumerateFiles(patchTempPath, "*", SearchOption.AllDirectories))
+            foreach (string file in files)
             {
                 token.ThrowIfCancellationRequested();
                 try
@@ -214,12 +268,14 @@ internal partial class WuwaGameInstaller : GameInstallerBase
                 }
             }
 
-            SharedStatic.InstanceLogger.LogDebug(
-                "[WuwaGameInstaller::CalculatePatchDownloadedBytesAsync] Total patch bytes on disk: {Total}", total);
+            SharedStatic.InstanceLogger.LogInformation(
+                "[WuwaGameInstaller::CalculatePatchDownloadedBytesAsync] Total patch bytes on disk: {Total} ({TotalMB:F2} MB)",
+                total, total / 1024.0 / 1024.0);
             return Task.FromResult(total);
         }
         catch (OperationCanceledException)
         {
+            SharedStatic.InstanceLogger.LogDebug("[WuwaGameInstaller::CalculatePatchDownloadedBytesAsync] Operation cancelled");
             return Task.FromResult(0L);
         }
         catch (Exception ex)

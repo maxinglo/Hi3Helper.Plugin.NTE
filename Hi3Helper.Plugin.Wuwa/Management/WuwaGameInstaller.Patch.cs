@@ -47,6 +47,10 @@ namespace Hi3Helper.Plugin.Wuwa.Management
 
             manager.GetCurrentGameVersion(out GameVersion currentVersion);
 
+            SharedStatic.InstanceLogger.LogDebug(
+                "[WuwaGameInstaller::CalculatePatchSizeAsync] Calculating size for kind={Kind}, currentVersion={Version}",
+                kind, currentVersion);
+
             var patchConfig = kind == GameInstallerKind.Preload
                 ? manager.GetPreloadPatchConfigForVersion(currentVersion)
                 : manager.GetPatchConfigForVersion(currentVersion);
@@ -54,8 +58,8 @@ namespace Hi3Helper.Plugin.Wuwa.Management
             if (patchConfig == null)
             {
                 SharedStatic.InstanceLogger.LogWarning(
-                    "[WuwaGameInstaller::CalculatePatchSizeAsync] No patch config found for version {Version}",
-                    currentVersion);
+                    "[WuwaGameInstaller::CalculatePatchSizeAsync] No patch config found for version {Version}, kind={Kind}",
+                    currentVersion, kind);
                 return 0L;
             }
 
@@ -123,9 +127,22 @@ namespace Hi3Helper.Plugin.Wuwa.Management
             SharedStatic.InstanceLogger.LogDebug(
                 "[WuwaGameInstaller::DownloadPatchIndexAsync] Requesting patch index URL: {Url}", url);
 
-            using HttpResponseMessage resp = await _downloadHttpClient
-                .GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token)
-                .ConfigureAwait(false);
+            HttpResponseMessage resp;
+            try
+            {
+                resp = await _downloadHttpClient
+                    .GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                SharedStatic.InstanceLogger.LogError(
+                    "[WuwaGameInstaller::DownloadPatchIndexAsync] HTTP request failed for {Url}: {Err}", url, ex);
+                return null;
+            }
+
+            using (resp)
+            {
 
             if (!resp.IsSuccessStatusCode)
             {
@@ -210,12 +227,14 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                     result.Resource.Length, result.DeleteFiles.Length, result.GroupInfos.Length);
                 return result;
             }
-            catch (JsonException ex)
+            catch (Exception ex)
             {
                 SharedStatic.InstanceLogger.LogError(
-                    "[WuwaGameInstaller::DownloadPatchIndexAsync] JSON parse error: {Err}", ex.Message);
+                    "[WuwaGameInstaller::DownloadPatchIndexAsync] Parse error: {Err}", ex);
                 return null;
             }
+
+            } // end using (resp)
         }
 
         /// <summary>
@@ -970,8 +989,10 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                     ReportProgress();
 
                     // Build the absolute base download URLs:
-                    // - patchBaseUrl: for krpdiff entries (from patchConfig.BaseUrl)
-                    // - mainBaseUrl:  for full-replacement entries (from main game config's BaseUrl)
+                    // - patchBaseUrl: for krpdiff entries (from patchConfig.BaseUrl — the patch CDN)
+                    // - mainBaseUrl:  for full-replacement entries (from the TARGET version's
+                    //   ConfigReference.BaseUrl, NOT the current GA version). For preload this
+                    //   is ApiPredownloadReference.BaseUrl; for updates, ApiConfigReference.BaseUrl.
                     string cdnHost = (_owner.ApiResponseAssetUrl ?? "").TrimEnd('/');
 
                     string patchRelativeBase = (patchConfig.BaseUrl ?? _owner.GameResourceBasisPath ?? "").TrimEnd('/');
@@ -979,7 +1000,10 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                         ? patchRelativeBase
                         : $"{cdnHost}/{patchRelativeBase.TrimStart('/')}";
 
-                    string mainRelativeBase = (_owner.GameResourceBasisPath ?? "").TrimEnd('/');
+                    WuwaApiResponseGameConfigRef? targetConfigRef = kind == GameInstallerKind.Preload
+                        ? manager.ApiPredownloadReference
+                        : manager.ApiConfigReference;
+                    string mainRelativeBase = (targetConfigRef?.BaseUrl ?? _owner.GameResourceBasisPath ?? "").TrimEnd('/');
                     string mainBaseUrl = string.IsNullOrEmpty(cdnHost)
                         ? mainRelativeBase
                         : $"{cdnHost}/{mainRelativeBase.TrimStart('/')}";
@@ -987,7 +1011,7 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                     SharedStatic.InstanceLogger.LogInformation(
                         "[Patch::RunAsync] Download base URL (patch): {PatchUrl}", patchBaseUrl);
                     SharedStatic.InstanceLogger.LogInformation(
-                        "[Patch::RunAsync] Download base URL (main): {MainUrl}", mainBaseUrl);
+                        "[Patch::RunAsync] Download base URL (main/target): {MainUrl}", mainBaseUrl);
 
                     Directory.CreateDirectory(patchTempPath);
 
@@ -1002,8 +1026,24 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                             string relativePath = entry.Dest.Replace('/', Path.DirectorySeparatorChar);
                             string outputPath = Path.Combine(patchTempPath, relativePath);
 
-                            // For full-replacement entries, check if the file already exists in the
-                            // game install directory with the correct size — skip download if so.
+                            // Skip if the file was already fully downloaded on a previous run.
+                            if (File.Exists(outputPath))
+                            {
+                                var fi = new FileInfo(outputPath);
+                                if (fi.Length == (long)entry.Size)
+                                {
+                                    SharedStatic.InstanceLogger.LogDebug(
+                                        "[Patch::RunAsync] Already downloaded with correct size, skipping: {Dest}",
+                                        entry.Dest);
+                                    Interlocked.Add(ref installProgress.DownloadedBytes, fi.Length);
+                                    Interlocked.Increment(ref installProgress.DownloadedCount);
+                                    Interlocked.Increment(ref installProgress.StateCount);
+                                    ReportProgress();
+                                    return;
+                                }
+                            }
+
+                            // For full-replacement entries, also check the game install directory.
                             if (!isKrpdiff)
                             {
                                 string existingPath = Path.Combine(installPath, relativePath);
@@ -1029,8 +1069,8 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                             if (!string.IsNullOrEmpty(dir))
                                 Directory.CreateDirectory(dir);
 
-                            // Build download URL: krpdiff files use the patch CDN,
-                            // full-replacement files use the main game resource CDN.
+                            // krpdiff entries use the patch CDN; full-replacement
+                            // entries use the target version's resource CDN.
                             string baseUrl = isKrpdiff ? patchBaseUrl : mainBaseUrl;
                             string fileUrl = $"{baseUrl}/{entry.Dest}";
                             Uri uri = new(fileUrl, UriKind.Absolute);
@@ -1038,9 +1078,14 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                             SharedStatic.InstanceLogger.LogDebug(
                                 "[Patch::RunAsync] Downloading: {Url}", fileUrl);
 
+                            long perFileAccumulated = 0;
+                            long perFileTotal = (long)entry.Size;
+
                             Action<long> progressCallback = bytes =>
                             {
                                 Interlocked.Add(ref installProgress.DownloadedBytes, bytes);
+                                long currentFileBytes = Interlocked.Add(ref perFileAccumulated, bytes);
+                                SharedStaticV1Ext.InvokePerFileProgress(currentFileBytes, perFileTotal);
                                 ReportProgress();
                             };
 
@@ -1156,8 +1201,11 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                 // Build the CDN base URL for fallback full-replacement downloads.
                 // If any source file is missing for a group, we download the destination
                 // files directly from the CDN instead of applying the krpdiff.
+                WuwaApiResponseGameConfigRef? fallbackTargetConfigRef = kind == GameInstallerKind.Preload
+                    ? manager.ApiPredownloadReference
+                    : manager.ApiConfigReference;
                 string fallbackCdnHost = (_owner.ApiResponseAssetUrl ?? "").TrimEnd('/');
-                string fallbackRelativeBase = (_owner.GameResourceBasisPath ?? "").TrimEnd('/');
+                string fallbackRelativeBase = (fallbackTargetConfigRef?.BaseUrl ?? _owner.GameResourceBasisPath ?? "").TrimEnd('/');
                 string fallbackBaseUrl = string.IsNullOrEmpty(fallbackCdnHost)
                     ? fallbackRelativeBase
                     : $"{fallbackCdnHost}/{fallbackRelativeBase.TrimStart('/')}";
@@ -1339,11 +1387,16 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                                 SharedStatic.InstanceLogger.LogDebug(
                                     "[Patch::RunAsync] Downloading replacement: {Url}", fileUrl);
 
+                                long replacementAccum = 0;
+                                long replacementTotal = (long)dstRef.Size;
+
                                 await _owner.TryDownloadWholeFileWithFallbacksAsync(
                                     uri, finalDst, dstRef.Dest, token,
                                     bytes =>
                                     {
                                         Interlocked.Add(ref installProgress.DownloadedBytes, bytes);
+                                        long currentBytes = Interlocked.Add(ref replacementAccum, bytes);
+                                        SharedStaticV1Ext.InvokePerFileProgress(currentBytes, replacementTotal);
                                         ReportProgress();
                                     }).ConfigureAwait(false);
 
