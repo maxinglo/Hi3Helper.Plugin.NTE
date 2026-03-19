@@ -1201,6 +1201,21 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                 // Build the CDN base URL for fallback full-replacement downloads.
                 // If any source file is missing for a group, we download the destination
                 // files directly from the CDN instead of applying the krpdiff.
+
+                // Invalidate pre-flight state cache: once we start moving patched files,
+                // the cached "all 141 files mismatch" result becomes stale because some
+                // files in installPath will be at the target version.  If the user cancels
+                // mid-move and retries, a fresh pre-flight will correctly detect which files
+                // have already been updated.
+                {
+                    string preflightStateToDelete = Path.Combine(patchTempPath, PreflightStateFileName);
+                    if (File.Exists(preflightStateToDelete))
+                    {
+                        try { File.Delete(preflightStateToDelete); }
+                        catch { /* best-effort */ }
+                    }
+                }
+
                 WuwaApiResponseGameConfigRef? fallbackTargetConfigRef = kind == GameInstallerKind.Preload
                     ? manager.ApiPredownloadReference
                     : manager.ApiConfigReference;
@@ -1316,30 +1331,40 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                             krpdiffEntries,
                             groupIdx);
 
-                        // ─ Pre-check: verify all source files exist ─
-                        // Directory-level krpdiffs need the old source files on disk.
-                        // If any are missing (corrupted install), download the target
-                        // destination files directly from the CDN as full replacements
-                        // instead of trying to patch.
-                        var missingSrcFiles = new List<string>();
+                        // ─ Pre-check: verify all source files exist and match expected sizes ─
+                        // Directory-level krpdiffs need the old source files on disk at
+                        // their ORIGINAL version.  If any are missing OR have the wrong
+                        // size (e.g. overwritten with target version by a previous
+                        // interrupted patch), the krpdiff will produce garbage output or
+                        // crash.  Detect this upfront and download the target destination
+                        // files directly from the CDN instead.
+                        var badSrcFiles = new List<string>();
                         foreach (var srcRef in group.SrcFiles)
                         {
                             if (string.IsNullOrEmpty(srcRef.Dest)) continue;
                             string srcPath = Path.Combine(installPath,
                                 srcRef.Dest.Replace('/', Path.DirectorySeparatorChar));
                             if (!File.Exists(srcPath))
-                                missingSrcFiles.Add(srcRef.Dest);
+                            {
+                                badSrcFiles.Add(srcRef.Dest);
+                            }
+                            else if (srcRef.Size > 0)
+                            {
+                                var srcFi = new FileInfo(srcPath);
+                                if ((ulong)srcFi.Length != srcRef.Size)
+                                    badSrcFiles.Add(srcRef.Dest);
+                            }
                         }
 
-                        if (missingSrcFiles.Count > 0)
+                        if (badSrcFiles.Count > 0)
                         {
                             SharedStatic.InstanceLogger.LogWarning(
-                                "[Patch::RunAsync] Group {Idx}: {Count} source file(s) missing — " +
+                                "[Patch::RunAsync] Group {Idx}: {Count} source file(s) missing or wrong size — " +
                                 "downloading destination files directly as full replacement.",
-                                groupIdx, missingSrcFiles.Count);
-                            foreach (var m in missingSrcFiles)
+                                groupIdx, badSrcFiles.Count);
+                            foreach (var m in badSrcFiles)
                                 SharedStatic.InstanceLogger.LogDebug(
-                                    "[Patch::RunAsync]   Missing source: {File}", m);
+                                    "[Patch::RunAsync]   Bad source: {File}", m);
 
                             // Download each destination file from CDN
                             foreach (var dstRef in group.DstFiles)
@@ -1432,6 +1457,15 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                         // Source = game install root (contains old files at their relative paths).
                         // Output = per-group temp dir so we can verify before committing.
                         string tempGroupDir = Path.Combine(patchTempPath, $"_patch_group_{groupIdx}");
+
+                        // Clean up any leftover temp directory from a previous interrupted
+                        // attempt (e.g. cancelled mid-verify-and-move) so stale output files
+                        // don't contaminate the new patch run.
+                        if (Directory.Exists(tempGroupDir))
+                        {
+                            try { Directory.Delete(tempGroupDir, true); }
+                            catch { /* best-effort */ }
+                        }
 
                         SharedStatic.InstanceLogger.LogDebug(
                             "[Patch::RunAsync] Applying group {Idx} dir patch: srcDir={Src}, diff={Diff}, outDir={Out}",
@@ -1534,20 +1568,105 @@ namespace Hi3Helper.Plugin.Wuwa.Management
 
                             if (!allDstMatchFallback)
                             {
-                                // Destination files don't match — this is a real failure
-                                throw new InvalidOperationException(
-                                    $"Patch application failed for group {groupIdx} and " +
-                                    $"destination files do not match target hashes. " +
-                                    $"The game installation may be corrupted.", patchEx);
+                                // Destination files don't match target yet — download each
+                                // one individually from CDN instead of throwing.  This
+                                // handles the case where a previous interrupted patch left
+                                // source files at mixed versions, making the krpdiff
+                                // produce garbage or crash (e.g. integer overflow).
+                                SharedStatic.InstanceLogger.LogWarning(
+                                    "[Patch::RunAsync] Group {Idx}: patch failed and destinations don't match. " +
+                                    "Downloading {Count} destination file(s) from CDN as fallback.",
+                                    groupIdx, group.DstFiles.Length);
+
+                                // Reset StateCount to pre-patch value before downloading
+                                Interlocked.Exchange(ref installProgress.StateCount, stateCountBeforePatch);
+
+                                foreach (var dstFallback in group.DstFiles)
+                                {
+                                    token.ThrowIfCancellationRequested();
+                                    if (string.IsNullOrEmpty(dstFallback.Dest)) continue;
+
+                                    string dstRelative = dstFallback.Dest.Replace('/', Path.DirectorySeparatorChar);
+                                    string finalDst = Path.Combine(installPath, dstRelative);
+
+                                    // Skip if this file already matches target
+                                    if (File.Exists(finalDst) && !string.IsNullOrEmpty(dstFallback.Md5))
+                                    {
+                                        var existFi = new FileInfo(finalDst);
+                                        if (existFi.Length == (long)dstFallback.Size)
+                                        {
+                                            await using var existStream = File.OpenRead(finalDst);
+                                            string existMd5 = await WuwaUtils
+                                                .ComputeMd5HexAsync(existStream, token)
+                                                .ConfigureAwait(false);
+                                            if (string.Equals(existMd5, dstFallback.Md5,
+                                                    StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                SharedStatic.InstanceLogger.LogDebug(
+                                                    "[Patch::RunAsync] CDN fallback: file already at target, skip: {Dst}",
+                                                    dstFallback.Dest);
+                                                Interlocked.Increment(ref installProgress.StateCount);
+                                                Interlocked.Add(ref installProgress.DownloadedBytes, (long)dstFallback.Size);
+                                                Interlocked.Increment(ref installProgress.DownloadedCount);
+                                                ReportProgress();
+                                                continue;
+                                            }
+                                        }
+                                    }
+
+                                    string fileUrl = $"{fallbackBaseUrl}/{dstFallback.Dest}";
+                                    Uri uri = new(fileUrl, UriKind.Absolute);
+
+                                    string? dstDir = Path.GetDirectoryName(finalDst);
+                                    if (!string.IsNullOrEmpty(dstDir))
+                                        Directory.CreateDirectory(dstDir);
+
+                                    SharedStatic.InstanceLogger.LogDebug(
+                                        "[Patch::RunAsync] CDN fallback download: {Url}", fileUrl);
+
+                                    long replacementAccum = 0;
+                                    long replacementTotal = (long)dstFallback.Size;
+
+                                    await _owner.TryDownloadWholeFileWithFallbacksAsync(
+                                        uri, finalDst, dstFallback.Dest, token,
+                                        bytes =>
+                                        {
+                                            Interlocked.Add(ref installProgress.DownloadedBytes, bytes);
+                                            long currentBytes = Interlocked.Add(ref replacementAccum, bytes);
+                                            SharedStaticV1Ext.InvokePerFileProgress(currentBytes, replacementTotal);
+                                            ReportProgress();
+                                        }).ConfigureAwait(false);
+
+                                    // Verify downloaded file
+                                    if (!string.IsNullOrEmpty(dstFallback.Md5))
+                                    {
+                                        await using var dlStream = File.OpenRead(finalDst);
+                                        string dlMd5 = await WuwaUtils
+                                            .ComputeMd5HexAsync(dlStream, token)
+                                            .ConfigureAwait(false);
+                                        if (!string.Equals(dlMd5, dstFallback.Md5,
+                                                StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            throw new InvalidOperationException(
+                                                $"CDN fallback file MD5 mismatch for " +
+                                                $"{dstFallback.Dest}: expected={dstFallback.Md5}, computed={dlMd5}");
+                                        }
+                                    }
+
+                                    Interlocked.Increment(ref installProgress.StateCount);
+                                    Interlocked.Increment(ref installProgress.DownloadedCount);
+                                    ReportProgress();
+                                }
+                            }
+                            else
+                            {
+                                SharedStatic.InstanceLogger.LogInformation(
+                                    "[Patch::RunAsync] Group {Idx}: patch failed but all destination " +
+                                    "files already match target — skipping (already applied).",
+                                    groupIdx);
                             }
 
-                            SharedStatic.InstanceLogger.LogInformation(
-                                "[Patch::RunAsync] Group {Idx}: patch failed but all destination " +
-                                "files already match target — skipping (already applied).",
-                                groupIdx);
-                            
-                            // Reset StateCount to pre-patch value (in case it was partially incremented)
-                            // then set it to reflect all files in this group
+                            // Correct progress counters for this group
                             int targetStateForGroup = stateCountBeforePatch + group.DstFiles.Length;
                             Interlocked.Exchange(ref installProgress.StateCount, targetStateForGroup);
                             
@@ -1563,6 +1682,14 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                         }
 
                         // ─ Verify each output file and move to final location ─
+                        // If a previous attempt was interrupted mid-move, some files in
+                        // installPath may already be at the target version while others
+                        // are still at the old version.  ApplyDirPatch expects ALL source
+                        // files to be at the old version, so patching over already-moved
+                        // files produces incorrect output.  We handle this gracefully:
+                        //   1. If patch output matches target MD5 → move it (normal path)
+                        //   2. If install file already matches target → skip (previous move)
+                        //   3. Otherwise → download from CDN as fallback
                         int verifiedFileCount = 0;
                         foreach (var dstRef in group.DstFiles)
                         {
@@ -1575,6 +1702,31 @@ namespace Hi3Helper.Plugin.Wuwa.Management
 
                             if (!File.Exists(patchedFile))
                             {
+                                // Patched output missing — check if install file is already at target
+                                if (File.Exists(finalDst) && !string.IsNullOrEmpty(dstRef.Md5))
+                                {
+                                    var existingFi = new FileInfo(finalDst);
+                                    if (existingFi.Length == (long)dstRef.Size)
+                                    {
+                                        await using var existStream = File.OpenRead(finalDst);
+                                        string existMd5 = await WuwaUtils
+                                            .ComputeMd5HexAsync(existStream, token)
+                                            .ConfigureAwait(false);
+                                        if (string.Equals(existMd5, dstRef.Md5,
+                                                StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            SharedStatic.InstanceLogger.LogDebug(
+                                                "[Patch::RunAsync] Patched output missing but install file already at target: {Dst}",
+                                                dstRef.Dest);
+                                            Interlocked.Increment(ref installProgress.DownloadedCount);
+                                            verifiedFileCount++;
+                                            if (verifiedFileCount % 10 == 0 || verifiedFileCount == group.DstFiles.Length)
+                                                ReportProgress();
+                                            continue;
+                                        }
+                                    }
+                                }
+
                                 throw new FileNotFoundException(
                                     $"Expected patched output file not found after dir patch " +
                                     $"(group {groupIdx}): {dstRef.Dest}",
@@ -1582,6 +1734,7 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                             }
 
                             // Post-patch MD5 verification
+                            bool patchOutputValid = true;
                             if (!string.IsNullOrEmpty(dstRef.Md5))
                             {
                                 await using var outStream = File.OpenRead(patchedFile);
@@ -1591,16 +1744,96 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                                 if (!string.Equals(outMd5, dstRef.Md5,
                                         StringComparison.OrdinalIgnoreCase))
                                 {
-                                    throw new InvalidOperationException(
-                                        $"Post-patch MD5 mismatch for {dstRef.Dest}: " +
-                                        $"expected={dstRef.Md5}, computed={outMd5}");
+                                    patchOutputValid = false;
+                                    SharedStatic.InstanceLogger.LogWarning(
+                                        "[Patch::RunAsync] Post-patch MD5 mismatch for {Dst}: expected={Expected}, computed={Computed}. " +
+                                        "Checking if install file is already at target or downloading replacement.",
+                                        dstRef.Dest, dstRef.Md5, outMd5);
                                 }
                             }
 
+                            if (!patchOutputValid)
+                            {
+                                // Patch output is wrong (source file was likely already at
+                                // target version from a previous interrupted move).  Check
+                                // if the file in the install directory already matches.
+                                bool installedFileOk = false;
+                                if (File.Exists(finalDst) && !string.IsNullOrEmpty(dstRef.Md5))
+                                {
+                                    var existingFi = new FileInfo(finalDst);
+                                    if (existingFi.Length == (long)dstRef.Size)
+                                    {
+                                        await using var existStream = File.OpenRead(finalDst);
+                                        string existMd5 = await WuwaUtils
+                                            .ComputeMd5HexAsync(existStream, token)
+                                            .ConfigureAwait(false);
+                                        if (string.Equals(existMd5, dstRef.Md5,
+                                                StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            SharedStatic.InstanceLogger.LogInformation(
+                                                "[Patch::RunAsync] Install file already at target (previous partial move): {Dst}",
+                                                dstRef.Dest);
+                                            installedFileOk = true;
+                                        }
+                                    }
+                                }
+
+                                if (!installedFileOk)
+                                {
+                                    // Neither patch output nor existing file matches — download from CDN
+                                    string fileUrl = $"{fallbackBaseUrl}/{dstRef.Dest}";
+                                    Uri uri = new(fileUrl, UriKind.Absolute);
+
+                                    string? dstDir = Path.GetDirectoryName(finalDst);
+                                    if (!string.IsNullOrEmpty(dstDir))
+                                        Directory.CreateDirectory(dstDir);
+
+                                    SharedStatic.InstanceLogger.LogWarning(
+                                        "[Patch::RunAsync] Downloading replacement from CDN: {Url}", fileUrl);
+
+                                    long replacementAccum = 0;
+                                    long replacementTotal = (long)dstRef.Size;
+
+                                    await _owner.TryDownloadWholeFileWithFallbacksAsync(
+                                        uri, finalDst, dstRef.Dest, token,
+                                        bytes =>
+                                        {
+                                            long currentBytes = Interlocked.Add(ref replacementAccum, bytes);
+                                            SharedStaticV1Ext.InvokePerFileProgress(currentBytes, replacementTotal);
+                                        }).ConfigureAwait(false);
+
+                                    // Verify the downloaded file
+                                    if (!string.IsNullOrEmpty(dstRef.Md5))
+                                    {
+                                        await using var dlStream = File.OpenRead(finalDst);
+                                        string dlMd5 = await WuwaUtils
+                                            .ComputeMd5HexAsync(dlStream, token)
+                                            .ConfigureAwait(false);
+                                        if (!string.Equals(dlMd5, dstRef.Md5,
+                                                StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            throw new InvalidOperationException(
+                                                $"CDN replacement file MD5 mismatch for " +
+                                                $"{dstRef.Dest}: expected={dstRef.Md5}, computed={dlMd5}");
+                                        }
+                                    }
+                                }
+
+                                // File is already correct in install dir (either already
+                                // there or just downloaded) — no need to move
+                                Interlocked.Increment(ref installProgress.DownloadedCount);
+                                verifiedFileCount++;
+                                if (verifiedFileCount % 10 == 0 || verifiedFileCount == group.DstFiles.Length)
+                                    ReportProgress();
+                                SharedStatic.InstanceLogger.LogDebug(
+                                    "[Patch::RunAsync] Recovered file: {Dst}", dstRef.Dest);
+                                continue;
+                            }
+
                             // Move verified file to install directory
-                            string? destDir = Path.GetDirectoryName(finalDst);
-                            if (!string.IsNullOrEmpty(destDir))
-                                Directory.CreateDirectory(destDir);
+                            string? destDir2 = Path.GetDirectoryName(finalDst);
+                            if (!string.IsNullOrEmpty(destDir2))
+                                Directory.CreateDirectory(destDir2);
 
                             if (File.Exists(finalDst))
                                 File.Delete(finalDst);
