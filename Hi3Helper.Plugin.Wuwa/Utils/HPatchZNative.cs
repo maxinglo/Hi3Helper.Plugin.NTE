@@ -57,6 +57,12 @@ internal static class HPatchZNative
             catch { /* ignore cleanup errors */ }
             throw;
         }
+        catch (Exception ex) when (FindCancellation(ex) is { } oce)
+        {
+            try { if (File.Exists(outputFilePath)) File.Delete(outputFilePath); }
+            catch { /* ignore cleanup errors */ }
+            throw oce;
+        }
         catch (Exception ex)
         {
             SharedStatic.InstanceLogger.LogError(
@@ -121,6 +127,14 @@ internal static class HPatchZNative
             catch { /* ignore cleanup errors */ }
             throw;
         }
+        catch (Exception ex) when (FindCancellation(ex) is { } oce)
+        {
+            // SharpHDiffPatch wraps OperationCanceledException inside AggregateException
+            // from Task.WaitAll. Unwrap and re-throw as a proper cancellation.
+            try { if (Directory.Exists(outputDir)) Directory.Delete(outputDir, true); }
+            catch { /* ignore cleanup errors */ }
+            throw oce;
+        }
         catch (Exception ex)
         {
             SharedStatic.InstanceLogger.LogError(
@@ -136,5 +150,27 @@ internal static class HPatchZNative
 
         SharedStatic.InstanceLogger.LogDebug(
             "[HPatchZNative::ApplyDirPatch] Dir patch applied successfully: {Output}", outputDir);
+    }
+
+    /// <summary>
+    /// Walks the exception's InnerException chain (and AggregateException.InnerExceptions)
+    /// looking for an <see cref="OperationCanceledException"/>.
+    /// </summary>
+    private static OperationCanceledException? FindCancellation(Exception ex)
+    {
+        if (ex is OperationCanceledException oce)
+            return oce;
+
+        if (ex is AggregateException agg)
+        {
+            foreach (var inner in agg.InnerExceptions)
+            {
+                var found = FindCancellation(inner);
+                if (found != null)
+                    return found;
+            }
+        }
+
+        return ex.InnerException != null ? FindCancellation(ex.InnerException) : null;
     }
 }
