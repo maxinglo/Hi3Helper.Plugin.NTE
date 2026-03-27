@@ -1052,6 +1052,22 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                                     var fi = new FileInfo(existingPath);
                                     if (fi.Length == (long)entry.Size)
                                     {
+                                        // Size matches — verify MD5 to ensure the content is
+                                        // actually the new version and not a stale file.
+                                        if (!string.IsNullOrEmpty(entry.Md5) && fi.Length <= Md5CheckSizeThreshold)
+                                        {
+                                            await using var existFs = File.OpenRead(existingPath);
+                                            string existMd5 = await WuwaUtils.ComputeMd5HexAsync(existFs, ct)
+                                                .ConfigureAwait(false);
+                                            if (!string.Equals(existMd5, entry.Md5, StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                SharedStatic.InstanceLogger.LogDebug(
+                                                    "[Patch::RunAsync] Full-replacement file has correct size but MD5 mismatch, downloading: {Dest}",
+                                                    entry.Dest);
+                                                goto DownloadFile;
+                                            }
+                                        }
+
                                         SharedStatic.InstanceLogger.LogDebug(
                                             "[Patch::RunAsync] Full-replacement file already exists with correct size, skipping: {Dest}",
                                             entry.Dest);
@@ -1063,6 +1079,8 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                                     }
                                 }
                             }
+
+                            DownloadFile:
 
                             // Ensure subdirectory exists
                             string? dir = Path.GetDirectoryName(outputPath);
@@ -1126,7 +1144,7 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                     string filePath = Path.Combine(patchTempPath, relativePath);
 
                     // Full-replacement files may have been skipped during download because
-                    // they already exist in the install directory with the correct size.
+                    // they already exist in the install directory with the correct size and MD5.
                     // Check both temp and install locations.
                     if (!File.Exists(filePath) && !isKrpdiff)
                     {
@@ -1136,6 +1154,19 @@ namespace Hi3Helper.Plugin.Wuwa.Management
                             var installFi = new FileInfo(installFilePath);
                             if (installFi.Length == (long)entry.Size)
                             {
+                                // Also verify MD5 to catch stale files with matching size.
+                                if (!string.IsNullOrEmpty(entry.Md5) && installFi.Length <= Md5CheckSizeThreshold)
+                                {
+                                    await using var installFs = File.OpenRead(installFilePath);
+                                    string installMd5 = await WuwaUtils.ComputeMd5HexAsync(installFs, token)
+                                        .ConfigureAwait(false);
+                                    if (!string.Equals(installMd5, entry.Md5, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        throw new InvalidOperationException(
+                                            $"Full-replacement file was skipped during download but MD5 does not match in install dir: {entry.Dest} (expected={entry.Md5}, computed={installMd5})");
+                                    }
+                                }
+
                                 SharedStatic.InstanceLogger.LogDebug(
                                     "[Patch::RunAsync] Verification: full-replacement file verified in install dir (skipped download): {Dest}",
                                     entry.Dest);
