@@ -1,0 +1,47 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Platforms>x64</Platforms>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsAotCompatible>true</IsAotCompatible>
+    <DebugType>embedded</DebugType>
+    <Deterministic>true</Deterministic>
+    <LangVersion>preview</LangVersion>
+    <AssemblyName>NTE</AssemblyName>
+    <ProductName>Neverness to Everness Plugin</ProductName>
+    <Product>Collapse</Product>
+    <Description>This library is a plugin for adding support for Neverness to Everness (NTE) into Collapse Launcher</Description>
+    <AssemblyTitle>Neverness to Everness Plugin</AssemblyTitle>
+    <Company>Collapse Launcher Team</Company>
+    <Authors>$(Company)</Authors>
+    <Copyright>Copyright 2022-2026 $(Company)</Copyright>
+    <Version>0.1.0</Version>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CA2256</NoWarn>
+    <Configurations>Debug;Release;DebugNoReflection;ReleaseNoReflection</Configurations>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='DebugNoReflection'">
+    <DefineConstants>$(DefineConstants);DEBUG;USELIGHTWEIGHTJSONPARSER;MANUALCOM</DefineConstants>
+    <Optimize>false</Optimize>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='ReleaseNoReflection'">
+    <DefineConstants>$(DefineConstants);USELIGHTWEIGHTJSONPARSER;MANUALCOM</DefineConstants>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Hi3Helper.Plugin.Core\Hi3Helper.Plugin.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
+  </ItemGroup>
+
+</Project>
+

@@ -1,0 +1,15 @@
+﻿<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+  </Configurations>
+  <Project Path="Hi3Helper.Plugin.Core/Hi3Helper.Plugin.Core.csproj">
+    <Platform Project="x64" />
+  </Project>
+  <Project Path="Hi3Helper.Plugin.Core/PluginTest/PluginTest.csproj">
+    <Platform Project="x64" />
+  </Project>
+  <Project Path="Hi3Helper.Plugin.NTE/Hi3Helper.Plugin.NTE.csproj">
+    <Platform Project="x64" />
+  </Project>
+</Solution>
+
