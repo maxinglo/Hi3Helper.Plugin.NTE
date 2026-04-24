@@ -28,6 +28,7 @@ internal partial class NteCNGameInstaller
     private async Task RunInstallAsync(
         InstallProgressDelegate? progressDelegate,
         InstallProgressStateDelegate? progressStateDelegate,
+        GameInstallerKind installerKind,
         CancellationToken token)
     {
         NteResListParser? resListParser = _cachedResList;
@@ -42,81 +43,14 @@ internal partial class NteCNGameInstaller
         // --- 阶段 1: 收集全部下载任务 ---
         progressStateDelegate?.Invoke(InstallProgressState.Preparing);
 
-        List<DownloadTask> downloadTasks = [];
-        long totalBytes = 0;
-        int totalFileCount = 0;
-
-        // 直接资源文件
-        foreach (NteResListEntry res in resListParser.Resources)
-        {
-            string outputPath = Path.Combine(gamePath, res.Filename.Replace('/', Path.DirectorySeparatorChar));
-            downloadTasks.Add(new DownloadTask
-            {
-                Kind = DownloadTaskKind.DirectResource,
-                ResEntry = res,
-                OutputPath = outputPath,
-                TotalSize = res.Filesize
-            });
-            totalBytes += res.Filesize;
-            totalFileCount++;
-        }
-
-        // BaseVersion 资源文件
-        foreach (NteResListEntry res in resListParser.BaseVersionResources)
-        {
-            string outputPath = Path.Combine(gamePath, res.Filename.Replace('/', Path.DirectorySeparatorChar));
-            downloadTasks.Add(new DownloadTask
-            {
-                Kind = DownloadTaskKind.DirectResource,
-                ResEntry = res,
-                OutputPath = outputPath,
-                TotalSize = res.Filesize
-            });
-            totalBytes += res.Filesize;
-            totalFileCount++;
-        }
-
-        // Pak 归档 - 每个 Entry 单独下载（使用 Range 请求）
-        foreach (NtePakInfo pak in resListParser.Paks)
-        {
-            foreach (NtePakEntry entry in pak.Entries)
-            {
-                string outputPath = Path.Combine(gamePath, entry.Name.Replace('/', Path.DirectorySeparatorChar));
-                downloadTasks.Add(new DownloadTask
-                {
-                    Kind = DownloadTaskKind.PakEntry,
-                    PakInfo = pak,
-                    PakEntry = entry,
-                    OutputPath = outputPath,
-                    TotalSize = entry.Size
-                });
-                totalBytes += entry.Size;
-                totalFileCount++;
-            }
-        }
-
-        // BaseVersion Pak 归档
-        foreach (NtePakInfo pak in resListParser.BaseVersionPaks)
-        {
-            foreach (NtePakEntry entry in pak.Entries)
-            {
-                string outputPath = Path.Combine(gamePath, entry.Name.Replace('/', Path.DirectorySeparatorChar));
-                downloadTasks.Add(new DownloadTask
-                {
-                    Kind = DownloadTaskKind.PakEntry,
-                    PakInfo = pak,
-                    PakEntry = entry,
-                    OutputPath = outputPath,
-                    TotalSize = entry.Size
-                });
-                totalBytes += entry.Size;
-                totalFileCount++;
-            }
-        }
+        bool onlyMissing = installerKind == GameInstallerKind.Update;
+        List<DownloadTask> downloadTasks = BuildDownloadTasks(resListParser, gamePath, onlyMissing);
+        long totalBytes = CalculateTotalBytes(downloadTasks);
+        int totalFileCount = downloadTasks.Count;
 
         SharedStatic.InstanceLogger.LogInformation(
-            "[NteCNInstaller::RunInstallAsync] Total files: {Count}, Total size: {Size} ({SizeMB:F2} MB)",
-            totalFileCount, totalBytes, totalBytes / 1024.0 / 1024.0);
+            "[NteCNInstaller::RunInstallAsync] Mode={Mode}, Total files: {Count}, Total size: {Size} ({SizeMB:F2} MB)",
+            installerKind, totalFileCount, totalBytes, totalBytes / 1024.0 / 1024.0);
 
         // --- 阶段 2: 执行下载 ---
         progressStateDelegate?.Invoke(InstallProgressState.Download);
@@ -251,38 +185,79 @@ internal partial class NteCNGameInstaller
     /// <summary>
     /// 计算已下载文件的总大小。
     /// </summary>
-    private long CalculateDownloadedBytes(NteResListParser resList, string gamePath)
+    private static List<DownloadTask> BuildDownloadTasks(NteResListParser resList, string gamePath, bool onlyMissing)
+    {
+        List<DownloadTask> downloadTasks = [];
+
+        AddDirectResourceTasks(downloadTasks, resList.Resources, gamePath);
+        AddPakEntryTasks(downloadTasks, resList.Paks, gamePath);
+        AddDirectResourceTasks(downloadTasks, resList.BaseVersionResources, gamePath);
+        AddPakEntryTasks(downloadTasks, resList.BaseVersionPaks, gamePath);
+
+        if (!onlyMissing)
+            return downloadTasks;
+
+        List<DownloadTask> pendingTasks = [];
+        foreach (DownloadTask task in downloadTasks)
+        {
+            if (!IsFileAlreadyValid(task))
+                pendingTasks.Add(task);
+        }
+
+        return pendingTasks;
+    }
+
+    private static void AddDirectResourceTasks(List<DownloadTask> downloadTasks, IEnumerable<NteResListEntry> resources, string gamePath)
+    {
+        foreach (NteResListEntry res in resources)
+        {
+            string outputPath = Path.Combine(gamePath, res.Filename.Replace('/', Path.DirectorySeparatorChar));
+            downloadTasks.Add(new DownloadTask
+            {
+                Kind = DownloadTaskKind.DirectResource,
+                ResEntry = res,
+                OutputPath = outputPath,
+                TotalSize = res.Filesize
+            });
+        }
+    }
+
+    private static void AddPakEntryTasks(List<DownloadTask> downloadTasks, IEnumerable<NtePakInfo> paks, string gamePath)
+    {
+        foreach (NtePakInfo pak in paks)
+        {
+            foreach (NtePakEntry entry in pak.Entries)
+            {
+                string outputPath = Path.Combine(gamePath, entry.Name.Replace('/', Path.DirectorySeparatorChar));
+                downloadTasks.Add(new DownloadTask
+                {
+                    Kind = DownloadTaskKind.PakEntry,
+                    PakInfo = pak,
+                    PakEntry = entry,
+                    OutputPath = outputPath,
+                    TotalSize = entry.Size
+                });
+            }
+        }
+    }
+
+    private static long CalculateTotalBytes(IEnumerable<DownloadTask> downloadTasks)
+    {
+        long total = 0;
+        foreach (DownloadTask task in downloadTasks)
+            total += task.TotalSize;
+
+        return total;
+    }
+
+    private long CalculateDownloadedBytes(IEnumerable<DownloadTask> downloadTasks)
     {
         long total = 0;
 
-        foreach (NteResListEntry res in resList.Resources)
+        foreach (DownloadTask task in downloadTasks)
         {
-            string path = Path.Combine(gamePath, res.Filename.Replace('/', Path.DirectorySeparatorChar));
-            total += GetFileOrTempSize(path);
-        }
-
-        foreach (NtePakInfo pak in resList.Paks)
-        {
-            foreach (NtePakEntry entry in pak.Entries)
-            {
-                string path = Path.Combine(gamePath, entry.Name.Replace('/', Path.DirectorySeparatorChar));
-                total += GetFileOrTempSize(path);
-            }
-        }
-
-        foreach (NteResListEntry res in resList.BaseVersionResources)
-        {
-            string path = Path.Combine(gamePath, res.Filename.Replace('/', Path.DirectorySeparatorChar));
-            total += GetFileOrTempSize(path);
-        }
-
-        foreach (NtePakInfo pak in resList.BaseVersionPaks)
-        {
-            foreach (NtePakEntry entry in pak.Entries)
-            {
-                string path = Path.Combine(gamePath, entry.Name.Replace('/', Path.DirectorySeparatorChar));
-                total += GetFileOrTempSize(path);
-            }
+            long downloaded = GetFileOrTempSize(task.OutputPath);
+            total += downloaded > task.TotalSize ? task.TotalSize : downloaded;
         }
 
         return total;

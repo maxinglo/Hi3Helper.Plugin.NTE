@@ -173,28 +173,43 @@ internal partial class NteCNLauncherApiNews : LauncherApiNewsBase
 
     private async Task<string> FetchCssContentAsync(string htmlContent, CancellationToken token)
     {
-        var matchCss = Regex.Match(htmlContent, @"<link\s+rel=""stylesheet""\s+type=""text/css""\s+href=""([^""]*?/style/launcher[^""]*?\.css[^""]*?)""");
-        if (!matchCss.Success)
+        HtmlDocument doc = new();
+        doc.LoadHtml(htmlContent);
+
+        var linkNodes = doc.DocumentNode.SelectNodes("//link[@href]");
+        if (linkNodes == null)
             return string.Empty;
 
-        string cssUrl = matchCss.Groups[1].Value;
-        if (cssUrl.StartsWith("/"))
-            cssUrl = NteConfigProvider.OfficialSiteUrl.TrimEnd('/') + cssUrl;
+        foreach (HtmlNode link in linkNodes)
+        {
+            string href = link.GetAttributeValue("href", string.Empty);
+            if (string.IsNullOrWhiteSpace(href) ||
+                href.IndexOf("launcher", StringComparison.OrdinalIgnoreCase) < 0 ||
+                href.IndexOf(".css", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                continue;
+            }
 
-        try
-        {
-            using HttpResponseMessage cssResponse = await ApiResponseHttpClient.GetAsync(cssUrl, token);
-            cssResponse.EnsureSuccessStatusCode();
-            return await cssResponse.Content.ReadAsStringAsync(token);
+            string cssUrl = ResolveSiteUrl(href);
+            if (string.IsNullOrEmpty(cssUrl))
+                continue;
+
+            try
+            {
+                using HttpResponseMessage cssResponse = await ApiResponseHttpClient.GetAsync(cssUrl, token);
+                cssResponse.EnsureSuccessStatusCode();
+                return await cssResponse.Content.ReadAsStringAsync(token);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                SharedStatic.InstanceLogger.LogWarning(
+                    "[NteCNLauncherApiNews::FetchCssContentAsync] Failed to load CSS from {Url}: {Error}",
+                    cssUrl, ex.Message);
+            }
         }
-        catch (OperationCanceledException) { throw; }
-        catch (Exception ex)
-        {
-            SharedStatic.InstanceLogger.LogWarning(
-                "[NteCNLauncherApiNews::FetchCssContentAsync] Failed to load CSS from {Url}: {Error}",
-                cssUrl, ex.Message);
-            return string.Empty;
-        }
+
+        return string.Empty;
     }
 
     private static ((string, string, string, LauncherNewsEntryType)[], (string, string, string, string)[]) ParseHtmlNewsAndSocials(string htmlContent, string cssContent)
@@ -208,12 +223,15 @@ internal partial class NteCNLauncherApiNews : LauncherApiNewsBase
         Dictionary<string, string> cssIcons = new();
         if (!string.IsNullOrEmpty(cssContent))
         {
-            var matches = Regex.Matches(cssContent, @"\.(icon-[a-zA-Z0-9_-]+)\s*\{[^}]*?background:\s*url\(([^)]+)\)");
+            var matches = Regex.Matches(
+                cssContent,
+                @"\.(icon-[a-zA-Z0-9_-]+)\s*\{[^}]*?url\(([^)]+)\)",
+                RegexOptions.IgnoreCase | RegexOptions.Singleline);
             foreach (Match m in matches)
             {
                 string cls = m.Groups[1].Value;
                 string url = m.Groups[2].Value.Trim('\'', '"');
-                cssIcons[cls] = url;
+                cssIcons[cls] = ResolveSiteUrl(url);
             }
         }
 
@@ -230,7 +248,7 @@ internal partial class NteCNLauncherApiNews : LauncherApiNewsBase
                 {
                     string title = li.SelectSingleNode(".//a")?.InnerText?.Trim() ?? "";
                     string link = li.SelectSingleNode(".//a")?.GetAttributeValue("href", "") ?? "";
-                    if (link.StartsWith("/")) link = NteConfigProvider.OfficialSiteUrl.TrimEnd('/') + link;
+                    link = ResolveSiteUrl(link);
                     
                     var spanNodes = li.SelectNodes(".//span");
                     string date = spanNodes?.Count > 0 ? spanNodes[spanNodes.Count - 1].InnerText?.Trim() ?? "" : "";
@@ -258,14 +276,19 @@ internal partial class NteCNLauncherApiNews : LauncherApiNewsBase
                 string qrUrl = imgNode?.GetAttributeValue("src", "") ?? "";
 
                 string iconUrl = "";
-                if (!string.IsNullOrEmpty(iconClass) && cssIcons.TryGetValue(iconClass.Trim(), out string? mappedUrl))
+                foreach (Match classMatch in Regex.Matches(iconClass, @"\bicon-[a-zA-Z0-9_-]+\b"))
                 {
-                    iconUrl = mappedUrl;
+                    if (cssIcons.TryGetValue(classMatch.Value, out string? mappedUrl))
+                    {
+                        iconUrl = mappedUrl;
+                        break;
+                    }
                 }
 
-                if (clickUrl.StartsWith("/")) clickUrl = NteConfigProvider.OfficialSiteUrl.TrimEnd('/') + clickUrl;
-                if (iconUrl.StartsWith("/")) iconUrl = NteConfigProvider.OfficialSiteUrl.TrimEnd('/') + iconUrl;
-                if (qrUrl.StartsWith("/")) qrUrl = NteConfigProvider.OfficialSiteUrl.TrimEnd('/') + qrUrl;
+                clickUrl = ResolveSiteUrl(clickUrl);
+                qrUrl = ResolveSiteUrl(qrUrl);
+                if (string.IsNullOrWhiteSpace(iconUrl))
+                    iconUrl = qrUrl;
 
                 socialList.Add((description, clickUrl, iconUrl, qrUrl));
             }
@@ -352,6 +375,20 @@ internal partial class NteCNLauncherApiNews : LauncherApiNewsBase
         count = 0;
         isDisposable = false;
         isAllocated = false;
+    }
+
+    private static string ResolveSiteUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return string.Empty;
+
+        if (Uri.TryCreate(url, UriKind.Absolute, out Uri? absUri))
+            return absUri.ToString();
+
+        if (Uri.TryCreate(new Uri(NteConfigProvider.OfficialSiteUrl), url, out Uri? relUri))
+            return relUri.ToString();
+
+        return url;
     }
 
     public override void Dispose()

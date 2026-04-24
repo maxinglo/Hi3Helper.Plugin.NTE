@@ -4,6 +4,7 @@ using Hi3Helper.Plugin.Core.Utility;
 using Hi3Helper.Plugin.NTE.Management.Config;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Net;
@@ -86,12 +87,19 @@ internal partial class NteCNGameInstaller(IGameManager gameManager) : GameInstal
         if (_cachedResList == null)
             return 0L;
 
-        return gameInstallerKind switch
+        if (gameInstallerKind == GameInstallerKind.Install)
+            return _cachedResList.GetTotalExtractedSize();
+
+        if (gameInstallerKind == GameInstallerKind.Update)
         {
-            GameInstallerKind.Install => _cachedResList.GetTotalInstallSize(),
-            GameInstallerKind.Update => _cachedResList.GetTotalInstallSize(), // 简化处理：更新时返回全量大小
-            _ => 0L
-        };
+            GameManager.GetGamePath(out string? gamePath);
+            if (string.IsNullOrEmpty(gamePath))
+                return _cachedResList.GetTotalExtractedSize();
+
+            return CalculateTotalBytes(BuildDownloadTasks(_cachedResList, gamePath, onlyMissing: true));
+        }
+
+        return 0L;
     }
 
     /// <summary>
@@ -109,7 +117,9 @@ internal partial class NteCNGameInstaller(IGameManager gameManager) : GameInstal
         if (string.IsNullOrEmpty(gamePath))
             return 0L;
 
-        return CalculateDownloadedBytes(_cachedResList, gamePath);
+        bool onlyMissing = gameInstallerKind == GameInstallerKind.Update;
+        List<DownloadTask> tasks = BuildDownloadTasks(_cachedResList, gamePath, onlyMissing);
+        return CalculateDownloadedBytes(tasks);
     }
 
     /// <summary>
@@ -123,7 +133,8 @@ internal partial class NteCNGameInstaller(IGameManager gameManager) : GameInstal
         if (_cachedResList == null)
             await InitAsync(token).ConfigureAwait(false);
 
-        await RunInstallAsync(progressDelegate, progressStateDelegate, token).ConfigureAwait(false);
+        await RunInstallAsync(progressDelegate, progressStateDelegate, GameInstallerKind.Install, token)
+            .ConfigureAwait(false);
     }
 
     /// <summary>
@@ -137,9 +148,8 @@ internal partial class NteCNGameInstaller(IGameManager gameManager) : GameInstal
         if (_cachedResList == null)
             await InitAsync(token).ConfigureAwait(false);
 
-        // 当前简化实现：和全新安装相同。
-        // 已存在且大小匹配的文件会被跳过。
-        await RunInstallAsync(progressDelegate, progressStateDelegate, token).ConfigureAwait(false);
+        await RunInstallAsync(progressDelegate, progressStateDelegate, GameInstallerKind.Update, token)
+            .ConfigureAwait(false);
     }
 
     /// <summary>
