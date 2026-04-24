@@ -1,5 +1,5 @@
 @echo off
-set _pluginName=Hi3Helper.Plugin.WuWa
+set _pluginName=Hi3Helper.Plugin.NTE
 set _isRemoveSymbol=true
 
 set currentPath=%~dp0
@@ -83,8 +83,8 @@ if /I exist "%projectPublishPath%" (
 )
 mkdir "%outputDirPath%"
 cd "%projectPath%"
-dotnet restore --runtime win-x64 ..\Hi3Helper.Plugin.WuWa.sln || goto :Error
-dotnet clean --configuration %configuration% --runtime win-x64 ..\Hi3Helper.Plugin.WuWa.sln || goto :Error
+dotnet restore --runtime win-x64 ..\Hi3Helper.Plugin.NTE.sln || goto :Error
+dotnet clean --configuration %configuration% --runtime win-x64 ..\Hi3Helper.Plugin.NTE.sln || goto :Error
 dotnet publish --configuration %configuration% --runtime win-x64 /p:PublishProfile=%publishProfile% -o "%outputDirPath%" || goto :Error
 
 :RemovePDBIfNotDebug

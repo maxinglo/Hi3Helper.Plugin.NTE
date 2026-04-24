@@ -1,6 +1,7 @@
 using Hi3Helper.Plugin.Core;
 using Hi3Helper.Plugin.Core.Management.Api;
 using Hi3Helper.Plugin.Core.Utility;
+using Hi3Helper.Plugin.NTE.Utils;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Buffers;
@@ -10,6 +11,8 @@ using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
 using System.Runtime.InteropServices.Marshalling;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -32,15 +35,26 @@ internal partial class NteCNLauncherApiMedia(string versionIniUrl, string siteRe
 
     protected override string ApiResponseBaseUrl => versionIniUrl;
 
+    private const string ExAnimatedBackgroundCacheVersion = "v1";
+    private const string ExAnimatedBackgroundProxyScheme = "nte-bgseq";
+    private static readonly Lock AnimatedBackgroundCacheLock = new();
+    private static readonly HashSet<string> AnimatedBackgroundLockKeys = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly string AnimatedBackgroundCacheDirectory = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Hi3Helper.Plugin.NTE",
+        "MediaCache");
+
     private string[] _backgroundImageUrls = [];
     private string? _backgroundVideoUrl;
+    private string? _backgroundVideoSourceUrl;
+    private string _backgroundVideoCacheKey = string.Empty;
 
     public override void GetBackgroundFlag(out LauncherBackgroundFlag result)
     {
         using (ThisInstanceLock.EnterScope())
         {
             result = !string.IsNullOrWhiteSpace(_backgroundVideoUrl)
-                ? LauncherBackgroundFlag.TypeIsVideo
+                ? LauncherBackgroundFlag.TypeIsImageSequence | LauncherBackgroundFlag.IsSourceZip
                 : LauncherBackgroundFlag.TypeIsImage;
         }
     }
@@ -52,12 +66,20 @@ internal partial class NteCNLauncherApiMedia(string versionIniUrl, string siteRe
         InitializeEmpty(out handle, out count, out isDisposable, out isAllocated);
     }
 
+    public override void GetBackgroundSpriteFps(out float result)
+    {
+        using (ThisInstanceLock.EnterScope())
+        {
+            result = !string.IsNullOrWhiteSpace(_backgroundVideoUrl) ? 24f : 0f;
+        }
+    }
+
     public override void GetBackgroundEntries(out nint handle, out int count, out bool isDisposable, out bool isAllocated)
     {
         using (ThisInstanceLock.EnterScope())
         {
             bool hasVideo = !string.IsNullOrWhiteSpace(_backgroundVideoUrl);
-            int entryCount = _backgroundImageUrls.Length + (hasVideo ? 1 : 0);
+            int entryCount = hasVideo ? 1 : _backgroundImageUrls.Length;
 
             if (entryCount == 0)
             {
@@ -67,16 +89,18 @@ internal partial class NteCNLauncherApiMedia(string versionIniUrl, string siteRe
 
             PluginDisposableMemory<LauncherPathEntry> entries = PluginDisposableMemory<LauncherPathEntry>.Alloc(entryCount);
 
-            for (int i = 0; i < _backgroundImageUrls.Length; i++)
-            {
-                ref LauncherPathEntry entry = ref entries[i];
-                entry.Write(_backgroundImageUrls[i], Span<byte>.Empty);
-            }
-
             if (hasVideo)
             {
-                ref LauncherPathEntry videoEntry = ref entries[_backgroundImageUrls.Length];
+                ref LauncherPathEntry videoEntry = ref entries[0];
                 videoEntry.Write(_backgroundVideoUrl!, Span<byte>.Empty);
+            }
+            else
+            {
+                for (int i = 0; i < _backgroundImageUrls.Length; i++)
+                {
+                    ref LauncherPathEntry entry = ref entries[i];
+                    entry.Write(_backgroundImageUrls[i], Span<byte>.Empty);
+                }
             }
 
             handle = entries.AsSafePointer();
@@ -110,13 +134,23 @@ internal partial class NteCNLauncherApiMedia(string versionIniUrl, string siteRe
             imageUrls = [CombineUrl(fileList.BaseUrl, fallbackBgPath)];
         }
 
-        // Temporarily disable animated background resources (yh.dat).
+        string imageVersionStamp = ComputeStaticBackgroundStamp(imageUrls);
+        string? videoSourceUrl = TryGetBackgroundVideoSourceUrl(fileList, configPath);
         string? videoUrl = null;
+        string videoCacheKey = string.Empty;
+
+        if (!string.IsNullOrWhiteSpace(videoSourceUrl))
+        {
+            videoCacheKey = BuildAnimatedBackgroundCacheKey(videoSourceUrl, imageVersionStamp);
+            videoUrl = BuildAnimatedBackgroundProxyUrl(videoCacheKey);
+        }
 
         using (ThisInstanceLock.EnterScope())
         {
             _backgroundImageUrls = imageUrls;
             _backgroundVideoUrl = videoUrl;
+            _backgroundVideoSourceUrl = videoSourceUrl;
+            _backgroundVideoCacheKey = videoCacheKey;
         }
 
         SharedStatic.InstanceLogger.LogInformation(
@@ -132,6 +166,12 @@ internal partial class NteCNLauncherApiMedia(string versionIniUrl, string siteRe
     {
         client ??= ApiResponseHttpClient;
 
+        if (TryGetBackgroundVideoDownloadContext(fileUrl, out string sourceVideoUrl, out string cacheKey))
+        {
+            await DownloadOrCopyCachedAnimatedBackgroundAsync(client, sourceVideoUrl, cacheKey, outputStream, downloadProgress, token);
+            return;
+        }
+
         // Launcher expects local background files to keep original extensions (e.g. .jpg/.dat).
         // For wmupd resources we download *.zip internally and extract the payload into outputStream.
         if (ShouldUseZipPackaging(fileUrl) && !IsZipUrl(fileUrl))
@@ -143,12 +183,6 @@ internal partial class NteCNLauncherApiMedia(string versionIniUrl, string siteRe
         if (IsZipUrl(fileUrl))
         {
             await DownloadZipAssetAsync(client, fileUrl, outputStream, downloadProgress, token);
-            return;
-        }
-
-        if (IsYhDatUrl(fileUrl))
-        {
-            await DownloadYhDatWithoutHeaderAsync(client, fileUrl, outputStream, downloadProgress, token);
             return;
         }
 
@@ -247,6 +281,26 @@ internal partial class NteCNLauncherApiMedia(string versionIniUrl, string siteRe
 
     private static bool IsZipUrl(string fileUrl)
         => fileUrl.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
+
+    private bool TryGetBackgroundVideoDownloadContext(string fileUrl, out string sourceVideoUrl, out string cacheKey)
+    {
+        using (ThisInstanceLock.EnterScope())
+        {
+            if (!string.IsNullOrWhiteSpace(_backgroundVideoUrl) &&
+                _backgroundVideoUrl.Equals(fileUrl, StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(_backgroundVideoSourceUrl) &&
+                !string.IsNullOrWhiteSpace(_backgroundVideoCacheKey))
+            {
+                sourceVideoUrl = _backgroundVideoSourceUrl;
+                cacheKey = _backgroundVideoCacheKey;
+                return true;
+            }
+        }
+
+        sourceVideoUrl = string.Empty;
+        cacheKey = string.Empty;
+        return false;
+    }
 
     private static IEnumerable<string> BuildUrlCandidates(string url)
     {
@@ -468,9 +522,197 @@ internal partial class NteCNLauncherApiMedia(string versionIniUrl, string siteRe
     private static string EnsureZipExtension(string path)
         => path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ? path : $"{path}.zip";
 
-    private static bool IsYhDatUrl(string fileUrl)
-        => StripZipExtension(fileUrl).EndsWith("/yh.dat", StringComparison.OrdinalIgnoreCase) ||
-           StripZipExtension(fileUrl).EndsWith("\\yh.dat", StringComparison.OrdinalIgnoreCase);
+    private static string BuildAnimatedBackgroundProxyUrl(string cacheKey)
+        => $"{ExAnimatedBackgroundProxyScheme}://{cacheKey}.zip";
+
+    private static string BuildAnimatedBackgroundCacheKey(string sourceUrl, string imageVersionStamp)
+        => ComputeSha256Hex($"{ExAnimatedBackgroundCacheVersion}|{sourceUrl.Trim()}|{imageVersionStamp}");
+
+    private static string ComputeStaticBackgroundStamp(IEnumerable<string> imageUrls)
+        => ComputeSha256Hex(string.Join("\n", imageUrls));
+
+    private static string ComputeSha256Hex(string raw)
+    {
+        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(raw));
+        return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private static string? TryGetBackgroundVideoSourceUrl(FileListManifest fileList, string configPath)
+    {
+        string configDirectory = GetDirectoryPath(configPath);
+        string directPath = CombineRelativePath(configDirectory, "yh.dat");
+        if (fileList.ContainsPath(directPath))
+        {
+            return CombineUrl(fileList.BaseUrl, directPath);
+        }
+
+        return fileList.TryFindPathBySuffix("/bgimgs/yh.dat", out string fallbackPath)
+            ? CombineUrl(fileList.BaseUrl, fallbackPath)
+            : null;
+    }
+
+    private async Task DownloadOrCopyCachedAnimatedBackgroundAsync(HttpClient client,
+        string sourceVideoUrl,
+        string cacheKey,
+        Stream outputStream,
+        PluginFiles.FileReadProgressDelegate? downloadProgress,
+        CancellationToken token)
+    {
+        Directory.CreateDirectory(AnimatedBackgroundCacheDirectory);
+
+        string cacheFilePath = Path.Combine(AnimatedBackgroundCacheDirectory, $"{cacheKey}.zip");
+        if (await TryCopyCachedFileAsync(cacheFilePath, outputStream, downloadProgress, token))
+        {
+            return;
+        }
+
+        await WaitForCacheKeyTurnAsync(cacheKey, token);
+        try
+        {
+            if (await TryCopyCachedFileAsync(cacheFilePath, outputStream, downloadProgress, token))
+            {
+                return;
+            }
+
+            string tempFilePath = Path.Combine(AnimatedBackgroundCacheDirectory, $"{cacheKey}.{Guid.NewGuid():N}.tmp");
+            try
+            {
+                await BuildAnimatedBackgroundCacheAsync(client, sourceVideoUrl, tempFilePath, downloadProgress, token);
+                File.Move(tempFilePath, cacheFilePath, overwrite: true);
+            }
+            finally
+            {
+                if (File.Exists(tempFilePath))
+                {
+                    File.Delete(tempFilePath);
+                }
+            }
+
+            await CopyFileToStreamAsync(cacheFilePath, outputStream, downloadProgress, token);
+        }
+        finally
+        {
+            ReleaseCacheKeyTurn(cacheKey);
+        }
+    }
+
+    private static async Task<bool> TryCopyCachedFileAsync(string cacheFilePath,
+        Stream outputStream,
+        PluginFiles.FileReadProgressDelegate? downloadProgress,
+        CancellationToken token)
+    {
+        if (!File.Exists(cacheFilePath))
+        {
+            return false;
+        }
+
+        FileInfo fileInfo = new(cacheFilePath);
+        if (fileInfo.Length <= 0)
+        {
+            File.Delete(cacheFilePath);
+            return false;
+        }
+
+        await CopyFileToStreamAsync(cacheFilePath, outputStream, downloadProgress, token);
+        return true;
+    }
+
+    private static async Task CopyFileToStreamAsync(string filePath,
+        Stream outputStream,
+        PluginFiles.FileReadProgressDelegate? downloadProgress,
+        CancellationToken token)
+    {
+        if (outputStream.CanSeek)
+        {
+            outputStream.Seek(0, SeekOrigin.Begin);
+            outputStream.SetLength(0);
+        }
+
+        await using FileStream cacheStream = new(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        await CopyStreamAsync(cacheStream, outputStream, downloadProgress, token, cacheStream.Length);
+    }
+
+    private static async Task BuildAnimatedBackgroundCacheAsync(HttpClient client,
+        string sourceVideoUrl,
+        string cacheFilePath,
+        PluginFiles.FileReadProgressDelegate? downloadProgress,
+        CancellationToken token)
+    {
+        string payloadTempPath = $"{cacheFilePath}.{Guid.NewGuid():N}.payload";
+
+        try
+        {
+            await using (FileStream payloadStream = new(payloadTempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                string downloadUrl = ShouldUseZipPackaging(sourceVideoUrl) && !IsZipUrl(sourceVideoUrl)
+                    ? EnsureZipExtension(sourceVideoUrl)
+                    : sourceVideoUrl;
+
+                if (IsZipUrl(downloadUrl))
+                {
+                    using HttpResponseMessage zipResponse = await client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, token);
+                    zipResponse.EnsureSuccessStatusCode();
+
+                    await using Stream zipStream = await zipResponse.Content.ReadAsStreamAsync(token);
+                    using ZipArchive archive = new(zipStream, ZipArchiveMode.Read, leaveOpen: false);
+                    ZipArchiveEntry entry = GetPreferredZipEntry(archive, GetZipEntryNameFromUrl(downloadUrl));
+
+                    await using Stream entryStream = entry.Open();
+                    await CopyStreamAsync(entryStream, payloadStream, downloadProgress, token, entry.Length);
+                }
+                else
+                {
+                    using HttpResponseMessage response = await client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, token);
+                    response.EnsureSuccessStatusCode();
+
+                    await using Stream sourceStream = await response.Content.ReadAsStreamAsync(token);
+                    await CopyStreamAsync(sourceStream, payloadStream, downloadProgress, token, response.Content.Headers.ContentLength ?? 0);
+                }
+            }
+
+            await using FileStream cacheStream = new(cacheFilePath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            int frameCount = await NteQtRccUtil.BuildImageSequenceZipFromRccPayloadAsync(payloadTempPath, cacheStream, token);
+            if (frameCount <= 0)
+            {
+                throw new InvalidDataException("No JFIF frames were extracted from yh.dat RCC payload.");
+            }
+        }
+        finally
+        {
+            if (File.Exists(payloadTempPath))
+            {
+                File.Delete(payloadTempPath);
+            }
+        }
+    }
+
+    // Qt RCC parsing moved to a dedicated utility for easier maintenance and reuse.
+
+    private static async Task WaitForCacheKeyTurnAsync(string cacheKey, CancellationToken token)
+    {
+        while (true)
+        {
+            token.ThrowIfCancellationRequested();
+
+            lock (AnimatedBackgroundCacheLock)
+            {
+                if (AnimatedBackgroundLockKeys.Add(cacheKey))
+                {
+                    return;
+                }
+            }
+
+            await Task.Delay(50, token);
+        }
+    }
+
+    private static void ReleaseCacheKeyTurn(string cacheKey)
+    {
+        lock (AnimatedBackgroundCacheLock)
+        {
+            AnimatedBackgroundLockKeys.Remove(cacheKey);
+        }
+    }
 
     private static string StripZipExtension(string path)
         => path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ? path[..^4] : path;
@@ -495,34 +737,7 @@ internal partial class NteCNLauncherApiMedia(string versionIniUrl, string siteRe
         ZipArchiveEntry entry = GetPreferredZipEntry(archive, GetZipEntryNameFromUrl(fileUrl));
 
         await using Stream entryStream = entry.Open();
-        if (IsYhDatUrl(fileUrl))
-        {
-            await CopyYhDatPayloadAsync(entryStream, outputStream, downloadProgress, 28, token, entry.Length);
-            return;
-        }
-
         await CopyStreamAsync(entryStream, outputStream, downloadProgress, token, entry.Length);
-    }
-
-    private static async Task DownloadYhDatWithoutHeaderAsync(HttpClient client,
-        string fileUrl,
-        Stream outputStream,
-        PluginFiles.FileReadProgressDelegate? downloadProgress,
-        CancellationToken token)
-    {
-        const int headerSize = 28;
-
-        if (outputStream.CanSeek)
-        {
-            outputStream.Seek(0, SeekOrigin.Begin);
-            outputStream.SetLength(0);
-        }
-
-        using HttpResponseMessage response = await client.GetAsync(fileUrl, HttpCompletionOption.ResponseHeadersRead, token);
-        response.EnsureSuccessStatusCode();
-
-        await using Stream sourceStream = await response.Content.ReadAsStreamAsync(token);
-        await CopyYhDatPayloadAsync(sourceStream, outputStream, downloadProgress, headerSize, token, response.Content.Headers.ContentLength);
     }
 
     private static async Task CopyStreamAsync(Stream sourceStream,
@@ -552,50 +767,6 @@ internal partial class NteCNLauncherApiMedia(string versionIniUrl, string siteRe
         }
 
         await outputStream.FlushAsync(token);
-    }
-
-    private static async Task CopyYhDatPayloadAsync(Stream sourceStream,
-        Stream outputStream,
-        PluginFiles.FileReadProgressDelegate? downloadProgress,
-        int headerSize,
-        CancellationToken token,
-        long? sourceLength = null)
-    {
-        if (sourceStream.CanSeek)
-        {
-            long totalBytes = Math.Max(0, sourceStream.Length - headerSize);
-            await SkipExactBytesAsync(sourceStream, headerSize, token);
-            await CopyStreamAsync(sourceStream, outputStream, downloadProgress, token, totalBytes);
-            return;
-        }
-
-        long total = sourceLength.HasValue ? Math.Max(0, sourceLength.Value - headerSize) : 0;
-        await SkipExactBytesAsync(sourceStream, headerSize, token);
-        await CopyStreamAsync(sourceStream, outputStream, downloadProgress, token, total);
-    }
-
-    private static async Task SkipExactBytesAsync(Stream stream, int bytesToSkip, CancellationToken token)
-    {
-        byte[] skipBuffer = ArrayPool<byte>.Shared.Rent(bytesToSkip);
-
-        try
-        {
-            int totalSkipped = 0;
-            while (totalSkipped < bytesToSkip)
-            {
-                int read = await stream.ReadAsync(skipBuffer.AsMemory(totalSkipped, bytesToSkip - totalSkipped), token);
-                if (read == 0)
-                {
-                    throw new InvalidDataException("yh.dat payload is smaller than the 28-byte header prefix.");
-                }
-
-                totalSkipped += read;
-            }
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(skipBuffer);
-        }
     }
 
     private static void InitializeEmpty(out nint handle, out int count, out bool isDisposable, out bool isAllocated)
