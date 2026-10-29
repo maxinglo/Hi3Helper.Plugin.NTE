@@ -20,7 +20,7 @@ public sealed class GameUpdateTests : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, "<config><ResVersion>1.4.9</ResVersion></config>");
         File.WriteAllText(Path.Combine(_directory, ".collapse_nte_config"), "GameVersion=1.0.22");
-        NteCNGameManager manager = new();
+        NteGameManager manager = new();
         manager.SetGamePath(_directory);
         manager.LoadConfig();
         manager.GetCurrentGameVersion(out GameVersion actual);
@@ -43,7 +43,7 @@ public sealed class GameUpdateTests : IDisposable
         await File.WriteAllTextAsync(output, "original", TestContext.Current.CancellationToken);
         await File.WriteAllTextAsync(temporary, "wrong", TestContext.Current.CancellationToken);
         string expected = Convert.ToHexString(MD5.HashData("right"u8));
-        await Assert.ThrowsAsync<InvalidDataException>(() => NteCNGameInstaller.CompleteDownloadAsync(
+        await Assert.ThrowsAsync<InvalidDataException>(() => NteGameInstaller.CompleteDownloadAsync(
             temporary, output, 5, expected, TestContext.Current.CancellationToken));
         Assert.Equal("original", await File.ReadAllTextAsync(output, TestContext.Current.CancellationToken));
         Assert.False(File.Exists(temporary));
@@ -55,7 +55,7 @@ public sealed class GameUpdateTests : IDisposable
         string output = Path.Combine(_directory, "game.pak");
         await File.WriteAllTextAsync(output, "original", TestContext.Current.CancellationToken);
         await File.WriteAllTextAsync(output + ".tmp", "right", TestContext.Current.CancellationToken);
-        await NteCNGameInstaller.CompleteDownloadAsync(output + ".tmp", output, 5,
+        await NteGameInstaller.CompleteDownloadAsync(output + ".tmp", output, 5,
             Convert.ToHexString(MD5.HashData("right"u8)), TestContext.Current.CancellationToken);
         Assert.Equal("right", await File.ReadAllTextAsync(output, TestContext.Current.CancellationToken));
     }
@@ -64,19 +64,19 @@ public sealed class GameUpdateTests : IDisposable
     public void RangeDownload_RejectsFullArchiveAndWrongOffsets()
     {
         using HttpResponseMessage full = new(HttpStatusCode.OK) { Content = new ByteArrayContent(new byte[100]) };
-        Assert.Throws<InvalidDataException>(() => NteCNGameInstaller.ValidateRangeResponse(full, 20, 29));
+        Assert.Throws<InvalidDataException>(() => NteGameInstaller.ValidateRangeResponse(full, 20, 29));
         using HttpResponseMessage partial = new(HttpStatusCode.PartialContent) { Content = new ByteArrayContent(new byte[10]) };
         partial.Content.Headers.ContentRange = new ContentRangeHeaderValue(0, 9, 100);
-        Assert.Throws<InvalidDataException>(() => NteCNGameInstaller.ValidateRangeResponse(partial, 20, 29));
+        Assert.Throws<InvalidDataException>(() => NteGameInstaller.ValidateRangeResponse(partial, 20, 29));
         partial.Content.Headers.ContentRange = new ContentRangeHeaderValue(20, 29, 100);
-        NteCNGameInstaller.ValidateRangeResponse(partial, 20, 29);
+        NteGameInstaller.ValidateRangeResponse(partial, 20, 29);
     }
 
     [Theory]
     [InlineData("../outside.pak")]
     [InlineData("C:/outside.pak")]
     public void ResourcePath_CannotEscapeGameDirectory(string path)
-        => Assert.Throws<InvalidDataException>(() => NteCNGameInstaller.ResolveResourcePath(_directory, path));
+        => Assert.Throws<InvalidDataException>(() => NteGameInstaller.ResolveResourcePath(_directory, path));
 
     [Fact]
     public void UpdatePlan_UnchangedManifestEntryDoesNotReadFileContents()
@@ -86,12 +86,12 @@ public sealed class GameUpdateTests : IDisposable
         NteResListParser manifest = NteResListParser.Parse("""<ResList version="1.4.17"><Res filename="unchanged.pak" filesize="9" md5="643c53e4f0a2622f62e141be20f8c31e"/></ResList>""");
         using FileStream exclusive = new(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
         int checkedCount = 0;
-        var pending = NteCNGameInstaller.BuildDownloadTasks(manifest, _directory, true, true,
+        var pending = NteGameInstaller.BuildDownloadTasks(manifest, _directory, true, true,
             TestContext.Current.CancellationToken, manifest,
             (in InstallProgress progress) => checkedCount = progress.DownloadedCount);
         Assert.Empty(pending);
         Assert.Equal(1, checkedCount);
-        Assert.Single(NteCNGameInstaller.BuildDownloadTasks(manifest, _directory, true, true,
+        Assert.Single(NteGameInstaller.BuildDownloadTasks(manifest, _directory, true, true,
             TestContext.Current.CancellationToken));
     }
 
@@ -102,7 +102,7 @@ public sealed class GameUpdateTests : IDisposable
         NteResListParser previous = NteResListParser.Parse("""<ResList version="1.4.9"><Res filename="changed.pak" filesize="5" md5="old"/></ResList>""");
         string expected = Convert.ToHexString(MD5.HashData("right"u8));
         NteResListParser target = NteResListParser.Parse($"<ResList version=\"1.4.17\"><Res filename=\"changed.pak\" filesize=\"5\" md5=\"{expected}\"/></ResList>");
-        Assert.Single(NteCNGameInstaller.BuildDownloadTasks(target, _directory, true, true,
+        Assert.Single(NteGameInstaller.BuildDownloadTasks(target, _directory, true, true,
             TestContext.Current.CancellationToken, previous));
     }
 
@@ -110,12 +110,12 @@ public sealed class GameUpdateTests : IDisposable
     public void Resume_DiscardsPartialDataFromAnotherResourceVersion()
     {
         string path = Path.Combine(_directory, "game.pak.tmp");
-        NteCNGameInstaller.PrepareTemporaryFile(path, "old-hash", 5);
+        NteGameInstaller.PrepareTemporaryFile(path, "old-hash", 5);
         File.WriteAllText(path, "old");
-        NteCNGameInstaller.PrepareTemporaryFile(path, "new-hash", 5);
+        NteGameInstaller.PrepareTemporaryFile(path, "new-hash", 5);
         Assert.False(File.Exists(path));
         File.WriteAllText(path, "new");
-        NteCNGameInstaller.PrepareTemporaryFile(path, "new-hash", 5);
+        NteGameInstaller.PrepareTemporaryFile(path, "new-hash", 5);
         Assert.Equal("new", File.ReadAllText(path));
     }
 

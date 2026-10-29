@@ -146,5 +146,13 @@
   <data name="LaunchOfficialLauncherHint" xml:space="preserve">
     <value>官方启动器必须安装在当前游戏安装目录内（国服 NTELauncher，国际版 NTEGlobal）。下次启动生效；登录、验证或更新所需窗口仍可能显示。</value>
   </data>
+  <data name="TaiwanZoneName" xml:space="preserve"><value>台港澳</value></data>
+  <data name="TaiwanZoneFullName" xml:space="preserve"><value>异环（台港澳）</value></data>
+  <data name="TaiwanZoneDescription" xml:space="preserve"><value>艾玩天地发行的繁体中文地区，使用独立的官方账号和启动器配置。</value></data>
+  <data name="ServerSettingsSection" xml:space="preserve"><value>服务器与共享安装</value></data>
+  <data name="ServerSwitchTarget" xml:space="preserve"><value>将此安装切换到</value></data>
+  <data name="ServerSwitchNoChange" xml:space="preserve"><value>保持当前服务器</value></data>
+  <data name="ServerSwitchSettingsHint" xml:space="preserve"><value>选择台港澳或国际服并应用。切服窗口会检查可复用资源，显示所需下载并切换安装。两个地区在 Collapse 中分别显示。</value></data>
+  <data name="ServerSwitchSelectInstallation" xml:space="preserve"><value>请先选择已安装的异环游戏目录。</value></data>
 </root>
 

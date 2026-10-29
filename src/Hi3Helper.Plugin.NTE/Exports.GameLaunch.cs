@@ -39,7 +39,7 @@ public partial class Exports
             NteHostRegion region = NteHostRegion.CN;
             if (context.PresetConfig is NteCNPresetConfig preset)
             {
-                region = preset.Region.IsGlobal ? NteHostRegion.Global : NteHostRegion.CN;
+                region = preset.Region.IsTaiwan ? NteHostRegion.Taiwan : preset.Region.IsGlobal ? NteHostRegion.Global : NteHostRegion.CN;
                 startArgument = preset.LaunchSettings.BuildArguments(startArgument);
             }
             int hostPid = NteLoginHostLaunch.Start(new(root, startArgument, isRunBoosted, processPriority, region, SharedStatic.PluginLocaleCode ?? "en-US"));
@@ -192,7 +192,7 @@ public partial class Exports
         [NotNullWhen(true)] out string? gameExecutablePath)
     {
         gameExecutablePath = null;
-        if (context is not { GameManager: NteCNGameManager nteGameManager, PresetConfig: PluginPresetConfigBase presetConfig })
+        if (context is not { GameManager: NteGameManager nteGameManager, PresetConfig: PluginPresetConfigBase presetConfig })
         {
             return false;
         }

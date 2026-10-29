@@ -15,7 +15,7 @@ public sealed class GlobalAccountStoreTests : IDisposable
         root = Path.Combine(Path.GetTempPath(), "NteGlobalAccounts-" + Guid.NewGuid().ToString("N"));
 
     private CancellationToken Token => TestContext.Current.CancellationToken;
-    private GlobalAccountStore Store() => new(root, new WindowsAccountKeyProtector());
+    private OverseasAccountStore Store() => new(root, new WindowsAccountKeyProtector());
 
     private static NteGlobalIdentity Identity(string uid, string token = "fixture-global-token", int provider = 2)
     {
@@ -56,7 +56,7 @@ public sealed class GlobalAccountStoreTests : IDisposable
     public async Task ReauthenticationUpdatesTheSameAccountAndPreservesItsRemark()
     {
         if (!OperatingSystem.IsWindows()) return;
-        GlobalAccountStore store = Store();
+        OverseasAccountStore store = Store();
         using NteGlobalIdentity original = Identity("fixture-user", "fixture-original-token");
         LocalAccount first = Assert.IsType<LocalAccount>(await store.SaveAndDeliverAsync(original, "Google", true, 0,
             (_, _) => Task.CompletedTask, Token));
@@ -80,7 +80,7 @@ public sealed class GlobalAccountStoreTests : IDisposable
     public async Task FailedDeliveryRollsBackANewAccountAndCannotRememberIt()
     {
         if (!OperatingSystem.IsWindows()) return;
-        GlobalAccountStore store = Store();
+        OverseasAccountStore store = Store();
         using NteGlobalIdentity identity = Identity("fixture-user");
         await Assert.ThrowsAsync<IOException>(() => store.SaveAndDeliverAsync(identity, "Google", true, 0,
             (_, _) => Task.FromException(new IOException("fixture")), Token));
@@ -92,7 +92,7 @@ public sealed class GlobalAccountStoreTests : IDisposable
     public async Task ExplicitLogoutClearsAutomaticSelectionWithoutDeletingTheRecord()
     {
         if (!OperatingSystem.IsWindows()) return;
-        GlobalAccountStore store = Store();
+        OverseasAccountStore store = Store();
         using NteGlobalIdentity identity = Identity("fixture-user");
         await store.SaveAndDeliverAsync(identity, "Google", true, 0, (_, _) => Task.CompletedTask, Token);
         await store.ClearRememberedAsync(Token);
@@ -113,11 +113,11 @@ public sealed class GlobalAccountStoreTests : IDisposable
     public async Task RestoringARecordObtainsAFreshOfficialIdentityBeforeDelivery()
     {
         if (!OperatingSystem.IsWindows()) return;
-        GlobalAccountStore store = Store();
+        OverseasAccountStore store = Store();
         using NteGlobalIdentity original = Identity("fixture-user", "fixture-old-token");
         LocalAccount saved = Assert.IsType<LocalAccount>(await store.SaveAndDeliverAsync(original, "Google", true, 0,
             (_, _) => Task.CompletedTask, Token));
-        using var configuration = new NteGlobalApplicationConfiguration(
+        using var configuration = new NteOverseasApplicationConfiguration(
             Encoding.UTF8.GetBytes("test-application-key-material-length-40!!"),
             "com.hottagames.nte", new("https://mapi.pwsdk.com"), "global-sg");
         using var handler = new RestoreHandler();
@@ -133,7 +133,7 @@ public sealed class GlobalAccountStoreTests : IDisposable
     public async Task RemovingOneAccountKeepsTheOtherRecordAndDoesNotAutoSelectIt()
     {
         if (!OperatingSystem.IsWindows()) return;
-        GlobalAccountStore store = Store();
+        OverseasAccountStore store = Store();
         using NteGlobalIdentity first = Identity("fixture-first");
         using NteGlobalIdentity second = Identity("fixture-second");
         LocalAccount a =
@@ -151,7 +151,7 @@ public sealed class GlobalAccountStoreTests : IDisposable
     public async Task UncheckedRememberDoesNotCreateANewAccountRecord()
     {
         if (!OperatingSystem.IsWindows()) return;
-        GlobalAccountStore store = Store();
+        OverseasAccountStore store = Store();
         using NteGlobalIdentity identity = Identity("fixture-user");
         int delivered = 0;
         Assert.Null(await store.SaveAndDeliverAsync(identity, "Google", false, 0,
@@ -169,11 +169,11 @@ public sealed class GlobalAccountStoreTests : IDisposable
     public async Task ARestoredDifferentUserCannotReplaceTheSelectedSavedAccount()
     {
         if (!OperatingSystem.IsWindows()) return;
-        GlobalAccountStore store = Store();
+        OverseasAccountStore store = Store();
         using NteGlobalIdentity original = Identity("fixture-user");
         LocalAccount saved = Assert.IsType<LocalAccount>(
             await store.SaveAndDeliverAsync(original, "Google", true, 0, (_, _) => Task.CompletedTask, Token));
-        using var configuration = new NteGlobalApplicationConfiguration(
+        using var configuration = new NteOverseasApplicationConfiguration(
             Encoding.UTF8.GetBytes("test-application-key-material-length-40!!"),
             "com.hottagames.nte", new("https://mapi.pwsdk.com"), "global-sg");
         using var handler = new RestoreHandler("fixture-other-user");

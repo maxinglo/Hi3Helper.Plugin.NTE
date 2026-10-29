@@ -36,7 +36,7 @@ internal partial class NteCNLauncherApiMedia : LauncherApiMediaBase
         : this(versionIniUrl, siteRefererUrl,
             new PluginHttpClientBuilder().AllowRedirections().Create(),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "CollapseLauncher", "Plugins", "NTE", region?.IsGlobal == true ? "Global/Media" : "Media"),
+                "CollapseLauncher", "Plugins", "NTE", region?.IsOverseas == true ? region.StorageName + "/Media" : "Media"),
             appearanceProvider ?? new NteAppearanceStore(NteAppearanceStore.DefaultPath).Load, region)
     {
     }
@@ -155,7 +155,7 @@ internal partial class NteCNLauncherApiMedia : LauncherApiMediaBase
                         {
                             byte[] packed = await File.ReadAllBytesAsync(localResource, token).ConfigureAwait(false);
                             string artwork = _region.IsGlobal ? NteGlobalLocalization.GetArtworkPath(SharedStatic.PluginLocaleCode)
-                                : "res/res/1289/main/slogan.png";
+                                : "res/res/" + _region.AppId + "/main/slogan.png";
                             nativeImages["slogan"] = NteQtResourceImage.ReadPng(packed, artwork);
                         }
                     }

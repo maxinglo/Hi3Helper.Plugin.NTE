@@ -557,4 +557,27 @@ Enable Remember this account when signing in with a verification code.</value>
   <data name="NoticeSharingExamplesGlobal" xml:space="preserve">
     <value>YouTube, TikTok, Reddit, X</value>
   </data>
+  <data name="ServerSwitchTitle" xml:space="preserve"><value>Switch NTE server</value></data>
+  <data name="ServerTaiwan" xml:space="preserve"><value>Taiwan / Hong Kong / Macau</value></data>
+  <data name="ServerGlobal" xml:space="preserve"><value>Global</value></data>
+  <data name="ServerSwitchHint" xml:space="preserve"><value>Shared resources are reused. The selected server keeps its own signed programs and official login configuration. Close the game and both official launchers first.</value></data>
+  <data name="ServerSwitchCheck" xml:space="preserve"><value>Check resources</value></data>
+  <data name="ServerSwitchApply" xml:space="preserve"><value>Switch server</value></data>
+  <data name="ServerSwitchCancel" xml:space="preserve"><value>Cancel operation</value></data>
+  <data name="ServerSwitchPreparing" xml:space="preserve"><value>Preparing server switch…</value></data>
+  <data name="ServerSwitchChecking" xml:space="preserve"><value>Checking existing resources…</value></data>
+  <data name="ServerSwitchDownloading" xml:space="preserve"><value>Preparing missing resources…</value></data>
+  <data name="ServerSwitchActivating" xml:space="preserve"><value>Activating the selected server…</value></data>
+  <data name="ServerSwitchReady" xml:space="preserve"><value>Ready to switch</value></data>
+  <data name="ServerSwitchSummary" xml:space="preserve"><value>Target version: {0}
+Reuse: {1} files · Cached/local: {2} files
+Download: {3} files ({4:F3} GB)</value></data>
+  <data name="ServerSwitchRecovery" xml:space="preserve"><value>The previous server switch was interrupted. Start switching to recover it safely.</value></data>
+  <data name="ServerSwitchCompleted" xml:space="preserve"><value>Server switch completed</value></data>
+  <data name="ServerSwitchCompletedHint" xml:space="preserve"><value>Select the target region in Collapse. Both regions now use this installation directory.</value></data>
+  <data name="ServerSwitchFailed" xml:space="preserve"><value>Server switching could not complete</value></data>
+  <data name="ServerSwitchCancelled" xml:space="preserve"><value>Operation cancelled</value></data>
+  <data name="ServerSwitchCancelledHint" xml:space="preserve"><value>Any activated files are rolled back. Verified downloads are kept for the next attempt.</value></data>
+  <data name="TaiwanTitle" xml:space="preserve"><value>Taiwan account sign-in</value></data>
+  <data name="LoginMethodUnavailable" xml:space="preserve"><value>This sign-in method is not available in the selected region.</value></data>
 </root>

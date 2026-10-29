@@ -39,7 +39,7 @@ internal static class NteGameIntegrity
     {
         string root = Path.GetFullPath(gameRoot);
         if (!Directory.Exists(root)) throw new DirectoryNotFoundException(root);
-        var files = NteCNGameInstaller.BuildDownloadTasks(manifest, root, false, false, token);
+        var files = NteGameInstaller.BuildDownloadTasks(manifest, root, false, false, token);
         if (files.Count == 0 || string.IsNullOrWhiteSpace(manifest.Version))
             throw new InvalidDataException("Integrity checking requires a non-empty, versioned resource manifest.");
         HashSet<string> paths = new(StringComparer.OrdinalIgnoreCase);

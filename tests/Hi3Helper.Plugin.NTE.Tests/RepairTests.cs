@@ -18,10 +18,10 @@ public sealed class RepairTests : IDisposable
     {
         Handler handler = new();
         using HttpClient http = new(handler);
-        NteCNGameManager manager = new(http);
+        NteGameManager manager = new(http);
         manager.SetGamePath(_root);
         manager.SetCurrentGameVersion(new GameVersion("1.4.17"));
-        NteCNGameInstaller installer = new(manager, http);
+        NteGameInstaller installer = new(manager, http);
         try
         {
             await File.WriteAllTextAsync(Path.Combine(_root, "good.pak"), "GOOD", TestContext.Current.CancellationToken);
@@ -46,10 +46,10 @@ public sealed class RepairTests : IDisposable
     {
         Handler handler = new() { CorruptDownloads = true };
         using HttpClient http = new(handler);
-        NteCNGameManager manager = new(http);
+        NteGameManager manager = new(http);
         manager.SetGamePath(_root);
         manager.SetCurrentGameVersion(new GameVersion("1.4.17"));
-        NteCNGameInstaller installer = new(manager, http);
+        NteGameInstaller installer = new(manager, http);
         try
         {
             await File.WriteAllTextAsync(Path.Combine(_root, "good.pak"), "GOOD", TestContext.Current.CancellationToken);
@@ -72,10 +72,10 @@ public sealed class RepairTests : IDisposable
     {
         Handler handler = new() { CorruptPrimary = true };
         using HttpClient http = new(handler);
-        NteCNGameManager manager = new(http);
+        NteGameManager manager = new(http);
         manager.SetGamePath(_root);
         manager.SetCurrentGameVersion(new GameVersion("1.4.17"));
-        NteCNGameInstaller installer = new(manager, http);
+        NteGameInstaller installer = new(manager, http);
         try
         {
             await File.WriteAllTextAsync(Path.Combine(_root, "good.pak"), "GOOD", TestContext.Current.CancellationToken);
@@ -109,10 +109,10 @@ public sealed class RepairTests : IDisposable
     {
         Handler handler = new() { SlowDownloads = true, AdditionalResources = 5 };
         using HttpClient http = new(handler);
-        NteCNGameManager manager = new(http);
+        NteGameManager manager = new(http);
         manager.SetGamePath(_root);
         manager.SetCurrentGameVersion(new GameVersion("1.4.17"));
-        NteCNGameInstaller installer = new(manager, http);
+        NteGameInstaller installer = new(manager, http);
         using CancellationTokenSource cancel = new();
         List<(long Done, long Total)> fileSamples = [];
         installer.ReportPerFileProgress = (done, total) => fileSamples.Add((done, total));

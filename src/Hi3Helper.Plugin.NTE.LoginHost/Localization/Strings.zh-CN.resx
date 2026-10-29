@@ -557,4 +557,27 @@
   <data name="NoticeSharingExamplesGlobal" xml:space="preserve">
     <value>YouTube、TikTok、Reddit、X 等</value>
   </data>
+  <data name="ServerSwitchTitle" xml:space="preserve"><value>切换异环服务器</value></data>
+  <data name="ServerTaiwan" xml:space="preserve"><value>台港澳</value></data>
+  <data name="ServerGlobal" xml:space="preserve"><value>国际服</value></data>
+  <data name="ServerSwitchHint" xml:space="preserve"><value>复用共同资源，为所选地区保留独立的签名程序和官方登录配置。请先关闭游戏及两服官方启动器。</value></data>
+  <data name="ServerSwitchCheck" xml:space="preserve"><value>检查资源</value></data>
+  <data name="ServerSwitchApply" xml:space="preserve"><value>切换服务器</value></data>
+  <data name="ServerSwitchCancel" xml:space="preserve"><value>取消操作</value></data>
+  <data name="ServerSwitchPreparing" xml:space="preserve"><value>正在准备切服…</value></data>
+  <data name="ServerSwitchChecking" xml:space="preserve"><value>正在检查现有资源…</value></data>
+  <data name="ServerSwitchDownloading" xml:space="preserve"><value>正在准备缺失资源…</value></data>
+  <data name="ServerSwitchActivating" xml:space="preserve"><value>正在激活所选地区…</value></data>
+  <data name="ServerSwitchReady" xml:space="preserve"><value>已准备好切换</value></data>
+  <data name="ServerSwitchSummary" xml:space="preserve"><value>目标版本：{0}
+可直接复用：{1} 个文件 · 缓存或本地：{2} 个文件
+需要下载：{3} 个文件（{4:F3} GB）</value></data>
+  <data name="ServerSwitchRecovery" xml:space="preserve"><value>上次切服意外中断，开始切换会先恢复该操作。</value></data>
+  <data name="ServerSwitchCompleted" xml:space="preserve"><value>服务器切换完成</value></data>
+  <data name="ServerSwitchCompletedHint" xml:space="preserve"><value>请在 Collapse 中选择目标地区。两服现在共用这个安装目录。</value></data>
+  <data name="ServerSwitchFailed" xml:space="preserve"><value>服务器切换未能完成</value></data>
+  <data name="ServerSwitchCancelled" xml:space="preserve"><value>操作已取消</value></data>
+  <data name="ServerSwitchCancelledHint" xml:space="preserve"><value>已激活的文件会回退，校验通过的下载会保留供下次使用。</value></data>
+  <data name="TaiwanTitle" xml:space="preserve"><value>台服账号登录</value></data>
+  <data name="LoginMethodUnavailable" xml:space="preserve"><value>此地区未开放这种登录方式。</value></data>
 </root>

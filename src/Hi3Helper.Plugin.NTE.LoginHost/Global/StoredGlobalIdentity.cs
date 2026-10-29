@@ -16,8 +16,8 @@ internal static class StoredGlobalIdentity
         {
             using (Utf8JsonWriter json = new(stream))
             {
-                json.WriteStartObject(); json.WriteNumber("format", 1); json.WriteNumber("appId", 3000001);
-                json.WriteString("area", "global-sg"); json.WriteNumber("provider", identity.Provider);
+                json.WriteStartObject(); json.WriteNumber("format", 1); json.WriteNumber("appId", identity.Region.ApplicationId);
+                json.WriteString("area", identity.Region.Area); json.WriteNumber("provider", identity.Provider);
                 json.WriteString("uid", NteGlobalIdentity.ReadUserId(identity.Result.GetProperty("uid")));
                 json.WriteString("token", identity.Result.GetProperty("token").GetString()); json.WriteEndObject();
             }
@@ -27,13 +27,14 @@ internal static class StoredGlobalIdentity
         finally { CryptographicOperations.ZeroMemory(stream.GetBuffer()); }
     }
 
-    internal static NteGlobalIdentity Decode(byte[] credential)
+    internal static NteGlobalIdentity Decode(byte[] credential, NteOverseasRegion? region = null)
     {
+        region ??= NteOverseasRegion.Global;
         if (credential.Length is < 1 or > 12288) throw new InvalidDataException("Saved Global identity size bound.");
         using JsonDocument json = JsonDocument.Parse(credential);
         JsonElement root = json.RootElement;
-        if (root.GetProperty("format").GetInt32() != 1 || root.GetProperty("appId").GetInt32() != 3000001 ||
-            root.GetProperty("area").GetString() != "global-sg") throw new InvalidDataException("Saved Global region mismatch.");
+        if (root.GetProperty("format").GetInt32() != 1 || root.GetProperty("appId").GetInt32() != region.ApplicationId ||
+            root.GetProperty("area").GetString() != region.Area) throw new InvalidDataException("Saved Global region mismatch.");
         using MemoryStream stream = new();
         try
         {
@@ -45,15 +46,18 @@ internal static class StoredGlobalIdentity
                 writer.WriteEndObject(); writer.WriteEndObject();
             }
             using JsonDocument response = JsonDocument.Parse(stream.GetBuffer().AsMemory(0, (int)stream.Length));
-            return NteGlobalIdentity.FromService(response.RootElement, root.GetProperty("provider").GetInt32());
+            return NteGlobalIdentity.FromService(response.RootElement, root.GetProperty("provider").GetInt32(), region);
         }
         finally { CryptographicOperations.ZeroMemory(stream.GetBuffer()); }
     }
 
-    internal static string SubjectKey(byte[] credential, byte[] key)
+    internal static string SubjectKey(byte[] credential, byte[] key) => SubjectKey(credential, key, NteOverseasRegion.Global);
+
+    internal static string SubjectKey(byte[] credential, byte[] key, NteOverseasRegion? region)
     {
-        using NteGlobalIdentity identity = Decode(credential);
-        byte[] scoped = Encoding.UTF8.GetBytes("NTE|Global|3000001|global-sg|uid:" +
+        region ??= NteOverseasRegion.Global;
+        using NteGlobalIdentity identity = Decode(credential, region);
+        byte[] scoped = Encoding.UTF8.GetBytes("NTE|" + region.Name + "|" + region.AppId + "|" + region.Area + "|uid:" +
             NteGlobalIdentity.ReadUserId(identity.Result.GetProperty("uid")));
         try { return Convert.ToHexString(HMACSHA256.HashData(key, scoped)); }
         finally { CryptographicOperations.ZeroMemory(scoped); }

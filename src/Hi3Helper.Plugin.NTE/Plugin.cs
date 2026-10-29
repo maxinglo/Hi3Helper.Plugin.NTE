@@ -13,7 +13,7 @@ namespace Hi3Helper.Plugin.NTE;
 [GeneratedComClass]
 public partial class NtePlugin : PluginBase
 {
-    private static readonly IPluginPresetConfig[] PresetConfigInstances = [new NteCNPresetConfig(), new NteCNPresetConfig(NteConfigProvider.Global)];
+    private static readonly IPluginPresetConfig[] PresetConfigInstances = [new NteCNPresetConfig(), new NteCNPresetConfig(NteConfigProvider.Global), new NteCNPresetConfig(NteConfigProvider.Taiwan)];
     private static DateTime _pluginCreationDate = new(2026, 04, 21, 00, 00, 00, DateTimeKind.Utc);
 
     public override void GetPluginName(out string result) => result = NteResourceProvider.GetString("PluginName");

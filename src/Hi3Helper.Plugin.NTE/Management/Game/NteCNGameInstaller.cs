@@ -16,7 +16,7 @@ using System.Threading.Tasks;
 namespace Hi3Helper.Plugin.NTE.Management.Game;
 
 [GeneratedComClass]
-internal partial class NteCNGameInstaller(IGameManager gameManager, HttpClient? downloadHttpClient = null) : GameInstallerBase(gameManager)
+internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? downloadHttpClient = null) : GameInstallerBase(gameManager)
 {
     private readonly HttpClient _downloadHttpClient = downloadHttpClient ?? new PluginHttpClientBuilder()
         .SetAllowedDecompression(DecompressionMethods.GZip)
@@ -61,7 +61,7 @@ internal partial class NteCNGameInstaller(IGameManager gameManager, HttpClient? 
         SharedStatic.InstanceLogger.LogDebug("[NteCNInstaller::InitAsync] Starting initialization...");
 
         // 初始化 GameManager
-        if (GameManager is not NteCNGameManager mgr)
+        if (GameManager is not NteGameManager mgr)
             throw new InvalidOperationException("GameManager is not NteCNGameManager");
 
         int mgrResult = await mgr.InitAsyncInner(true, token).ConfigureAwait(false);
@@ -239,8 +239,29 @@ internal partial class NteCNGameInstaller(IGameManager gameManager, HttpClient? 
         if (string.IsNullOrEmpty(installPath))
             return;
 
+        NteSharedInstallationState? shared = NteSharedInstallation.Load(installPath);
+        using FileStream? sharedOperation = shared != null ? NteGameOperation.Acquire(installPath) : null;
+        if (shared != null)
+        {
+            NteSharedInstallation.EnsureGamesClosed(installPath);
+            if (NteSharedInstallation.HasPendingSwitch(installPath)) throw new IOException("Recover the interrupted server switch before uninstalling.");
+        }
+        if (shared is { Profiles.Count: > 1 } && GameManager is NteGameManager manager)
+        {
+            if (shared.ActiveAppId == manager.Region.AppId)
+            {
+                string remaining = System.Linq.Enumerable.First(shared.Profiles.Keys, id => id != manager.Region.AppId);
+                using var client = new PluginHttpClientBuilder().AllowRedirections().Create();
+                await new NteRegionSwitchService(client).SwitchAsync(installPath, NteConfigProvider.GetRegion(remaining), null, token, operationHeld: true).ConfigureAwait(false);
+            }
+            NteSharedInstallation.RemoveProfile(installPath, manager.Region);
+            return;
+        }
         SharedStatic.InstanceLogger.LogInformation("[NteCNInstaller::UninstallAsyncInner] Uninstalling from: {Path}", installPath);
-        await Task.Run(() => Directory.Delete(installPath, true), token).ConfigureAwait(false);
+        string removal = Path.GetFullPath(installPath).TrimEnd(Path.DirectorySeparatorChar);
+        if (removal.Equals(Path.GetPathRoot(removal)!.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("A drive root cannot be uninstalled as an NTE game directory.");
+        await Task.Run(() => Directory.Delete(removal, true), token).ConfigureAwait(false);
     }
 
     public override void Dispose()
@@ -254,13 +275,13 @@ internal partial class NteCNGameInstaller(IGameManager gameManager, HttpClient? 
     /// <summary>
     /// 下载 ResList.bin.zip，解压并解密，返回 XML 字节。
     /// </summary>
-    private async Task<byte[]> DownloadAndDecryptResListAsync(
+    internal async Task<byte[]> DownloadAndDecryptResListAsync(
         string branchName, string gameVersion, CancellationToken token)
     {
         Exception? lastException = null;
 
         // 尝试所有 CDN
-        string[] resourceRoots = ((NteCNGameManager)GameManager).GameResBaseUrls;
+        string[] resourceRoots = ((NteGameManager)GameManager).GameResBaseUrls;
         for (int i = 0; i < resourceRoots.Length; i++)
         {
             string url = $"{resourceRoots[i].TrimEnd('/')}/{branchName}/Version/Windows/version/{gameVersion}/ResList.bin.zip";
@@ -299,7 +320,7 @@ internal partial class NteCNGameInstaller(IGameManager gameManager, HttpClient? 
                 byte[] encryptedData = await ReadAllBytesAsync(entryStream, token).ConfigureAwait(false);
 
                 // 解密
-                byte[] decryptedXml = NteResListDecryptor.Decrypt(encryptedData.AsSpan(), ((NteCNGameManager)GameManager).AppId);
+                byte[] decryptedXml = NteResListDecryptor.Decrypt(encryptedData.AsSpan(), ((NteGameManager)GameManager).AppId);
 
                 SharedStatic.InstanceLogger.LogInformation(
                     "[NteCNInstaller::DownloadAndDecryptResListAsync] Successfully decrypted ResList: {Size} bytes",

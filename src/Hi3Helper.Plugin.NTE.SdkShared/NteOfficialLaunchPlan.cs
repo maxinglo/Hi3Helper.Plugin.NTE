@@ -7,23 +7,37 @@ namespace Nte.Login;
 internal sealed record NteOfficialLaunchPlan(string Executable, string GameExecutable)
 {
     internal static NteOfficialLaunchPlan Create(string gameRoot, bool global)
+        => Create(gameRoot, global ? NteHostRegion.Global : NteHostRegion.CN);
+
+    internal static NteOfficialLaunchPlan Create(string gameRoot, NteHostRegion region)
     {
         string root = Path.GetFullPath(gameRoot);
-        string executable = Path.Combine(root, global ? "NTEGlobal" : "NTELauncher",
-            global ? "NTEGlobalGame.exe" : "NTEGame.exe");
-        if (!File.Exists(executable)) throw new FileNotFoundException("The official launcher must be installed inside the game installation directory.", executable);
-        return new(executable, Path.Combine(root, "Client", "WindowsNoEditor", "HT", "Binaries", "Win64", "HTGame.exe"));
+        (string directory, string file) = region switch
+        {
+            NteHostRegion.Global => ("NTEGlobal", "NTEGlobalGame.exe"),
+            NteHostRegion.Taiwan => ("NTETW", "NTETWGame.exe"),
+            NteHostRegion.CN => ("NTELauncher", "NTEGame.exe"),
+            _ => throw new ArgumentException("Unknown official launch region.", nameof(region))
+        };
+        string executable = Path.Combine(root, directory, file);
+        if (!File.Exists(executable))
+            throw new FileNotFoundException(
+                "The official launcher must be installed inside the game installation directory.", executable);
+        return new(executable,
+            Path.Combine(root, "Client", "WindowsNoEditor", "HT", "Binaries", "Win64", "HTGame.exe"));
     }
 
-    internal ProcessStartInfo CreateStartInfo(string? additionalArguments)
+    internal ProcessStartInfo CreateStartInfo(string? additionalArguments, bool requestElevation = false)
     {
         ProcessStartInfo start = new(Executable)
         {
-            WorkingDirectory = Path.GetDirectoryName(Executable)!, UseShellExecute = false,
-            CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden
+            WorkingDirectory = Path.GetDirectoryName(Executable)!, UseShellExecute = requestElevation,
+            Verb = requestElevation ? "runas" : "",
+            CreateNoWindow = !requestElevation,
+            WindowStyle = requestElevation ? ProcessWindowStyle.Normal : ProcessWindowStyle.Hidden
         };
-        // These are the vendor's direct/autoplay switches, used by both PC regions.
-        // Game options are appended verbatim, never interpreted by a shell.
+        // ShellExecute is used only for the Windows elevation verb. The exact
+        // executable and arguments are passed directly; no command shell runs.
         start.Arguments = "/launcher /directly /autoplay" +
                           (string.IsNullOrWhiteSpace(additionalArguments) ? "" : " " + additionalArguments);
         return start;

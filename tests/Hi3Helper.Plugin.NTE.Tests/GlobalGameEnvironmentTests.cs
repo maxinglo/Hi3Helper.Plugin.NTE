@@ -11,7 +11,7 @@ public sealed class GlobalGameEnvironmentTests
     public void InstalledGlobalBootstrapReplacesInheritedRegionAndStaysOutOfArguments()
     {
         const string fixtureKey = "synthetic-application-material";
-        using var configuration = new NteGlobalApplicationConfiguration(Encoding.UTF8.GetBytes(fixtureKey),
+        using var configuration = new NteOverseasApplicationConfiguration(Encoding.UTF8.GetBytes(fixtureKey),
             "com.hottagames.nte", new("https://mapi.pwsdk.com"), "global-sg",
             new Dictionary<string, string> { ["chatCoreDomain"] = "fixture.invalid" });
         ProcessStartInfo start = new("fixture.exe", "-dx11");

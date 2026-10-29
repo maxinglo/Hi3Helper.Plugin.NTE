@@ -13,7 +13,7 @@ namespace Hi3Helper.Plugin.NTE.Management.Game;
 internal sealed record NtePatcherConfig(string BranchName, string AppId, string[] ResourceUrls)
 {
     internal const string VersionIniUrl = "https://yhcdn1.wmupd.com/hd/publish_ob/launcher/Version.ini";
-    private string Referer => AppId == NteConfigProvider.Global.AppId ? NteConfigProvider.Global.ZoneHomePageUrl : NteConfigProvider.OfficialSiteUrl;
+    private string Referer => NteConfigProvider.GetRegion(AppId).ZoneHomePageUrl;
 
     internal static async Task<NtePatcherConfig> DiscoverAsync(HttpClient httpClient, CancellationToken token, NteRegionConfig? region = null)
     {

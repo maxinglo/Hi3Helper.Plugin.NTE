@@ -10,10 +10,10 @@ internal static class NteGlobalGameEnvironment
     internal static IReadOnlyList<string> Keys { get; } =
         ["GAME_APPID", "GAME_APPKEY", "GAME_AREA", "chatCoreDomain", "chatTCPDomain", "chatIMApiDomain"];
 
-    internal static void Apply(ProcessStartInfo start, NteGlobalApplicationConfiguration configuration)
+    internal static void Apply(ProcessStartInfo start, NteOverseasApplicationConfiguration configuration)
     {
         Clear(start);
-        start.Environment["GAME_APPID"] = "3000001";
+        start.Environment["GAME_APPID"] = configuration.Region.AppId;
         start.Environment["GAME_APPKEY"] = Encoding.UTF8.GetString(configuration.ApplicationKey);
         start.Environment["GAME_AREA"] = configuration.GameArea;
         foreach (string name in Keys.Skip(3))

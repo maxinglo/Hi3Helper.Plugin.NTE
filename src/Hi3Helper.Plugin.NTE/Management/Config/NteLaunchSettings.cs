@@ -9,7 +9,7 @@ using Nte.Login;
 
 namespace Hi3Helper.Plugin.NTE.Management.Config;
 
-internal sealed class NteLaunchSettings(string path)
+internal sealed class NteLaunchSettings(string path, bool officialOnly = false)
 {
     internal const string GraphicsKey = "launch.graphicsApi";
     internal const string OfficialLauncherKey = "launch.officialLauncher";
@@ -22,7 +22,7 @@ internal sealed class NteLaunchSettings(string path)
         profile, "launch.json");
 
     internal string Load() => NteLaunchPreferences.Read(path).GraphicsApi;
-    internal bool UseOfficialLauncher => NteLaunchPreferences.Read(path).OfficialLauncher;
+    internal bool UseOfficialLauncher => officialOnly || NteLaunchPreferences.Read(path).OfficialLauncher;
 
     internal GameSettingsSection GetSection()
     {
@@ -35,8 +35,8 @@ internal sealed class NteLaunchSettings(string path)
                         new("default", NteResourceProvider.GetString("LaunchGraphicsDefault")),
                         new("dx11", "DirectX 11"), new("dx12", "DirectX 12")
                     ]),
-                GameSettingEntry.Toggle(OfficialLauncherKey, NteResourceProvider.GetString("LaunchOfficialLauncher"),
-                    pendingOfficial ?? UseOfficialLauncher, NteResourceProvider.GetString("LaunchOfficialLauncherHint"))
+                .. (officialOnly ? Array.Empty<GameSettingEntry>() : new[] { GameSettingEntry.Toggle(OfficialLauncherKey, NteResourceProvider.GetString("LaunchOfficialLauncher"),
+                    pendingOfficial ?? UseOfficialLauncher, NteResourceProvider.GetString("LaunchOfficialLauncherHint")) })
             ]);
     }
 

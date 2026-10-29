@@ -46,9 +46,9 @@ public sealed class DownloadSpaceTests : IDisposable
     public void PartialBytes_RequireTheMatchingResourceIdentity()
     {
         string path = Path.Combine(root, "file");
-        NteCNGameInstaller.PrepareTemporaryFile(path + ".tmp", "old", 10);
+        NteGameInstaller.PrepareTemporaryFile(path + ".tmp", "old", 10);
         File.WriteAllText(path + ".tmp", "123456");
-        NteCNGameInstaller.DownloadTask task = new() { OutputPath = path, TotalSize = 10, ExpectedMd5 = "new" };
+        NteGameInstaller.DownloadTask task = new() { OutputPath = path, TotalSize = 10, ExpectedMd5 = "new" };
         NteDownloadSpace mismatch = NteDownloadSpace.Capture(task);
         Assert.Equal(0, mismatch.ResumableBytes);
         Assert.Equal(10, mismatch.NetworkBytes);
@@ -63,9 +63,9 @@ public sealed class DownloadSpaceTests : IDisposable
     {
         string complete = Path.Combine(root, "complete"), partial = Path.Combine(root, "partial"), stale = Path.Combine(root, "stale");
         File.WriteAllText(complete, "DONE");
-        NteCNGameInstaller.PrepareTemporaryFile(partial + ".tmp", "wanted", 10); File.WriteAllText(partial + ".tmp", "123456789");
-        NteCNGameInstaller.PrepareTemporaryFile(stale + ".tmp", "old", 10); File.WriteAllText(stale + ".tmp", "123456789");
-        NteCNGameManager manager = new(); NteCNGameInstaller installer = new(manager, new HttpClient());
+        NteGameInstaller.PrepareTemporaryFile(partial + ".tmp", "wanted", 10); File.WriteAllText(partial + ".tmp", "123456789");
+        NteGameInstaller.PrepareTemporaryFile(stale + ".tmp", "old", 10); File.WriteAllText(stale + ".tmp", "123456789");
+        NteGameManager manager = new(); NteGameInstaller installer = new(manager, new HttpClient());
         try
         {
             Assert.Equal(13, installer.CalculateDownloadedBytes([

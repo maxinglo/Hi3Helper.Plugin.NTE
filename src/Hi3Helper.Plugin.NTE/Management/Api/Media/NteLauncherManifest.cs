@@ -7,11 +7,14 @@ using System.Text.RegularExpressions;
 
 namespace Hi3Helper.Plugin.NTE.Management.Api.Media;
 
+internal sealed record NteLauncherFile(string Path, long Size, string Md5);
+
 internal sealed class NteLauncherManifest
 {
     private readonly Uri _baseUri;
     private readonly HashSet<string> _paths;
     private readonly Dictionary<string, string> _checksums;
+    internal List<NteLauncherFile> Files { get; } = [];
 
     private NteLauncherManifest(Uri baseUri, HashSet<string> paths, Dictionary<string, string> checksums)
     {
@@ -54,6 +57,7 @@ internal sealed class NteLauncherManifest
         if (document.DocumentElement?.Name != "All_Files")
             throw new InvalidDataException("AllFiles.xml does not contain an All_Files root element.");
 
+        List<NteLauncherFile> entries = [];
         HashSet<string> paths = new(StringComparer.OrdinalIgnoreCase);
         Dictionary<string, string> checksums = new(StringComparer.OrdinalIgnoreCase);
         foreach (XmlNode file in document.DocumentElement.ChildNodes)
@@ -63,11 +67,18 @@ internal sealed class NteLauncherManifest
             {
                 path = NormalizePath(path); paths.Add(path);
                 string? checksum = file.Attributes?["Checksum"]?.Value;
-                if (checksum != null && Regex.IsMatch(checksum, "\\A[0-9A-Fa-f]{32}\\z")) checksums[path] = checksum.ToLowerInvariant();
+                if (checksum != null && Regex.IsMatch(checksum, "\\A[0-9A-Fa-f]{32}\\z"))
+                {
+                    checksums[path] = checksum.ToLowerInvariant();
+                    if (long.TryParse(file.Attributes?["Size"]?.Value, out long size) && size >= 0)
+                        entries.Add(new(path, size, checksum.ToLowerInvariant()));
+                }
             }
         }
 
-        return new NteLauncherManifest(new Uri(new Uri(fileListUrl), "."), paths, checksums);
+        NteLauncherManifest manifest = new(new Uri(new Uri(fileListUrl), "."), paths, checksums);
+        manifest.Files.AddRange(entries);
+        return manifest;
     }
 
     internal bool TryFindPathBySuffix(string suffix, out string path)

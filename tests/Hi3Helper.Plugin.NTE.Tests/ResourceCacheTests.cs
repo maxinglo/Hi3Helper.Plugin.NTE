@@ -63,8 +63,8 @@ public sealed class ResourceCacheTests : IDisposable
         await cache.StoreAsync(source, md5, bytes.Length, TestContext.Current.CancellationToken);
         Handler handler = new(bytes);
         using HttpClient http = new(handler);
-        NteCNGameManager manager = new(http);
-        NteCNGameInstaller installer = new(manager, http);
+        NteGameManager manager = new(http);
+        NteGameInstaller installer = new(manager, http);
         string output = Path.Combine(_root, "game.pak");
         long reported = 0;
         try

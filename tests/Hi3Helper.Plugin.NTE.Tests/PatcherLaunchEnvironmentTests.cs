@@ -8,6 +8,7 @@ public sealed class PatcherLaunchEnvironmentTests
     [Theory]
     [InlineData("NTELauncher", "1289")]
     [InlineData("NTEGlobal", "3000001")]
+    [InlineData("NTETW", "2000013")]
     public void MatchingInstalledConfigurationProvidesTheObservedPublicPaths(string launcherDirectoryName,
         string applicationId)
     {

@@ -9,43 +9,44 @@ namespace Nte.Login;
 
 // Resolves only a direct game launch. Installed vendor files supply static
 // configuration and the game SDK; this plan creates no vendor process.
-internal sealed record NteGlobalLaunchPlan(string GameRoot, string GameExecutable, string GameArguments)
+internal sealed record NteOverseasLaunchPlan(string GameRoot, string GameExecutable, string GameArguments, NteHostRegion Region = NteHostRegion.Global)
 {
-    internal static NteGlobalLaunchPlan Create(NteHostLaunchOptions options)
+    internal static NteOverseasLaunchPlan Create(NteHostLaunchOptions options)
     {
-        if (options.Region != NteHostRegion.Global) throw new ArgumentException("A global launch context is required.");
+        NteOverseasRegion region = NteOverseasRegion.From(options.Region);
         string root = Path.GetFullPath(options.GameRoot);
-        string platform = Path.Combine(root, "NTEGlobal");
+        string platform = Path.Combine(root, region.LauncherDirectory);
         string config = Path.Combine(platform, "Config", "Config.ini");
         foreach (string file in new[]
                  {
-                     config, Path.Combine(platform, "NTEGlobalGame.exe"),
+                     config, Path.Combine(platform, region.LauncherDirectory + "Game.exe"),
                      Path.Combine(platform, "WPGameClientSDK_64.dll"),
-                     Path.Combine(platform, "ResData", "3000001.dat"),
+                     Path.Combine(platform, "ResData", region.AppId + ".dat"),
                      Path.Combine(root, "Client/WindowsNoEditor/HT/Binaries/Win64/HTGame.exe"),
                      Path.Combine(root, "Client/WindowsNoEditor/HT/Binaries/Win64/WPGlobalSDK_64.dll")
                  })
             if (!File.Exists(file))
                 throw new NteGlobalLaunchException("GlobalFilesMissing");
-        if (IniValue(ReadBounded(config), "General", "GameID") != "3000001")
+        if (IniValue(ReadBounded(config), "General", "GameID") != region.AppId)
             throw new NteGlobalLaunchException("GlobalWrongPlatform");
         string marker = Path.Combine(root, ".collapse_nte_config");
         if (File.Exists(marker))
         {
             string? appId = IniValue(ReadBounded(marker), "", "AppId");
-            if (appId != "3000001")
+            if (appId != region.AppId)
                 throw new NteGlobalLaunchException("GlobalWrongRegion");
         }
 
         return new(root,
             Path.GetFullPath(Path.Combine(root, "Client/WindowsNoEditor/HT/Binaries/Win64/HTGame.exe")),
-            CreateGameArguments(options));
+            CreateGameArguments(options), options.Region);
     }
 
     private static string CreateGameArguments(NteHostLaunchOptions options)
     {
-        // The installed Global component uses Saved_Global. Without this
-        // flag the same game executable reads the mainland Saved directory.
+        NteOverseasRegion region = NteOverseasRegion.From(options.Region);
+        // Only Global's saved-directory suffix has been observed. Taiwan uses
+        // the client's default; never silently inject another region's flag.
         foreach (Match match in Regex.Matches(options.AdditionalArguments ?? "", "(?:[^\\s\"]|\"[^\"]*\")+"))
         {
             string argument = match.Value.Trim('"');
@@ -54,12 +55,12 @@ internal sealed record NteGlobalLaunchPlan(string GameRoot, string GameExecutabl
             string name = (equals < 0 ? argument : argument[..equals]).TrimStart('-');
             if (name.Equals("enginesaveddirsuffix", StringComparison.OrdinalIgnoreCase) ||
                 name.Equals("saveddirsuffix", StringComparison.OrdinalIgnoreCase) &&
-                (equals < 0 || !argument[(equals + 1)..].Trim('"')
-                    .Equals("Global", StringComparison.OrdinalIgnoreCase)))
+                (region.SavedDirectorySuffix == null || equals < 0 || !argument[(equals + 1)..].Trim('"')
+                    .Equals(region.SavedDirectorySuffix, StringComparison.OrdinalIgnoreCase)))
                 throw new NteGlobalLaunchException("GlobalSaveDirectoryConflict");
         }
 
-        string required = NteHostLaunchOptions.RequiredGameArguments + " --saveddirsuffix=Global";
+        string required = NteHostLaunchOptions.RequiredGameArguments + (region.SavedDirectorySuffix == null ? "" : " --saveddirsuffix=" + region.SavedDirectorySuffix);
         return string.IsNullOrWhiteSpace(options.AdditionalArguments)
             ? required
             : required + " " + options.AdditionalArguments;
@@ -73,7 +74,8 @@ internal sealed record NteGlobalLaunchPlan(string GameRoot, string GameExecutabl
         if (string.IsNullOrWhiteSpace(pipeName) || pipeName.Length > 200 ||
             pipeName.AsSpan().ContainsAnyExcept("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_"))
             throw new ArgumentException("Invalid game pipe name.", nameof(pipeName));
-        string platform = Path.Combine(GameRoot, "NTEGlobal");
+        NteOverseasRegion region = NteOverseasRegion.From(Region);
+        string platform = Path.Combine(GameRoot, region.LauncherDirectory);
         ProcessStartInfo start = new(GameExecutable, GameArguments)
         {
             WorkingDirectory = Path.Combine(GameRoot, "Client"), UseShellExecute = false, RedirectStandardOutput = true,
@@ -85,7 +87,7 @@ internal sealed record NteGlobalLaunchPlan(string GameRoot, string GameExecutabl
                      "ArcMoblieNotify", "anchor_w", "anchor_v", "ArcMId", "ArcMMId", "ArcDataIndex", "GameVersion",
                      "_PATCHER_RES_VERSION_", "_PATCHER_CONFIG_PATH_", "_PATCHER_USERDATA_PATH_", "_PATCHER_LOG_PATH_"
                  }) start.Environment.Remove(key);
-        if (!platformEnvironment.TryGetValue("ArcGameAppId", out string? appId) || appId != "3000001")
+        if (!platformEnvironment.TryGetValue("ArcGameAppId", out string? appId) || appId != region.AppId)
             throw new ArgumentException("Invalid global platform application.", nameof(platformEnvironment));
         // These must exist before the first native call: IsStartFromPlatform
         // caches its initial check, and a later environment ACK cannot fix it.

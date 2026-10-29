@@ -34,7 +34,7 @@ public sealed class GlobalLoginLaunchTests
         using Installation game = new();
         const string arguments = "-dx11 -windowed -some-value=\"a b&c\"";
         NteHostLaunchOptions options = new(game.Root, arguments, Region: NteHostRegion.Global);
-        NteGlobalLaunchPlan plan = NteGlobalLaunchPlan.Create(options);
+        NteOverseasLaunchPlan plan = NteOverseasLaunchPlan.Create(options);
         ProcessStartInfo start =
             plan.CreateStartInfo("Collapse.NTE.Global.Test", FixtureDeviceId, PlatformEnvironment());
         Assert.Equal(plan.GameExecutable, start.FileName);
@@ -68,7 +68,7 @@ public sealed class GlobalLoginLaunchTests
     public void OnlyTheGlobalPlanSelectsTheGlobalSavedDirectory()
     {
         using Installation game = new();
-        var global = NteGlobalLaunchPlan.Create(new(game.Root, Region: NteHostRegion.Global));
+        var global = NteOverseasLaunchPlan.Create(new(game.Root, Region: NteHostRegion.Global));
         Assert.Equal(NteHostLaunchOptions.RequiredGameArguments + " --saveddirsuffix=Global", global.GameArguments);
         Assert.Equal(NteHostLaunchOptions.RequiredGameArguments, new NteHostLaunchOptions(game.Root).GameArguments);
     }
@@ -83,7 +83,7 @@ public sealed class GlobalLoginLaunchTests
         var context = PlatformEnvironment();
         if (value == null) context.Remove(key);
         else context[key] = value;
-        var plan = NteGlobalLaunchPlan.Create(new(game.Root, Region: NteHostRegion.Global));
+        var plan = NteOverseasLaunchPlan.Create(new(game.Root, Region: NteHostRegion.Global));
         Assert.Throws<ArgumentException>(() =>
             plan.CreateStartInfo("Collapse.NTE.Global.Test", FixtureDeviceId, context));
     }
@@ -98,7 +98,7 @@ public sealed class GlobalLoginLaunchTests
     {
         using Installation game = new();
         var error = Assert.Throws<NteGlobalLaunchException>(() =>
-            NteGlobalLaunchPlan.Create(new(game.Root, arguments, Region: NteHostRegion.Global)));
+            NteOverseasLaunchPlan.Create(new(game.Root, arguments, Region: NteHostRegion.Global)));
         Assert.Equal("GlobalSaveDirectoryConflict", error.Key);
     }
 
@@ -108,7 +108,7 @@ public sealed class GlobalLoginLaunchTests
     public void AnExplicitMatchingSavedDirectoryOptionRemainsCompatible(string arguments)
     {
         using Installation game = new();
-        var plan = NteGlobalLaunchPlan.Create(new(game.Root, arguments, Region: NteHostRegion.Global));
+        var plan = NteOverseasLaunchPlan.Create(new(game.Root, arguments, Region: NteHostRegion.Global));
         Assert.EndsWith(arguments, plan.GameArguments);
     }
 
@@ -119,16 +119,16 @@ public sealed class GlobalLoginLaunchTests
         string settings = Path.Combine(game.Root, "NTEGlobal/UserData/Config/Config.ini");
         File.WriteAllText(Path.Combine(game.Root, ".collapse_nte_config"), "AppId=1289\nGameVersion=1.0.14\n");
         Assert.Throws<NteGlobalLaunchException>(() =>
-            NteGlobalLaunchPlan.Create(new(game.Root, Region: NteHostRegion.Global)));
+            NteOverseasLaunchPlan.Create(new(game.Root, Region: NteHostRegion.Global)));
         Assert.False(File.Exists(settings));
         File.Delete(Path.Combine(game.Root, ".collapse_nte_config"));
         File.WriteAllText(Path.Combine(game.Root, "NTEGlobal/Config/Config.ini"), "[General]\nGameID=1289\n");
         Assert.Throws<NteGlobalLaunchException>(() =>
-            NteGlobalLaunchPlan.Create(new(game.Root, Region: NteHostRegion.Global)));
+            NteOverseasLaunchPlan.Create(new(game.Root, Region: NteHostRegion.Global)));
         File.WriteAllText(Path.Combine(game.Root, "NTEGlobal/Config/Config.ini"), "[General]\nGameID=3000001\n");
         File.Delete(Path.Combine(game.Root, "NTEGlobal/WPGameClientSDK_64.dll"));
         Assert.Throws<NteGlobalLaunchException>(() =>
-            NteGlobalLaunchPlan.Create(new(game.Root, Region: NteHostRegion.Global)));
+            NteOverseasLaunchPlan.Create(new(game.Root, Region: NteHostRegion.Global)));
         Assert.False(File.Exists(settings));
     }
 
@@ -140,7 +140,7 @@ public sealed class GlobalLoginLaunchTests
         Directory.CreateDirectory(Path.GetDirectoryName(settings)!);
         byte[] previous = Encoding.Unicode.GetBytes("[Setting]\r\nwebLoginBySystem=0\r\nDx11=0\r\n");
         File.WriteAllBytes(settings, previous);
-        NteGlobalLaunchPlan plan = NteGlobalLaunchPlan.Create(new(game.Root, "-dx11", Region: NteHostRegion.Global));
+        NteOverseasLaunchPlan plan = NteOverseasLaunchPlan.Create(new(game.Root, "-dx11", Region: NteHostRegion.Global));
         Assert.EndsWith("HTGame.exe",
             plan.CreateStartInfo("Collapse.NTE.Global.Test", FixtureDeviceId, PlatformEnvironment()).FileName);
         Assert.Equal(previous, File.ReadAllBytes(settings));
@@ -156,7 +156,7 @@ public sealed class GlobalLoginLaunchTests
         using Installation game = new();
         File.WriteAllText(Path.Combine(game.Root, "NTEGlobal/Config/Config.ini"),
             "[General]\r\nGameID=3000001\r\n", new UnicodeEncoding(bigEndian, true));
-        Assert.Equal(game.Root, NteGlobalLaunchPlan.Create(new(game.Root, Region: NteHostRegion.Global)).GameRoot);
+        Assert.Equal(game.Root, NteOverseasLaunchPlan.Create(new(game.Root, Region: NteHostRegion.Global)).GameRoot);
     }
 
     private sealed class Installation : IDisposable

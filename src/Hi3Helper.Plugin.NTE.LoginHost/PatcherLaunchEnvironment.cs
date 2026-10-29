@@ -14,7 +14,7 @@ internal static class PatcherLaunchEnvironment
         foreach (string name in new[] { "_PATCHER_CONFIG_PATH_", "_PATCHER_USERDATA_PATH_", "_PATCHER_LOG_PATH_" })
             environment.Remove(name);
 
-        if (launcherDirectoryName is not ("NTELauncher" or "NTEGlobal") ||
+        if (launcherDirectoryName is not ("NTELauncher" or "NTEGlobal" or "NTETW") ||
             applicationId.Length is < 1 or > 10 ||
             !applicationId.All(char.IsAsciiDigit) ||
             !uint.TryParse(applicationId, NumberStyles.None, CultureInfo.InvariantCulture, out uint expectedId) ||

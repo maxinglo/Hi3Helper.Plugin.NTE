@@ -16,10 +16,10 @@ using Hi3Helper.Plugin.Core;
 namespace Hi3Helper.Plugin.NTE.Management.Game;
 
 [GeneratedComClass]
-internal partial class NteCNGameManager : GameManagerBase
+internal partial class NteGameManager : GameManagerBase
 {
     internal NteRegionConfig Region { get; }
-    internal NteCNGameManager(HttpClient? httpClient = null, NteRegionConfig? region = null)
+    internal NteGameManager(HttpClient? httpClient = null, NteRegionConfig? region = null)
     {
         Region = region ?? NteConfigProvider.CN;
         GameResBaseUrls = Region.ResourceUrls;
@@ -34,7 +34,8 @@ internal partial class NteCNGameManager : GameManagerBase
     internal bool IsGamePathCompatible(string gamePath)
     {
         NteRegionConfig? installedRegion = NteConfigProvider.DetectInstalledRegion(gamePath);
-        return installedRegion == null || installedRegion.AppId == Region.AppId;
+        return installedRegion == null || installedRegion.AppId == Region.AppId ||
+            installedRegion.IsOverseas && Region.IsOverseas && NteSharedInstallation.Contains(gamePath, Region);
     }
 
     private bool AcceptCurrentGamePath()
@@ -74,7 +75,7 @@ internal partial class NteCNGameManager : GameManagerBase
         IsInstalled &&
         CurrentGameVersion != GameVersion.Empty &&
         ApiGameVersion != GameVersion.Empty &&
-        CurrentGameVersion < ApiGameVersion;
+        (CurrentGameVersion < ApiGameVersion || !string.IsNullOrEmpty(CurrentGameInstallPath) && NteSharedInstallation.NeedsActivation(CurrentGameInstallPath, Region));
 
     protected override bool IsInstalled
     {
@@ -113,6 +114,13 @@ internal partial class NteCNGameManager : GameManagerBase
         if (!AcceptCurrentGamePath() || string.IsNullOrEmpty(CurrentGameInstallPath))
             return;
 
+        NteSharedInstallationState? shared = NteSharedInstallation.Load(CurrentGameInstallPath);
+        if (shared?.Profiles.TryGetValue(Region.AppId, out NteSharedProfile? profile) == true &&
+            GameVersion.TryParse(profile.Version, out GameVersion sharedVersion))
+        {
+            CurrentGameVersion = sharedVersion;
+            return;
+        }
         string officialConfigPath = Path.Combine(CurrentGameInstallPath, Region.SdkDirectory, "config.xml");
         if (File.Exists(officialConfigPath))
         {
@@ -170,9 +178,11 @@ internal partial class NteCNGameManager : GameManagerBase
 
         try
         {
+            if (NteSharedInstallation.HasPendingSwitch(CurrentGameInstallPath)) return;
+            if (NteSharedInstallation.Load(CurrentGameInstallPath) is { } shared && shared.ActiveAppId != Region.AppId) return;
             string configPath = Path.Combine(CurrentGameInstallPath, ".collapse_nte_config");
             Directory.CreateDirectory(CurrentGameInstallPath);
-            File.WriteAllText(configPath, $"GameVersion={CurrentGameVersion}\n" + (Region.IsGlobal ? $"AppId={Region.AppId}\n" : ""));
+            File.WriteAllText(configPath, $"GameVersion={CurrentGameVersion}\n" + (Region.IsOverseas ? $"AppId={Region.AppId}\n" : ""));
 
             SharedStatic.InstanceLogger.LogInformation(
                 "[NteCNGameManager::SaveConfig] Saved config: Version={V}",
@@ -187,6 +197,8 @@ internal partial class NteCNGameManager : GameManagerBase
 
     protected override Task<string?> FindExistingInstallPathAsyncInner(CancellationToken token)
     {
+        string? sharedRoot = NteSharedInstallation.FindRoot(Region);
+        if (sharedRoot != null) return Task.FromResult<string?>(sharedRoot);
         // 尝试从注册表查找已有安装路径（仅 Windows）
         if (OperatingSystem.IsWindows())
         {

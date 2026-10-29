@@ -13,13 +13,22 @@ public static class NteConfigProvider
         {
             foreach (string line in File.ReadLines(marker))
                 if (line.StartsWith("AppId=", StringComparison.Ordinal))
-                    return line[6..].Trim() switch { "3000001" => Global, "1289" => CN, _ => throw new InvalidDataException("Unknown installed NTE region.") };
+                    return GetRegion(line[6..].Trim());
             return CN; // Existing China installations predate the application identifier.
         }
         if (File.Exists(Path.Combine(root, Global.SdkDirectory, "config.xml"))) return Global;
+        if (File.Exists(Path.Combine(root, Taiwan.SdkDirectory, "config.xml"))) return Taiwan;
         if (File.Exists(Path.Combine(root, CN.SdkDirectory, "config.xml"))) return CN;
         return null;
     }
+
+    internal static NteRegionConfig GetRegion(string appId) => appId switch
+    {
+        "1289" => CN,
+        "3000001" => Global,
+        "2000013" => Taiwan,
+        _ => throw new InvalidDataException("Unknown installed NTE region.")
+    };
 
     public static string SwiperScriptUrl { get; } = "https://static.games.wanmei.com/public/commonData/gamesData/gameSwiper/yh-gameSwiper.js";
     public static string LauncherVersionIniUrl { get; } = "https://yhcdn1.wmupd.com/hd/publish_ob/launcher/Version.ini";
@@ -116,6 +125,30 @@ public static class NteConfigProvider
         LauncherDirectoryName = "NTEGlobal",
         DefaultBranch = "PC_140",
         ResourceUrls = ["https://ntecdn1.perfectworld.com/clientRes", "https://ntecdn2.perfectworld.com/clientRes"]
+    };
+
+    public static NteRegionConfig Taiwan { get; } = new(
+        ProfileName: "NteTaiwan",
+        ZoneName: "台港澳",
+        ZoneLogoUrl: CN.ZoneLogoUrl,
+        ZonePosterUrl: CN.ZonePosterUrl,
+        ZoneHomePageUrl: "https://nte.iwplay.com.tw/",
+        GameExecutableName: GameExecutableRelativePath,
+        LauncherGameDirectoryName: "NTE-Taiwan",
+        GameAppDataPath: @"%LocalAppData%\HT",
+        GameLogFileName: "HT.log",
+        GameVendorName: "Iwplay",
+        GameRegistryKeyName: @"SOFTWARE\NTETW",
+        GameMainLanguage: "zh-TW",
+        ReleaseChannel: GameReleaseChannel.Public,
+        SupportedLanguages: ["zh-TW"])
+    {
+        AppId = "2000013",
+        LauncherVersionIniUrl = "https://patchnte1.iwplay.com.tw/hd/OBpublish_PC/launcher/Version.ini",
+        LauncherDirectoryName = "NTETW",
+        LauncherPageUrl = "https://nte.iwplay.com.tw/",
+        DefaultBranch = "PC_140",
+        ResourceUrls = ["https://patchnte1.iwplay.com.tw/clientRes", "https://patchnte2.iwplay.com.tw/clientRes"]
     };
 }
 

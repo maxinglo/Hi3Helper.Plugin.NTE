@@ -108,7 +108,7 @@ internal sealed partial class LoginWindow
         {
             form.Children.Clear();
             Add(form, global, 0);
-            title.Text = LoginText.Get("GlobalTitle");
+            title.Text = global.TitleLabel;
             footer.Visibility = Visibility.Collapsed;
             QueueCardSize();
         }
@@ -160,11 +160,10 @@ internal sealed partial class LoginWindow
                 ShowLoginNotice();
                 return;
             }
-            bool global = launchOptions.Region == NteHostRegion.Global;
-            _ = NteOfficialLaunchPlan.Create(launchOptions.GameRoot, global);
+            _ = NteOfficialLaunchPlan.Create(launchOptions.GameRoot, launchOptions.Region);
             // Persist first. A failed write leaves this owned game running and
             // the notice unacknowledged. Never terminate another installation.
-            NteLaunchPreferences.Update(NteLaunchPreferences.GetPath(global), officialLauncher: true);
+            NteLaunchPreferences.Update(NteLaunchPreferences.GetPath(launchOptions.Region), officialLauncher: true);
             if (game is { HasExited: false }) game.Kill();
             CancelForGameExit();
         }

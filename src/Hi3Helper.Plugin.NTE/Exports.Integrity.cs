@@ -63,10 +63,10 @@ public partial class Exports
         Action<int, long, long, int, int, string> progress, bool repair, CancellationToken token)
     {
         using FileStream operation = NteGameOperation.Acquire(root);
-        NteCNGameManager manager = new(region: NteConfigProvider.DetectInstalledRegion(root));
+        NteGameManager manager = new(region: NteConfigProvider.DetectInstalledRegion(root));
         manager.SetGamePath(root);
         manager.LoadConfig();
-        NteCNGameInstaller installer = new(manager);
+        NteGameInstaller installer = new(manager);
         try
         {
             NteResListParser manifest;

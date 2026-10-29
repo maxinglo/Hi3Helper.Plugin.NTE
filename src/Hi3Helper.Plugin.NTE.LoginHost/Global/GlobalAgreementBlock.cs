@@ -4,12 +4,13 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using Nte.LoginHost.Localization;
+using Nte.Login;
 
 namespace Nte.LoginHost;
 
 internal sealed class GlobalAgreementBlock : Grid
 {
-    internal GlobalAgreementBlock(CheckBox checkbox, Style style)
+    internal GlobalAgreementBlock(CheckBox checkbox, Style style, NteOverseasRegion? region = null)
     {
         Margin = new(0, 6, 0, 0);
         ColumnDefinitions.Add(new() { Width = new(24) });
@@ -38,9 +39,7 @@ internal sealed class GlobalAgreementBlock : Grid
             bool isTerms = position == terms;
             Hyperlink link = new(new Run(LoginText.Get(isTerms ? "TermsName" : "PrivacyName")))
             {
-                NavigateUri = new(isTerms
-                    ? "https://static.pwsdk.com/nte/contract/contract.html"
-                    : "https://static.pwsdk.com/nte/privacy/privacy.html")
+                NavigateUri = isTerms ? (region ?? NteOverseasRegion.Global).TermsUri : (region ?? NteOverseasRegion.Global).PrivacyUri
             };
             link.SetResourceReference(TextElement.ForegroundProperty, "AccentBrush");
             AutomationProperties.SetAutomationId(link, isTerms ? "terms" : "privacy");

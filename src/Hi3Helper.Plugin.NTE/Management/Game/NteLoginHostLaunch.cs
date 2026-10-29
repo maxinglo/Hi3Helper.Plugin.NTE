@@ -9,6 +9,9 @@ namespace Hi3Helper.Plugin.NTE.Management.Game;
 
 internal static class NteLoginHostLaunch
 {
+    internal static int StartSwitch(NteRegionSwitchOptions options)
+        => NteDetachedProcess.Start(ResolveHostPath(FindPluginDirectory()), options.ToArguments());
+
     internal static int Start(NteHostLaunchOptions options)
         => NteDetachedProcess.Start(ResolveHostPath(FindPluginDirectory()), options.ToArguments());
 

@@ -13,7 +13,7 @@ internal sealed record NteDownloadSpace(long TargetBytes, long TemporaryBytes, l
     internal long AdditionalBytes => Math.Max(0, TargetBytes - TemporaryBytes);
     internal long ReclaimedBytes => ExistingBytes + Math.Max(0, TemporaryBytes - TargetBytes);
 
-    internal static NteDownloadSpace Capture(NteCNGameInstaller.DownloadTask task)
+    internal static NteDownloadSpace Capture(NteGameInstaller.DownloadTask task)
     {
         long temporary = Length(task.OutputPath + ".tmp");
         long resumable = 0;

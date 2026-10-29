@@ -45,7 +45,7 @@ function Capture([string]$Name,[string]$Theme='night') {
 $completed=$false; $built=$NoBuild.IsPresent
 try {
     foreach($language in $Languages) {
-        foreach($region in @('Global','CN')) {
+        foreach($region in @('Global','Taiwan','CN')) {
             $script:caseTag=$region+'/'+$language
             Write-Host "Verifying $script:caseTag"
             $ui=& (Join-Path $PSScriptRoot 'Start-NteLoginUiVerification.ps1') -HostDirectory $HostDirectory -Region $region -Language $language -NoBuild:$built
@@ -68,7 +68,7 @@ try {
                     Check ($probe.observed -eq $outcome -and $probe.ownerRestored -and $probe.originalStateRestored -and -not $probe.systemDialogUsed -and -not $probe.securityGestureRequested) "prompt-restore/$initial/$outcome"
                 }}
             }
-            if($region -eq 'Global') {
+            if($region -ne 'CN') {
                 foreach($variant in @('missing','legacy','legacy-profile')) {
                     Scenario @{ProfileVariant=$variant}
                     $choices=(Node account-selector).choices
@@ -90,7 +90,7 @@ try {
             Act key remark @{Key='Enter'}
             $list=Node account-selector
             Check ($list.selectedIndex -eq 1 -and $list.choices[1] -like '*Fixture renamed account*') 'enter-saves-remark-with-selection'
-            $identity=if($region -eq 'Global'){'user2@example.com'}else{'138****0002'}
+            $identity=if($region -ne 'CN'){'user2@example.com'}else{'138****0002'}
             Check ($list.choices[1] -like ('*'+$identity+'*')) 'remark-preserves-identification'
             Act invoke manage-accounts
             Act invoke remove-account
@@ -178,6 +178,16 @@ try {
                 }
                 Capture methods-returned
                 Act invoke back
+            } elseif($region -eq 'Taiwan') {
+                Check ($state.state.page -eq 'Methods' -and @(Nodes provider-google).Count -eq 1 -and @(Nodes provider-facebook).Count -eq 1 -and @(Nodes email-login).Count -eq 0) 'taiwan-only-enabled-login-methods'
+                Check (@(Nodes terms).Count -eq 1 -and @(Nodes privacy).Count -eq 1) 'taiwan-publisher-agreements'
+                foreach($theme in @('night','day','sunset')) { Capture methods $theme }
+                Act invoke provider-google
+                Check (-not [string]::IsNullOrWhiteSpace((Node status).text) -and -not (Node agreement).checked) 'taiwan-consent-required'
+                Act toggle agreement @{Checked=$true}
+                Act invoke provider-google
+                Check ($state.state.page -eq 'Methods' -and -not $state.state.previewTaskFaulted) 'taiwan-preview-never-authenticates'
+                Act invoke back
             } else {
                 Check ($state.state.page -eq 'Sms' -and @(Nodes phone).Count -eq 1 -and @(Nodes remember).Count -eq 1 -and (Node remember).kind -eq 'CheckBox') 'direct-sms-form-with-checkbox'
                 Check (-not $state.state.card.scrollbarVisible -and $state.state.card.scrollableHeight -le 1) 'sms-fits-without-scrollbar'
@@ -199,7 +209,7 @@ try {
             Act select account-selector @{Index=15}
             Check ((Node account-selector).selectedIndex -eq 15) 'many-account-selection'
             Scenario @{AccountCount=3;Busy=$true;Notice='Fixture operation in progress'}
-            if($region -eq 'Global'){Check (@(Nodes cancel-operation).Count -eq 1 -and @(Nodes account-selector).Count -eq 0) 'busy-offers-cancel'}
+            if($region -ne 'CN'){Check (@(Nodes cancel-operation).Count -eq 1 -and @(Nodes account-selector).Count -eq 0) 'busy-offers-cancel'}
             else {
                 $disabled=Node account-selector; $state=Invoke-Ui select @{Node=$disabled.id;Revision=$state.state.revision;Index=1}
                 Check (-not $state.ok -and $state.error -eq 'unavailable-control') 'busy-disables-selection'
@@ -213,7 +223,7 @@ try {
             Check ($state.state.pixelWidth -eq 1280 -and $state.state.pixelHeight -eq 720) '1280x720-size'
             if($language -eq 'zh-CN'){Capture compact}
             Scenario @{AccountCount=0}
-            Check ($state.state.page -eq $(if($region -eq 'Global'){'Methods'}else{'Sms'}) -and @(Nodes account-selector).Count -eq 0) 'empty-goes-directly-to-new-sign-in'
+            Check ($state.state.page -eq $(if($region -ne 'CN'){'Methods'}else{'Sms'}) -and @(Nodes account-selector).Count -eq 0) 'empty-goes-directly-to-new-sign-in'
             $state=Invoke-Ui close; Check $state.ok 'normal-close'
             $deadline=[DateTime]::UtcNow.AddSeconds(5)
             do {
@@ -225,6 +235,15 @@ try {
             Check (-not $previewAlive -and -not $fixtureAlive) 'owned-processes-exited'
         }
     }
+    $script:caseTag='switch-preview'
+    $verification=Join-Path $repository 'tools/NteLoginUiVerification/bin/x64/Release/net10.0-windows/NteLoginUiVerification.exe'
+    $switchDirectory=Join-Path $reportDirectory 'switch-preview'
+    $switchOutput=& $verification switch-preview $HostDirectory $switchDirectory
+    $switchExit=$LASTEXITCODE
+    $switchReport=$switchOutput|ConvertFrom-Json
+    Check ($switchExit -eq 0 -and $switchReport.passed -and $switchReport.nativeRecoveryPreview -and $switchReport.journalUnchanged) 'native-recovery-preview'
+    Check ($switchReport.commandsBound -and (Test-Path -LiteralPath $switchReport.capture)) 'bound-and-rendered'
+    $captures.Add($switchReport.capture)
     $script:caseTag='release'
     $forbidden=Join-Path $reportDirectory 'forbidden-package-fixture'
     New-Item -ItemType Directory -Path $forbidden | Out-Null

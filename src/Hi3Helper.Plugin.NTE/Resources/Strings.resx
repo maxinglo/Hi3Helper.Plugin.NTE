@@ -146,5 +146,13 @@
   <data name="LaunchOfficialLauncherHint" xml:space="preserve">
     <value>The official launcher must be inside the selected game installation directory (NTELauncher for Mainland China, NTEGlobal for Global). Applies on the next launch; required login, verification or update windows may still appear.</value>
   </data>
+  <data name="TaiwanZoneName" xml:space="preserve"><value>Taiwan / Hong Kong / Macau</value></data>
+  <data name="TaiwanZoneFullName" xml:space="preserve"><value>Neverness to Everness — Taiwan / Hong Kong / Macau</value></data>
+  <data name="TaiwanZoneDescription" xml:space="preserve"><value>Traditional Chinese service published by Iwplay. Uses its own official account and launcher configuration.</value></data>
+  <data name="ServerSettingsSection" xml:space="preserve"><value>Servers and shared installation</value></data>
+  <data name="ServerSwitchTarget" xml:space="preserve"><value>Switch this installation to</value></data>
+  <data name="ServerSwitchNoChange" xml:space="preserve"><value>Keep the current server</value></data>
+  <data name="ServerSwitchSettingsHint" xml:space="preserve"><value>Choose Taiwan or Global and apply. A separate window will check reuse, show missing downloads and switch the installation. Both regions remain separately listed in Collapse.</value></data>
+  <data name="ServerSwitchSelectInstallation" xml:space="preserve"><value>Select an installed NTE game directory first.</value></data>
 </root>
 

@@ -7,25 +7,26 @@ using Nte.Login;
 namespace Nte.LoginHost;
 
 // Owns the game and global SDK session without an official platform process.
-internal sealed class GlobalGameLoginHost(NteHostLaunchOptions options, LoginWindow window) : IDisposable
+internal sealed class OverseasGameLoginHost(NteHostLaunchOptions options, LoginWindow window) : IDisposable
 {
+    private readonly NteOverseasRegion region = NteOverseasRegion.From(options.Region);
     private readonly CancellationTokenSource lifetime = new();
     private ProbeEnvironment? context;
-    private NteGlobalApplicationConfiguration? configuration;
+    private NteOverseasApplicationConfiguration? configuration;
     private NteGlobalAuthentication? authentication;
     private Task logins = Task.CompletedTask;
     private Task metadata = Task.CompletedTask;
     private GlobalSdkQueries? sdkQueries;
     private readonly NteGlobalSession session = new();
-    private GlobalAccountStore? accounts;
+    private OverseasAccountStore? accounts;
     private bool automaticRestoreAllowed = true;
     private Task logoutSelection = Task.CompletedTask;
 
     internal async Task<bool> RunAsync()
     {
-        using Mutex instance = new(false, @"Local\Collapse.NTE.LoginHost.3000001", out bool created);
+        using Mutex instance = new(false, @"Local\Collapse.NTE.LoginHost." + region.AppId, out bool created);
         if (!created) throw new NteGlobalLaunchException("GlobalAlreadyRunning");
-        foreach (string name in new[] { "HTGame", "NTEGame", "NTEGlobalGame", "NTEGlobalUpdate" })
+        foreach (string name in new[] { "HTGame", "NTEGame", "NTEGlobalGame", "NTEGlobalUpdate", "NTETWGame", "NTETWUpdate" })
         {
             Process[] running = Process.GetProcessesByName(name);
             try
@@ -38,15 +39,15 @@ internal sealed class GlobalGameLoginHost(NteHostLaunchOptions options, LoginWin
             }
         }
 
-        NteGlobalLaunchPlan plan = NteGlobalLaunchPlan.Create(options);
+        NteOverseasLaunchPlan plan = NteOverseasLaunchPlan.Create(options);
         string root = Path.GetFullPath(options.GameRoot);
-        await using (FileStream bridge = File.OpenRead(Path.Combine(root, "NTEGlobal", "WPGameClientSDK_64.dll")))
+        await using (FileStream bridge = File.OpenRead(Path.Combine(root, region.LauncherDirectory, "WPGameClientSDK_64.dll")))
             if (Convert.ToHexString(await SHA256.HashDataAsync(bridge)) !=
-                "B922E40052ED1B0F7306D909986A69A58C1FDD869233307162DD4572A63D5AB2")
+                region.BridgeSha256)
                 throw new NteGlobalLaunchException("GlobalSdkUnsupported");
-        configuration = NteGlobalApplicationConfiguration.Load(root);
+        configuration = NteOverseasApplicationConfiguration.Load(root, options.Region);
         context = new(root, true, useOwnExecutable: true, hostExecutable: Environment.ProcessPath!,
-            launcherDirectoryName: "NTEGlobal", applicationId: "3000001");
+            launcherDirectoryName: region.LauncherDirectory, applicationId: region.AppId);
         context.GameWindowChanged += window.NotifySdkGeometryChanged;
         // The global SDK uses 101 for logout and 102 for account switching.
         // Both notifications already clear its local identity before posting.
@@ -57,14 +58,14 @@ internal sealed class GlobalGameLoginHost(NteHostLaunchOptions options, LoginWin
             window.CancelForGameExit();
             logoutSelection = ClearRememberedSelectionAsync();
         });
-        accounts = new(GlobalAccountStore.DefaultDirectory, new Accounts.WindowsAccountKeyProtector(),
-            new Accounts.HelloAccountKeyProtector());
+        accounts = new(OverseasAccountStore.DirectoryFor(region), new Accounts.WindowsAccountKeyProtector(),
+            new Accounts.HelloAccountKeyProtector(), region);
         string deviceId = await accounts.DeviceIdAsync(lifetime.Token);
         authentication = new(configuration, context.InstalledVersion, language: Localization.LoginText.WebLanguage,
             deviceId: deviceId);
         sdkQueries = new(authentication, window);
         context.GlobalQueryRequested += sdkQueries.Enqueue;
-        string pipeName = "Collapse.NTE.Global.Login." + Guid.NewGuid().ToString("N");
+        string pipeName = "Collapse.NTE." + region.Name + ".Login." + Guid.NewGuid().ToString("N");
         using NamedPipeServerStream pipe = new(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Message,
             PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         ProcessStartInfo start =
@@ -72,7 +73,7 @@ internal sealed class GlobalGameLoginHost(NteHostLaunchOptions options, LoginWin
         Process? launched;
         try
         {
-            PatcherLaunchEnvironment.TryApply(start.Environment, root, context.ApplicationId, "NTEGlobal");
+            PatcherLaunchEnvironment.TryApply(start.Environment, root, context.ApplicationId, region.LauncherDirectory);
             NteGlobalGameEnvironment.Apply(start, configuration);
             launched = Process.Start(start);
         }
@@ -165,14 +166,14 @@ internal sealed class GlobalGameLoginHost(NteHostLaunchOptions options, LoginWin
                             // then use the observed Global duplex reply path.
                             _ = ProbeCallbackTransport.FromRegistration(frame.AsSpan(0, count), clientId,
                                 context!.WindowHandle, "global");
-                            NteGlobalPipeTransport callback = new(pipe);
+                            NteGlobalPipeTransport callback = new(pipe, region);
                             nint gameWindow = await WaitForGameWindowAsync(clientId, lifetime.Token);
                             // Show first-use disclosure before supplying device
                             // measurements or allowing any automatic account login.
                             if (!await window.EnsureNoticeAsync(true, lifetime.Token)) return;
                             await callback.BindGameWindowAsync(gameWindow, clientId, lifetime.Token);
                             await callback.SendWindowsPlatformAsync(lifetime.Token);
-                            await callback.SendLanguageAsync(Localization.LoginText.Culture.Name, lifetime.Token);
+                            await callback.SendLanguageAsync(region.HostRegion == NteHostRegion.Taiwan ? "zh-TW" : Localization.LoginText.Culture.Name, lifetime.Token);
                             await callback.SendClientContextAsync(lifetime.Token);
                             NteGlobalDeviceInfo device = await Task.Run(
                                 () => WindowsGlobalDeviceInfo.Capture(authentication!.DeviceId, options.GameRoot),
@@ -255,7 +256,7 @@ internal sealed class GlobalGameLoginHost(NteHostLaunchOptions options, LoginWin
                             {
                                 using CancellationTokenSource restore =
                                     CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, sessionToken);
-                                bool useHello = GlobalAccountStore.ReadProtectionPreference();
+                                bool useHello = OverseasAccountStore.ReadProtectionPreference(region);
                                 await window.WithGlobalAccountOwnerAsync(useHello || accounts.RequiresHello(last.Id),
                                     owner =>
                                         accounts.RestoreAndDeliverAsync(last.Id, authentication!, true, owner,

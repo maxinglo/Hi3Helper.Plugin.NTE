@@ -16,7 +16,7 @@ public sealed class GlobalHelloStoreTests : IDisposable
     private readonly string root = Path.Combine(Path.GetTempPath(), "NteGlobalHello-" + Guid.NewGuid().ToString("N"));
     private readonly GestureProtector hello = new();
     private CancellationToken Token => TestContext.Current.CancellationToken;
-    private GlobalAccountStore Store => new(root, new WindowsAccountKeyProtector(), hello);
+    private OverseasAccountStore Store => new(root, new WindowsAccountKeyProtector(), hello);
 
     private static NteGlobalIdentity Identity(string token = "fixture-old-token")
     {
@@ -182,7 +182,7 @@ public sealed class GlobalHelloStoreTests : IDisposable
 
     private sealed class Api : IDisposable
     {
-        private readonly NteGlobalApplicationConfiguration configuration;
+        private readonly NteOverseasApplicationConfiguration configuration;
         private readonly HttpClient http;
         internal RestoreHandler Handler { get; }
         internal NteGlobalAuthentication Client { get; }

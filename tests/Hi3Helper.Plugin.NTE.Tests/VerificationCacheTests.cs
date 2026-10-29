@@ -19,14 +19,14 @@ public sealed class VerificationCacheTests : IDisposable
         NteResListParser target = NteResListParser.Parse($"<ResList version=\"1.4.17\"><Res filename=\"game.pak\" filesize=\"5\" md5=\"{md5}\"/></ResList>");
         NteFileVerificationCache cache = new();
         for (int i = 0; i < 2; i++)
-            Assert.Single(NteCNGameInstaller.BuildDownloadTasks(target, _root, true, false,
+            Assert.Single(NteGameInstaller.BuildDownloadTasks(target, _root, true, false,
                 TestContext.Current.CancellationToken, previous, verificationCache: cache));
         Assert.Equal(0, cache.HashReads);
-        Assert.Empty(NteCNGameInstaller.BuildDownloadTasks(target, _root, true, true,
+        Assert.Empty(NteGameInstaller.BuildDownloadTasks(target, _root, true, true,
             TestContext.Current.CancellationToken, previous, verificationCache: cache));
         Assert.Equal(1, cache.HashReads);
         using FileStream locked = new(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
-        Assert.Empty(NteCNGameInstaller.BuildDownloadTasks(target, _root, true, true,
+        Assert.Empty(NteGameInstaller.BuildDownloadTasks(target, _root, true, true,
             TestContext.Current.CancellationToken, previous, verificationCache: cache));
         Assert.Equal(1, cache.HashReads);
     }

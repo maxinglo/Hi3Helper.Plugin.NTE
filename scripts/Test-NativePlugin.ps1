@@ -12,6 +12,7 @@ if (-not ('NteNativeSmoke' -as [type])) {
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.IO;
 
 public static unsafe class NteNativeSmoke
 {
@@ -62,8 +63,34 @@ public static unsafe class NteNativeSmoke
             if (version != expected)
                 throw new InvalidOperationException("Plugin version mismatch: " + version + " != " + expected);
         }
-        foreach (string export in new[] { "GetPlugin", "GetGameSettingsPage", "SetGameSettingValue", "ApplyGameSettings", "CheckNteGameIntegrity", "RepairNteGame" })
+        foreach (string export in new[] { "GetPlugin", "GetGameSettingsPage", "SetGameSettingValue", "ApplyGameSettings", "CheckNteGameIntegrity", "RepairNteGame", "PlanNteRegionSwitch", "SwitchNteRegion" })
             Find(export);
+        // Exercise the NativeAOT JSON/result ABI without downloading or touching
+        // a real game installation. Recovery preview must be strictly read-only.
+        string fixture = Path.Combine(Path.GetDirectoryName(path), ".region-switch-smoke-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(fixture, ".collapse-nte"));
+        try
+        {
+            string journal = Path.Combine(fixture, ".collapse-nte", "switch.json");
+            File.WriteAllText(journal, "{}");
+            string report = Path.Combine(fixture, "result.json");
+            string target = "2000013";
+            int status;
+            fixed (char* rootPointer = fixture, targetPointer = target, reportPointer = report)
+                status = ((delegate* unmanaged[Cdecl]<char*, int, char*, int, char*, int, nint, int>)Find("PlanNteRegionSwitch"))(
+                    rootPointer, fixture.Length, targetPointer, target.Length, reportPointer, report.Length, 0);
+            Check(status, "PlanNteRegionSwitch");
+            if (!File.ReadAllText(report).Contains("\"RecoveryRequired\": true") || File.ReadAllText(journal) != "{}")
+                throw new InvalidOperationException("Native region preview failed to preserve a pending transaction.");
+            File.Delete(journal);
+            target = "1289";
+            fixed (char* rootPointer = fixture, targetPointer = target, reportPointer = report)
+                status = ((delegate* unmanaged[Cdecl]<char*, int, char*, int, char*, int, nint, int>)Find("SwitchNteRegion"))(
+                    rootPointer, fixture.Length, targetPointer, target.Length, reportPointer, report.Length, 0);
+            if (status >= 0 || !File.ReadAllText(report).Contains("Taiwan and Global only"))
+                throw new InvalidOperationException("Native switch did not reject an unsupported region.");
+        }
+        finally { Directory.Delete(fixture, true); }
         nint unknown = (nint)((delegate* unmanaged[Cdecl]<void*>)Find("GetPlugin"))();
         if (unknown == 0)
             throw new InvalidOperationException("GetPlugin returned a null COM pointer.");
@@ -78,8 +105,8 @@ public static unsafe class NteNativeSmoke
             void** table = *(void***)plugin;
             int count = 0;
             Marshal.ThrowExceptionForHR(((delegate* unmanaged[MemberFunction]<nint, int*, int>)table[8])(plugin, &count));
-            if (count != 2)
-                throw new InvalidOperationException("Expected China and international NTE presets.");
+            if (count != 3)
+                throw new InvalidOperationException("Expected separate China, Global and Taiwan NTE presets.");
             foreach (string locale in new[] { "en-US", "zh-CN" })
             {
                 fixed (char* localePointer = locale)
@@ -113,7 +140,8 @@ public static unsafe class NteNativeSmoke
                     string json = Marshal.PtrToStringUTF8((nint)page.Handle, page.Length);
                     if (json == null || !json.Contains("dynamicBackground") || !json.Contains("overlayEnabled") ||
                         !json.Contains("launch.graphicsApi") || !json.Contains("dx11") ||
-                        !json.Contains("login.experimentalWindowsHello"))
+                        !json.Contains("login.experimentalWindowsHello") ||
+                        (presetIndex > 0 && !json.Contains("server.switchTarget")))
                         throw new InvalidOperationException("The native appearance settings page is incomplete.");
                 }
                 finally { if (page.IsDisposable != 0) NativeMemory.Free(page.Handle); }
@@ -126,7 +154,7 @@ public static unsafe class NteNativeSmoke
             if (plugin != 0) Marshal.Release(plugin);
             Marshal.Release(unknown);
         }
-        return "Native ABI, en/zh metadata and appearance UI OK; Core " + standard + "; NTE " + version;
+        return "Native ABI, region preview/rejection, en/zh metadata and appearance UI OK; Core " + standard + "; NTE " + version;
     }
 
     private static void Check(int result, string operation)

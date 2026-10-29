@@ -18,7 +18,7 @@ namespace Hi3Helper.Plugin.NTE.Management.Game;
 /// NTE 游戏安装器的下载辅助方法（partial class）。
 /// 提供文件下载、断点续传、CDN 回退、分块下载等功能。
 /// </summary>
-internal partial class NteCNGameInstaller
+internal partial class NteGameInstaller
 {
     /// <summary>
     /// 从 CDN 下载文件，支持断点续传和 CDN 回退。
@@ -470,6 +470,7 @@ internal partial class NteCNGameInstaller
             }
         }
         token.ThrowIfCancellationRequested();
+        NteSharedInstallation.PreserveReferencedVersion(outputPath, token);
         File.Move(temporaryPath, outputPath, overwrite: true);
         File.Delete(temporaryPath + ".identity");
     }

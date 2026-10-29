@@ -1,4 +1,4 @@
-﻿using Hi3Helper.Plugin.Core;
+using Hi3Helper.Plugin.Core;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -10,6 +10,7 @@ public partial class Exports : SharedStaticV1Ext<Exports>
     {
         Load<NtePlugin>(PluginVersion.Value);
         RegisterIntegrityExports();
+        RegisterRegionSwitchExports();
     }
 
     [UnmanagedCallersOnly(EntryPoint = "TryGetApiExport", CallConvs = [typeof(CallConvCdecl)])]

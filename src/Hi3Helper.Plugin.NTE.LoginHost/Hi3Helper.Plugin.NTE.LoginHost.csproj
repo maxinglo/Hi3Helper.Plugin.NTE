@@ -6,6 +6,7 @@
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
     <UseWPF>true</UseWPF>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>Nte.LoginHost</AssemblyName>
     <RootNamespace>Nte.LoginHost</RootNamespace>

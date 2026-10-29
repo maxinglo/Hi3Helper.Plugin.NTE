@@ -10,7 +10,7 @@ namespace Hi3Helper.Plugin.NTE.Tests;
 
 public sealed class GlobalAuthenticationTests
 {
-    private static NteGlobalApplicationConfiguration Configuration() => new(
+    private static NteOverseasApplicationConfiguration Configuration() => new(
         Encoding.ASCII.GetBytes("test-application-key-material-length-40!!"), "com.hottagames.nte",
         new("https://mapi.pwsdk.com"), "global-sg");
 
@@ -20,7 +20,7 @@ public sealed class GlobalAuthenticationTests
         using var config = Configuration();
         using NteGlobalAuthentication api = new(config, "1.4.10");
         using JsonDocument metadata = JsonDocument.Parse(Uri.UnescapeDataString(api.ClientData));
-        var plan = new NteGlobalLaunchPlan(Path.GetFullPath("fixture-root"),
+        var plan = new NteOverseasLaunchPlan(Path.GetFullPath("fixture-root"),
             Path.GetFullPath("fixture-root/HTGame.exe"), "-dx11");
         var start = plan.CreateStartInfo("Collapse.NTE.Global.Test", api.DeviceId, new Dictionary<string, string>
         {

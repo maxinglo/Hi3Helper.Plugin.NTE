@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string] $HostDirectory,
-    [ValidateSet('CN','Global')][string] $Region = 'Global',
+    [ValidateSet('CN','Global','Taiwan')][string] $Region = 'Global',
     [ValidateSet('en','zh-CN','zh-TW','ja','ko','de','fr','ru','es')][string] $Language = 'zh-CN',
     [switch] $NoBuild,
     [switch] $Visible

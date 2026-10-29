@@ -5,7 +5,7 @@ using System.IO;
 
 namespace Nte.Login;
 
-internal enum NteHostRegion { CN, Global }
+internal enum NteHostRegion { CN, Global, Taiwan }
 
 internal sealed record NteHostLaunchOptions(string GameRoot, string? AdditionalArguments = null,
     bool PriorityBoost = false, ProcessPriorityClass Priority = ProcessPriorityClass.Normal,
@@ -38,7 +38,7 @@ internal sealed record NteHostLaunchOptions(string GameRoot, string? AdditionalA
             throw new ArgumentException("Invalid game priority boost.");
         NteHostRegion region = NteHostRegion.CN;
         if (fields.TryGetValue("--region", out string? regionText) &&
-            (regionText is not ("CN" or "Global") || !Enum.TryParse(regionText, out region)))
+            (regionText is not ("CN" or "Global" or "Taiwan") || !Enum.TryParse(regionText, out region)))
             throw new ArgumentException("Invalid game region.");
         NteHostLaunchOptions options = new(root, fields.GetValueOrDefault("--game-arguments"), boost, priority, region, fields.GetValueOrDefault("--language") ?? "zh-CN");
         options.Validate(); return options;

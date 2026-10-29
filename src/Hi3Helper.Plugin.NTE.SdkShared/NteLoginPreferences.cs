@@ -11,6 +11,13 @@ internal static class NteLoginPreferences
 
     internal static string GlobalPath => Path.Combine(Path.GetDirectoryName(DefaultPath)!, "Global", "login.json");
 
+    internal static string GetPath(NteHostRegion region) => region switch
+    {
+        NteHostRegion.CN => DefaultPath, NteHostRegion.Global => GlobalPath,
+        NteHostRegion.Taiwan => Path.Combine(Path.GetDirectoryName(DefaultPath)!, "Taiwan", "login.json"),
+        _ => throw new ArgumentException("Unknown login region.", nameof(region))
+    };
+
     internal static string GetPath(bool global) => global ? GlobalPath : DefaultPath;
 
     internal static bool ReadExperimentalHello(string path)

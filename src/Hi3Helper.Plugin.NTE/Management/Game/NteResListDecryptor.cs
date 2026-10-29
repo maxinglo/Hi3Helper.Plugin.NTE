@@ -26,7 +26,7 @@ internal static class NteResListDecryptor
     /// <returns>解密后的 XML 字节</returns>
     public static byte[] Decrypt(ReadOnlySpan<byte> data, string appId = "1289")
     {
-        if (appId is not ("1289" or "3000001")) throw new InvalidDataException("Unsupported patcher application identifier.");
+        if (appId is not ("1289" or "3000001" or "2000013")) throw new InvalidDataException("Unsupported patcher application identifier.");
         if (data.Length < HeaderLength) throw new InvalidDataException("Truncated resource manifest.");
         // 检查魔术头
         ReadOnlySpan<byte> magic = data[..MagicLength];

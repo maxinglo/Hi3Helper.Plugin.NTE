@@ -1,4 +1,4 @@
-﻿using Hi3Helper.Plugin.Core.Management;
+using Hi3Helper.Plugin.Core.Management;
 using System.Collections.Generic;
 
 namespace Hi3Helper.Plugin.NTE.Management.Config;
@@ -26,6 +26,10 @@ public sealed record NteRegionConfig(
     public string DefaultBranch { get; init; } = "publish_PC";
     public string[] ResourceUrls { get; init; } = NteConfigProvider.GameResBaseUrls;
     public bool IsGlobal => AppId == "3000001";
+    public bool IsTaiwan => AppId == "2000013";
+    public bool IsOverseas => IsGlobal || IsTaiwan;
+    public string LauncherPageUrl { get; init; } = NteConfigProvider.LauncherHtmlUrl;
+    public string StorageName => IsGlobal ? "Global" : IsTaiwan ? "Taiwan" : "";
     public string SdkDirectory => LauncherDirectoryName + "/UserData/Patcher/PatcherSDK";
 }
 

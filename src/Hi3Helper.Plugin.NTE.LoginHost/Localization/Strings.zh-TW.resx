@@ -555,4 +555,27 @@
   <data name="NoticeSharingExamplesGlobal" xml:space="preserve">
     <value>YouTube、TikTok、Reddit、X 等</value>
   </data>
+  <data name="ServerSwitchTitle" xml:space="preserve"><value>切換異環伺服器</value></data>
+  <data name="ServerTaiwan" xml:space="preserve"><value>台港澳</value></data>
+  <data name="ServerGlobal" xml:space="preserve"><value>国际服</value></data>
+  <data name="ServerSwitchHint" xml:space="preserve"><value>重用共同資源，為所選地區保留獨立的簽章程式和官方登入設定。請先關閉遊戲及兩服官方啟動器。</value></data>
+  <data name="ServerSwitchCheck" xml:space="preserve"><value>檢查資源</value></data>
+  <data name="ServerSwitchApply" xml:space="preserve"><value>切換伺服器</value></data>
+  <data name="ServerSwitchCancel" xml:space="preserve"><value>取消操作</value></data>
+  <data name="ServerSwitchPreparing" xml:space="preserve"><value>正在準備切服…</value></data>
+  <data name="ServerSwitchChecking" xml:space="preserve"><value>正在檢查現有資源…</value></data>
+  <data name="ServerSwitchDownloading" xml:space="preserve"><value>正在準備缺少的資源…</value></data>
+  <data name="ServerSwitchActivating" xml:space="preserve"><value>正在啟用所選地區…</value></data>
+  <data name="ServerSwitchReady" xml:space="preserve"><value>已準備好切換</value></data>
+  <data name="ServerSwitchSummary" xml:space="preserve"><value>目標版本：{0}
+可直接重用：{1} 個檔案 · 快取或本機：{2} 個檔案
+需要下載：{3} 個檔案（{4:F3} GB）</value></data>
+  <data name="ServerSwitchRecovery" xml:space="preserve"><value>上次切服意外中斷，開始切換會先還原該操作。</value></data>
+  <data name="ServerSwitchCompleted" xml:space="preserve"><value>伺服器切換完成</value></data>
+  <data name="ServerSwitchCompletedHint" xml:space="preserve"><value>請在 Collapse 中選擇目標地區。兩服現在共用這個安裝資料夾。</value></data>
+  <data name="ServerSwitchFailed" xml:space="preserve"><value>伺服器切換未能完成</value></data>
+  <data name="ServerSwitchCancelled" xml:space="preserve"><value>操作已取消</value></data>
+  <data name="ServerSwitchCancelledHint" xml:space="preserve"><value>已啟用的檔案會還原，通過驗證的下載會保留供下次使用。</value></data>
+  <data name="TaiwanTitle" xml:space="preserve"><value>台港澳帳號登入</value></data>
+  <data name="LoginMethodUnavailable" xml:space="preserve"><value>此地區未開放這種登入方式。</value></data>
 </root>

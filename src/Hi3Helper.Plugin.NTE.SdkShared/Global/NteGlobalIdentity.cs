@@ -13,6 +13,7 @@ internal sealed class NteGlobalIdentity : IDisposable
     private readonly JsonDocument document;
     internal JsonElement Result => document.RootElement;
     internal int Provider { get; }
+    internal NteOverseasRegion Region { get; }
 
     internal NteGlobalProfile Profile { get; private set; }
 
@@ -20,8 +21,9 @@ internal sealed class NteGlobalIdentity : IDisposable
     // separate values. QHDGlobalAuthManager forwards result.loginType.
     internal int LoginType { get; }
 
-    private NteGlobalIdentity(JsonElement result, int provider)
+    private NteGlobalIdentity(JsonElement result, int provider, NteOverseasRegion region)
     {
+        Region = region;
         Profile = NteGlobalProfile.FromService(result);
         LoginType = result.TryGetProperty("loginType", out JsonElement type)
             ? type.ValueKind == JsonValueKind.Number && type.TryGetInt32(out int value) && value >= 0
@@ -49,7 +51,7 @@ internal sealed class NteGlobalIdentity : IDisposable
         Provider = provider;
     }
 
-    internal static NteGlobalIdentity FromService(JsonElement response, int provider)
+    internal static NteGlobalIdentity FromService(JsonElement response, int provider, NteOverseasRegion? region = null)
     {
         JsonElement result = NteGlobalAuthentication.RequireResult(response);
         if (provider is not (1 or 2 or 8) || !result.TryGetProperty("uid", out JsonElement uid) ||
@@ -57,7 +59,7 @@ internal sealed class NteGlobalIdentity : IDisposable
             !result.TryGetProperty("token", out JsonElement token) ||
             token.ValueKind != JsonValueKind.String || token.GetString() is not { Length: > 0 and <= 8192 })
             throw new InvalidDataException("Incomplete official global identity.");
-        return new(result, provider);
+        return new(result, provider, region ?? NteOverseasRegion.Global);
     }
 
     internal static string ReadUserId(JsonElement value) => value.ValueKind switch
@@ -74,7 +76,7 @@ internal sealed class NteGlobalIdentity : IDisposable
         return this;
     }
 
-    internal NteGlobalIdentity Clone() => new(Result, Provider) { Profile = Profile };
+    internal NteGlobalIdentity Clone() => new(Result, Provider, Region) { Profile = Profile };
     public void Dispose() => document.Dispose();
     public override string ToString() => "Global identity [payload omitted]";
 }

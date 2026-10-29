@@ -14,9 +14,9 @@ namespace Hi3Helper.Plugin.NTE.Management.Game;
 
 internal sealed class NteDownloadJob
 {
-    internal NteDownloadJob(NteCNGameInstaller.DownloadTask file)
+    internal NteDownloadJob(NteGameInstaller.DownloadTask file)
     { File = file; Space = NteDownloadSpace.Capture(file); TemporaryBytes = Space.TemporaryBytes; }
-    internal NteCNGameInstaller.DownloadTask File { get; }
+    internal NteGameInstaller.DownloadTask File { get; }
     internal NteDownloadSpace Space { get; set; }
     internal int Attempt { get; set; }
     internal long ReadyAt { get; set; }

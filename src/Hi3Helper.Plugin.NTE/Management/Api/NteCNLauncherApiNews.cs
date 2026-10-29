@@ -27,14 +27,14 @@ internal partial class NteCNLauncherApiNews : LauncherApiNewsBase
     private (string title, string link, string date, LauncherNewsEntryType type)[] _newsItems = [];
     private NteSocialMediaAsset[] _socialMediaItems = [];
     private readonly NteRegionConfig _region;
-    private string PageUrl => _region.IsGlobal ? NteGlobalLocalization.GetPageUrl(SharedStatic.PluginLocaleCode) : NteConfigProvider.LauncherHtmlUrl;
+    private string PageUrl => _region.IsGlobal ? NteGlobalLocalization.GetPageUrl(SharedStatic.PluginLocaleCode) : _region.LauncherPageUrl;
     private string SiteUrl => _region.ZoneHomePageUrl;
 
     internal NteCNLauncherApiNews() : this(NteConfigProvider.CN) { }
 
     internal NteCNLauncherApiNews(NteRegionConfig region) : this(new PluginHttpClientBuilder().AllowRedirections().Create(),
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "CollapseLauncher", "Plugins", "NTE", region.IsGlobal ? "Global/Media/icons" : "Media/icons"), region)
+            "CollapseLauncher", "Plugins", "NTE", region.IsOverseas ? region.StorageName + "/Media/icons" : "Media/icons"), region)
     {
     }
 
@@ -144,6 +144,7 @@ internal partial class NteCNLauncherApiNews : LauncherApiNewsBase
                 string html = await ApiResponseHttpClient.GetStringAsync(PageUrl, token).ConfigureAwait(false);
                 return await FetchGlobalCarouselAsync(html, token).ConfigureAwait(false);
             }
+            if (_region.IsTaiwan) return [];
             string script = await ApiResponseHttpClient.GetStringAsync(NteConfigProvider.SwiperScriptUrl, token).ConfigureAwait(false);
             return ParseCarouselItems(ExtractJsonObjectFromJsVariable(script, "yh_data_data"));
         }

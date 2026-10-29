@@ -50,8 +50,8 @@ internal sealed class UiSession : IDisposable
             { Source = new Uri("pack://application:,,,/Nte.LoginHost;component/Styles/Collapse.Adapted.xaml") });
         Window = (Window)Activator.CreateInstance(assembly.GetType("Nte.LoginHost.LoginWindow", true)!, Members, null,
             [true], null)!;
-        preview = (Task)Call(Window, region == "Global" ? "PreviewGlobalAsync" : "PreviewAsync",
-            region == "Global" ? [fixturePid] : [fixturePid, false])!;
+        preview = (Task)Call(Window, region == "Taiwan" ? "PreviewTaiwanAsync" : region == "Global" ? "PreviewGlobalAsync" : "PreviewAsync",
+            region == "CN" ? [fixturePid, false] : [fixturePid])!;
         RequirePreview();
         _ = preview.ContinueWith(
             _ => Window.Dispatcher.BeginInvokeShutdown(System.Windows.Threading.DispatcherPriority.Background),
@@ -60,7 +60,8 @@ internal sealed class UiSession : IDisposable
 
     private void RequirePreview()
     {
-        if (Field(Window, "preview") is not true || (GlobalView is { } global && Field(global, "preview") is not true))
+        if (Field(Window, "preview") is not true || (GlobalView is FrameworkElement global &&
+            global.DataContext?.GetType().GetProperty("IsPreview", Members)?.GetValue(global.DataContext) is not true))
             throw new InvalidOperationException("Only synthetic, non-authenticating previews can be controlled.");
     }
 
@@ -97,6 +98,7 @@ internal sealed class UiSession : IDisposable
                 else if (button is ToggleButton option)
                     option.SetCurrentValue(ToggleButton.IsCheckedProperty, option.IsChecked != true);
                 button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                if (button.Command is { } actionCommand && actionCommand.CanExecute(button.CommandParameter)) actionCommand.Execute(button.CommandParameter);
                 break;
             case "toggle" when element is ToggleButton toggle && toggle is not RadioButton:
                 toggle.SetCurrentValue(ToggleButton.IsCheckedProperty,
@@ -174,9 +176,8 @@ internal sealed class UiSession : IDisposable
         if (command.TryGetProperty("busy", out JsonElement busy))
         {
             object owner = GlobalView ?? Window;
-            SetField(owner, "busy", busy.GetBoolean());
-            if (GlobalView != null) Call(owner, "RefreshLayout");
-            else Call(Window, "SetAccountControlsEnabled", !busy.GetBoolean());
+            if (GlobalView != null) Call(owner, "SetPreviewBusy", busy.GetBoolean());
+            else { SetField(owner, "busy", busy.GetBoolean()); Call(Window, "SetAccountControlsEnabled", !busy.GetBoolean()); }
         }
     }
 
@@ -227,7 +228,7 @@ internal sealed class UiSession : IDisposable
             mandatoryNotice = Field(Window, "noticeCompletion") != null,
             noticeConfirmation = Field(Window, "noticeConfirmation") is true,
             page = Field(Window, "helpOpen") is true ? "Help" :
-                GlobalView is { } pageOwner ? Field(pageOwner, "page")?.ToString() :
+                GlobalView is FrameworkElement pageOwner ? pageOwner.DataContext?.GetType().GetProperty("Page")?.GetValue(pageOwner.DataContext)?.ToString() :
                 Field(Window, "localMode") is true ? "Saved" : "Sms",
             modeSelector = ModeSelectorState(rootElement),
             nodes, capture, promptProbe

@@ -20,13 +20,14 @@ public partial class NteCNPresetConfig : PluginPresetConfigBase
     internal NteRegionConfig Region { get; }
     internal NteAppearanceStore Appearance { get; }
     internal NteLaunchSettings LaunchSettings { get; }
+    internal NteServerSettings ServerSettings { get; } = new();
     public NteCNPresetConfig() : this(NteConfigProvider.CN) { }
     public NteCNPresetConfig(NteRegionConfig region)
     {
         Region = region;
-        Appearance = new(region.IsGlobal ? Path.Combine(Path.GetDirectoryName(NteAppearanceStore.DefaultPath)!, "Global", "appearance.json") : NteAppearanceStore.DefaultPath);
+        Appearance = new(region.IsOverseas ? Path.Combine(Path.GetDirectoryName(NteAppearanceStore.DefaultPath)!, region.StorageName, "appearance.json") : NteAppearanceStore.DefaultPath);
         LaunchSettings = new(NteLaunchSettings.GetPath(region.ProfileName));
-        LoginSettings = new(Nte.Login.NteLoginPreferences.GetPath(region.IsGlobal));
+        LoginSettings = new(region.IsTaiwan ? Path.Combine(Path.GetDirectoryName(Nte.Login.NteLoginPreferences.DefaultPath)!, "Taiwan", "login.json") : Nte.Login.NteLoginPreferences.GetPath(region.IsGlobal));
     }
     internal NteLoginSettings LoginSettings { get; }
     private IGameManager? _gameManager;
@@ -47,11 +48,11 @@ public partial class NteCNPresetConfig : PluginPresetConfigBase
 
     public override string ProfileName => Region.ProfileName;
 
-    public override string ZoneDescription => NteResourceProvider.GetString(Region.IsGlobal ? "GlobalZoneDescription" : "ZoneDescription");
+    public override string ZoneDescription => NteResourceProvider.GetString(Region.IsTaiwan ? "TaiwanZoneDescription" : Region.IsGlobal ? "GlobalZoneDescription" : "ZoneDescription");
 
-    public override string ZoneName => NteResourceProvider.GetString(Region.IsGlobal ? "GlobalZoneName" : "ZoneName");
+    public override string ZoneName => NteResourceProvider.GetString(Region.IsTaiwan ? "TaiwanZoneName" : Region.IsGlobal ? "GlobalZoneName" : "ZoneName");
 
-    public override string ZoneFullName => NteResourceProvider.GetString(Region.IsGlobal ? "GlobalZoneFullName" : "ZoneFullName");
+    public override string ZoneFullName => NteResourceProvider.GetString(Region.IsTaiwan ? "TaiwanZoneFullName" : Region.IsGlobal ? "GlobalZoneFullName" : "ZoneFullName");
 
     public override string ZoneLogoUrl => Region.ZoneLogoUrl;
 
@@ -71,7 +72,7 @@ public partial class NteCNPresetConfig : PluginPresetConfigBase
     {
         get => field ??= new NteCNLauncherApiMedia(
             Region.LauncherVersionIniUrl,
-            Region.IsGlobal ? NteGlobalLocalization.GetPageUrl(SharedStatic.PluginLocaleCode) : NteConfigProvider.LauncherHtmlUrl,
+            Region.IsGlobal ? NteGlobalLocalization.GetPageUrl(SharedStatic.PluginLocaleCode) : Region.LauncherPageUrl,
             Appearance.Load, Region);
         set;
     }
@@ -84,13 +85,13 @@ public partial class NteCNPresetConfig : PluginPresetConfigBase
 
     public override IGameManager? GameManager
     {
-        get => _gameManager ??= new NteCNGameManager(region: Region);
+        get => _gameManager ??= new NteGameManager(region: Region);
         set => _gameManager = value;
     }
 
     public override IGameInstaller? GameInstaller
     {
-        get => _gameInstaller ??= new NteCNGameInstaller(GameManager ?? new NteCNGameManager(region: Region));
+        get => _gameInstaller ??= new NteGameInstaller(GameManager ?? new NteGameManager(region: Region));
         set => _gameInstaller = value;
     }
 

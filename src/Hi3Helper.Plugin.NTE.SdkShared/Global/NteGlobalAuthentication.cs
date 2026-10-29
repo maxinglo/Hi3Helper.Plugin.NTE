@@ -10,42 +10,44 @@ namespace Nte.Login;
 
 internal sealed class NteGlobalAuthentication : IDisposable
 {
-    private readonly NteGlobalApplicationConfiguration configuration;
+    private readonly NteOverseasApplicationConfiguration configuration;
     private readonly HttpClient http;
     private readonly bool ownsHttp;
     private JsonDocument? initialization;
+    internal NteOverseasRegion Region => configuration.Region;
     internal string DeviceId { get; }
     private readonly string language;
     private DateTimeOffset nextCaptcha;
     internal bool Initialized => initialization != null;
+    internal bool SupportsEmail => Region.HostRegion == NteHostRegion.Global;
 
     internal TimeSpan CaptchaCooldown =>
         nextCaptcha > DateTimeOffset.UtcNow ? nextCaptcha - DateTimeOffset.UtcNow : TimeSpan.Zero;
 
     internal string ClientData { get; }
 
-    internal NteGlobalAuthentication(NteGlobalApplicationConfiguration configuration, string version,
+    internal NteGlobalAuthentication(NteOverseasApplicationConfiguration configuration, string version,
         HttpClient? http = null, string language = "en", string? deviceId = null)
     {
         DeviceId = deviceId ?? Guid.NewGuid().ToString("N");
         if (DeviceId.Length != 32 || DeviceId.Any(c => !char.IsAsciiHexDigit(c)))
             throw new ArgumentException("Invalid device context.", nameof(deviceId));
         this.configuration = configuration;
-        this.language = language;
+        this.language = configuration.Region.HostRegion == NteHostRegion.Taiwan ? "zh-tw" : language;
         ownsHttp = http == null;
         this.http = http ?? new(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
             { Timeout = TimeSpan.FromSeconds(30) };
         ClientData = Uri.EscapeDataString(JsonSerializer.Serialize(new
         {
-            appId = 3000001, packageName = configuration.PackageName, appVersion = version, sdkVersion = "4.1.0",
+            appId = Region.ApplicationId, packageName = configuration.PackageName, appVersion = version, sdkVersion = "4.1.0",
             sdkServerVersion = "20260917",
             osType = 4, udid = DeviceId, ndid = DeviceId, deviceName = "PC",
             phoneSystemVersion = Environment.OSVersion.VersionString,
             channelId = 0, mediaId = "", afId = "", deviceLanguage = CultureInfo.CurrentUICulture.Name,
-            appLanguage = language,
+            appLanguage = this.language,
             deviceTimeZone = TimeZoneInfo.Local.Id, androidAdId = "", pcAdid = "",
             ctz = TimeZoneInfo.Local.BaseUtcOffset.ToString(),
-            ctzid = TimeZoneInfo.Local.Id, csl = CultureInfo.CurrentUICulture.Name, gameClientLang = language,
+            ctzid = TimeZoneInfo.Local.Id, csl = CultureInfo.CurrentUICulture.Name, gameClientLang = this.language,
             gameServerTz = "", serverId = ""
         }));
     }
@@ -60,6 +62,7 @@ internal sealed class NteGlobalAuthentication : IDisposable
 
     internal async Task SendEmailCaptchaAsync(string email, CancellationToken token)
     {
+        if (!SupportsEmail) throw new NteGlobalAuthenticationException("LoginMethodUnavailable");
         RequireReady();
         ValidateEmail(email);
         if (CaptchaCooldown > TimeSpan.Zero) throw new NteGlobalAuthenticationException("EmailCooldown");
@@ -73,6 +76,7 @@ internal sealed class NteGlobalAuthentication : IDisposable
     internal async Task<NteGlobalIdentity> LoginEmailAsync(string email, string secret, bool password,
         CancellationToken token)
     {
+        if (!SupportsEmail) throw new NteGlobalAuthenticationException("LoginMethodUnavailable");
         RequireReady();
         ValidateEmail(email);
         if (secret.Length is < 1 or > 256 || secret.Contains('\0'))
@@ -109,7 +113,7 @@ internal sealed class NteGlobalAuthentication : IDisposable
 
         using JsonDocument response =
             await RequestAsync(password ? "/c/api/email/login/password" : "/c/api/email/captcha/login", fields, token);
-        return NteGlobalIdentity.FromService(response.RootElement, 8).WithProfile(NteGlobalProfile.FromEmail(email));
+        return NteGlobalIdentity.FromService(response.RootElement, 8, Region).WithProfile(NteGlobalProfile.FromEmail(email));
     }
 
     internal Uri CreateBrowserLoginUri(int provider, string callbackTarget)
@@ -125,12 +129,12 @@ internal sealed class NteGlobalAuthentication : IDisposable
 
         string name = provider == 1 ? "facebook" : "google";
         Uri page = new(Decode(accounts.GetProperty(name), "loginUrl"));
-        if (page.Scheme != "https" || page.Host != "static.pwsdk.com" ||
+        if (!Region.IsBrowserOrigin(page) ||
             page.AbsolutePath != "/pcLogin_3.0/" + name + ".html")
             throw new InvalidDataException("Unexpected global browser origin.");
         Dictionary<string, object> settings = new()
         {
-            ["appId"] = "3000001", ["packageName"] = configuration.PackageName, ["webdomain"] = "https://i.pwsdk.com",
+            ["appId"] = Region.AppId, ["packageName"] = configuration.PackageName, ["webdomain"] = Region.WebService.GetLeftPart(UriPartial.Authority),
             ["directURL"] = callbackTarget, ["funType"] = 1, ["xClientData"] = ClientData, ["hl"] = language
         };
         if (provider == 1)
@@ -189,7 +193,7 @@ internal sealed class NteGlobalAuthentication : IDisposable
         if (fields["thirdAuthToken"].Length == 0)
             throw new InvalidDataException("Missing browser provider credential.");
         using JsonDocument response = await RequestAsync("/c/api/user/third/login", fields, token);
-        NteGlobalIdentity identity = NteGlobalIdentity.FromService(response.RootElement, provider);
+        NteGlobalIdentity identity = NteGlobalIdentity.FromService(response.RootElement, provider, Region);
         string? googleProject = null;
         if (provider == 2)
         {
@@ -210,6 +214,7 @@ internal sealed class NteGlobalAuthentication : IDisposable
 
     internal Task<NteGlobalIdentity> RestoreSessionAsync(NteGlobalIdentity identity, CancellationToken token)
     {
+        if (identity.Region != Region) throw new InvalidDataException("The saved account belongs to another publisher.");
         RequireReady();
         return ValidateIdentityAsync(NteGlobalIdentity.ReadUserId(identity.Result.GetProperty("uid")),
             identity.Result.GetProperty("token").GetString()!, identity.Provider, token);
@@ -223,7 +228,7 @@ internal sealed class NteGlobalAuthentication : IDisposable
     {
         using JsonDocument response = await RequestAsync("/c/api/user/token/login",
             new() { ["uid"] = uid, ["token"] = accessToken }, token);
-        return NteGlobalIdentity.FromService(response.RootElement, provider);
+        return NteGlobalIdentity.FromService(response.RootElement, provider, Region);
     }
 
     internal async Task<JsonDocument> RequestAsync(string path, Dictionary<string, string> fields,
@@ -231,7 +236,7 @@ internal sealed class NteGlobalAuthentication : IDisposable
     {
         fields = new(fields, StringComparer.Ordinal)
         {
-            ["appId"] = "3000001",
+            ["appId"] = Region.AppId,
             ["timestamp"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture)
         };
         fields["sign"] = Sign(fields, configuration.ApplicationKey);

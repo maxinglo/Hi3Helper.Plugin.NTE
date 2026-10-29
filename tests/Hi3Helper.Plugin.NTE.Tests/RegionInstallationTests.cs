@@ -17,7 +17,7 @@ public sealed class RegionInstallationTests : IDisposable
         string china = CreateGame("china", NteConfigProvider.CN, "1.4.17", officialOnly);
         string marker = Path.Combine(china, officialOnly ? NteConfigProvider.CN.SdkDirectory + "/config.xml" : ".collapse_nte_config");
         byte[] before = File.ReadAllBytes(marker);
-        NteCNGameManager manager = new(region: NteConfigProvider.Global);
+        NteGameManager manager = new(region: NteConfigProvider.Global);
         manager.SetGamePath(china);
         manager.LoadConfig();
         manager.IsGameInstalled(out bool installed);
@@ -34,7 +34,7 @@ public sealed class RegionInstallationTests : IDisposable
     public void ChinaProfile_RejectsInternationalDirectory()
     {
         string global = CreateGame("global", NteConfigProvider.Global, "1.4.10");
-        NteCNGameManager manager = new();
+        NteGameManager manager = new();
         manager.SetGamePath(global); manager.LoadConfig();
         manager.IsGameInstalled(out bool installed);
         Assert.False(installed);
@@ -48,7 +48,7 @@ public sealed class RegionInstallationTests : IDisposable
         string installed = CreateGame("global", NteConfigProvider.Global, "1.4.10");
         string incomplete = Path.Combine(root, "incomplete");
         CreateExecutable(incomplete);
-        NteCNGameManager manager = new(region: NteConfigProvider.Global);
+        NteGameManager manager = new(region: NteConfigProvider.Global);
         manager.SetGamePath(installed); manager.LoadConfig();
         manager.IsGameInstalled(out bool initiallyInstalled); Assert.True(initiallyInstalled);
         manager.SetGamePath(incomplete); manager.LoadConfig();
@@ -60,7 +60,7 @@ public sealed class RegionInstallationTests : IDisposable
     public void ReapplyingSamePath_DoesNotEraseTheVersionDuringInstallFinalization()
     {
         string installed = CreateGame("global", NteConfigProvider.Global, "1.4.10");
-        NteCNGameManager manager = new(region: NteConfigProvider.Global);
+        NteGameManager manager = new(region: NteConfigProvider.Global);
         manager.SetGamePath(installed); manager.LoadConfig();
         manager.SetGamePath(installed); manager.SaveConfig();
         manager.GetCurrentGameVersion(out GameVersion version);
@@ -72,7 +72,7 @@ public sealed class RegionInstallationTests : IDisposable
     public void RecheckingPath_DoesNotAcceptAForeignMarkerCreatedAfterSelection()
     {
         string path = Path.Combine(root, "changed"); CreateExecutable(path);
-        NteCNGameManager manager = new(region: NteConfigProvider.Global);
+        NteGameManager manager = new(region: NteConfigProvider.Global);
         manager.SetGamePath(path);
         File.WriteAllText(Path.Combine(path, ".collapse_nte_config"), "GameVersion=1.4.17\n");
         manager.SetCurrentGameVersion(new GameVersion("1.4.17"));
@@ -86,7 +86,7 @@ public sealed class RegionInstallationTests : IDisposable
     {
         string china = CreateGame("china", NteConfigProvider.CN, "1.4.17");
         string global = CreateGame("global", NteConfigProvider.Global, "1.4.10");
-        NteCNGameManager cnManager = new(), globalManager = new(region: NteConfigProvider.Global);
+        NteGameManager cnManager = new(), globalManager = new(region: NteConfigProvider.Global);
         cnManager.SetGamePath(china); cnManager.LoadConfig();
         globalManager.SetGamePath(global); globalManager.LoadConfig();
         cnManager.IsGameInstalled(out bool cnInstalled); globalManager.IsGameInstalled(out bool globalInstalled);

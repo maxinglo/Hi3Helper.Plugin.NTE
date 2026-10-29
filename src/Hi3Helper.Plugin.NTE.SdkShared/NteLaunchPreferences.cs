@@ -8,6 +8,14 @@ namespace Nte.Login;
 // same per-region file, preserving the other launch choices.
 internal static class NteLaunchPreferences
 {
+    internal static string GetPath(NteHostRegion region) => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "CollapseLauncher", "Plugins", "NTE", region switch
+        {
+            NteHostRegion.CN => "NteCN", NteHostRegion.Global => "NteGlobal", NteHostRegion.Taiwan => "NteTaiwan",
+            _ => throw new ArgumentException("Unknown launch region.", nameof(region))
+        }, "launch.json");
+
     internal static string GetPath(bool global) => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "CollapseLauncher", "Plugins", "NTE", global ? "NteGlobal" : "NteCN", "launch.json");

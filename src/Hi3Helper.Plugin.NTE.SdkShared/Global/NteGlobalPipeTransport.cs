@@ -11,23 +11,28 @@ namespace Nte.Login;
 internal sealed class NteGlobalPipeTransport
 {
     private readonly NamedPipeServerStream pipe;
+    private readonly NteOverseasRegion region;
     private readonly SemaphoreSlim writes = new(1, 1);
 
-    internal NteGlobalPipeTransport(NamedPipeServerStream pipe)
+    internal NteGlobalPipeTransport(NamedPipeServerStream pipe, NteOverseasRegion? region = null)
     {
         ArgumentNullException.ThrowIfNull(pipe);
         if (!pipe.IsConnected || !pipe.CanWrite) throw new IOException("Global SDK pipe is not connected.");
         this.pipe = pipe;
+        this.region = region ?? NteOverseasRegion.Global;
     }
 
-    internal Task SendLoginAsync(NteGlobalIdentity identity, CancellationToken token) =>
-        SendPacketsAsync(NteGlobalLoginPacket.EncodeSequence(identity, Environment.ProcessId), token);
+    internal Task SendLoginAsync(NteGlobalIdentity identity, CancellationToken token)
+    {
+        if (identity.Region != region) throw new InvalidDataException("The login result belongs to another publisher.");
+        return SendPacketsAsync(NteGlobalLoginPacket.EncodeSequence(identity, Environment.ProcessId), token);
+    }
 
     internal Task SendWindowsPlatformAsync(CancellationToken token) =>
         SendPacketsAsync([NteGlobalPacket.EncodeWindowsPlatform(Environment.ProcessId)], token);
 
     internal Task SendClientContextAsync(CancellationToken token) =>
-        SendPacketsAsync(NteGlobalSdkContextPackets.Encode(Environment.ProcessId), token);
+        SendPacketsAsync(NteGlobalSdkContextPackets.Encode(Environment.ProcessId, region), token);
 
     internal Task SendQueryAsync(NteGlobalSdkQuery query, JsonElement response, CancellationToken token) =>
         SendPacketsAsync([NteGlobalPacket.EncodeQuery(query, response, Environment.ProcessId)], token);

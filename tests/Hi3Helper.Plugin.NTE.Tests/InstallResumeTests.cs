@@ -20,11 +20,11 @@ public sealed class InstallResumeTests : IDisposable
     {
         await File.WriteAllTextAsync(Path.Combine(root, "one.dat"), "DONE", TestContext.Current.CancellationToken);
         string temporary = Path.Combine(root, "two.dat.tmp");
-        NteCNGameInstaller.PrepareTemporaryFile(temporary, Handler.Hash("MORE!"), 5);
+        NteGameInstaller.PrepareTemporaryFile(temporary, Handler.Hash("MORE!"), 5);
         await File.WriteAllTextAsync(temporary, "MO", TestContext.Current.CancellationToken);
         using Handler handler = new(); using HttpClient http = new(handler);
-        NteCNGameManager manager = new(http); manager.SetGamePath(root);
-        NteCNGameInstaller installer = new(manager, http);
+        NteGameManager manager = new(http); manager.SetGamePath(root);
+        NteGameInstaller installer = new(manager, http);
         try
         {
             Guid token = Guid.NewGuid();

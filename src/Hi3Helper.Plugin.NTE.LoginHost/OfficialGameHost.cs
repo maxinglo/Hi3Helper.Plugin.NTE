@@ -8,8 +8,8 @@ internal static class OfficialGameHost
 {
     internal static async Task<bool> RunAsync(NteHostLaunchOptions options)
     {
-        NteOfficialLaunchPlan plan = NteOfficialLaunchPlan.Create(options.GameRoot, options.Region == NteHostRegion.Global);
-        using Process platform = Process.Start(plan.CreateStartInfo(options.AdditionalArguments))
+        NteOfficialLaunchPlan plan = NteOfficialLaunchPlan.Create(options.GameRoot, options.Region);
+        using Process platform = StartPlatform(plan, options.AdditionalArguments)
                                  ?? throw new InvalidOperationException("Official launcher could not start.");
         // The official platform owns authentication and the game. Observe the
         // selected installation only; never read or import its saved accounts.
@@ -21,13 +21,30 @@ internal static class OfficialGameHost
                 using (candidate)
                 {
                     if (!NteProcessImage.Matches(candidate.Id, plan.GameExecutable)) continue;
-                    await NteProcessImage.WaitForExitWithLimitedAccessAsync(candidate.Id, plan.GameExecutable, CancellationToken.None);
+                    await NteProcessImage.WaitForExitWithLimitedAccessAsync(candidate.Id, plan.GameExecutable,
+                        CancellationToken.None);
                     return true;
                 }
             }
+
             if (platform.HasExited && platform.ExitCode != 0) return false;
             await Task.Delay(500);
         }
+
         return false;
+    }
+
+    private static Process? StartPlatform(NteOfficialLaunchPlan plan, string? arguments)
+    {
+        try
+        {
+            return Process.Start(plan.CreateStartInfo(arguments));
+        }
+        catch (System.ComponentModel.Win32Exception error) when (error.NativeErrorCode == 740)
+        {
+            // Overseas official platforms requireAdministrator. Ask Windows to
+            // apply that manifest when the parent launcher is not elevated.
+            return Process.Start(plan.CreateStartInfo(arguments, requestElevation: true));
+        }
     }
 }

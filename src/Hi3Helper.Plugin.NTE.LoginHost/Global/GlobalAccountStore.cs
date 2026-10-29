@@ -5,26 +5,31 @@ using Nte.LoginHost.Accounts;
 
 namespace Nte.LoginHost;
 
-internal sealed class GlobalAccountStore
+internal sealed class OverseasAccountStore
 {
     internal static string DefaultDirectory => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "Collapse", "NTE", "Accounts", "Global");
 
-    private static readonly Guid DeviceRecord = new("eddb1305-0b6e-4d17-bad2-9f03a57a201e");
+    private Guid DeviceRecord => Region.HostRegion == NteHostRegion.Taiwan
+        ? new("019bfe4d-f706-40b7-9114-3726a4c32013")
+        : new("eddb1305-0b6e-4d17-bad2-9f03a57a201e");
+    internal NteOverseasRegion Region { get; }
+    internal static string DirectoryFor(NteOverseasRegion region) => Path.Combine(Path.GetDirectoryName(DefaultDirectory)!, region.Name);
     private readonly string directory;
     private readonly IAccountKeyProtector protector;
     private readonly LocalAccountStore vault;
     private readonly RememberedLogin remembered;
     private readonly AccountDisplayStore displays;
 
-    internal GlobalAccountStore(string directory, IAccountKeyProtector protector,
-        IAccountKeyProtector? helloProtector = null)
+    internal OverseasAccountStore(string directory, IAccountKeyProtector protector,
+        IAccountKeyProtector? helloProtector = null, NteOverseasRegion? region = null)
     {
+        Region = region ?? NteOverseasRegion.Global;
         this.directory = Path.GetFullPath(directory);
         this.protector = protector;
         vault = new(this.directory, protector, helloProtector: helloProtector,
-            subjectKey: StoredGlobalIdentity.SubjectKey, credentialLimit: 12288);
+            subjectKey: (credential, key) => StoredGlobalIdentity.SubjectKey(credential, key, Region), credentialLimit: 12288);
         remembered = new(Path.Combine(this.directory, "last-login.bin"), protector);
         displays = new(this.directory, protector);
     }
@@ -37,11 +42,11 @@ internal sealed class GlobalAccountStore
     internal bool RequiresHello(Guid id) => vault.RequiresHello(id);
     internal bool SaveMayPrompt(bool useHello) => useHello || List().Any(account => RequiresHello(account.Id));
 
-    internal static bool ReadProtectionPreference()
+    internal static bool ReadProtectionPreference(NteOverseasRegion? region = null)
     {
         try
         {
-            return NteLoginPreferences.ReadExperimentalHello(NteLoginPreferences.GlobalPath);
+            return NteLoginPreferences.ReadExperimentalHello(NteLoginPreferences.GetPath((region ?? NteOverseasRegion.Global).HostRegion));
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException
                                           or System.Text.Json.JsonException)
@@ -166,10 +171,10 @@ internal sealed class GlobalAccountStore
         }
     }
 
-    private static async Task<NteGlobalIdentity> RefreshIdentityAsync(byte[] credential, NteGlobalAuthentication api,
+    private async Task<NteGlobalIdentity> RefreshIdentityAsync(byte[] credential, NteGlobalAuthentication api,
         CancellationToken token)
     {
-        using NteGlobalIdentity saved = StoredGlobalIdentity.Decode(credential);
+        using NteGlobalIdentity saved = StoredGlobalIdentity.Decode(credential, Region);
         if (!api.Initialized) await api.InitializeAsync(token);
         NteGlobalIdentity restored = await api.RestoreSessionAsync(saved, token);
         if (NteGlobalIdentity.ReadUserId(restored.Result.GetProperty("uid")) !=
@@ -186,6 +191,7 @@ internal sealed class GlobalAccountStore
         nint owner, Func<NteGlobalIdentity, CancellationToken, Task> deliver, CancellationToken token,
         bool useHello = false)
     {
+        if (identity.Region != Region) throw new InvalidDataException("The account belongs to another publisher.");
         HashSet<Guid> existing = List().Select(account => account.Id).ToHashSet();
         byte[] credential = StoredGlobalIdentity.Encode(identity);
         PendingAccountSave? change;

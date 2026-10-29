@@ -8,14 +8,15 @@ namespace Nte.Login;
 // These fixed frames contain no user identity, credential or allow result.
 internal static class NteGlobalSdkContextPackets
 {
-    internal static byte[][] Encode(int hostProcessId)
+    internal static byte[][] Encode(int hostProcessId, NteOverseasRegion? region = null)
     {
         if (hostProcessId <= 0) throw new ArgumentOutOfRangeException(nameof(hostProcessId));
         byte[] application = Create(50, 236);
         try
         {
-            WriteAscii(application, 12, "com.hottagames.nte");
-            WriteAscii(application, 0x4c, "3000001");
+            region ??= NteOverseasRegion.Global;
+            WriteAscii(application, 12, region.PackageName);
+            WriteAscii(application, 0x4c, region.AppId);
             // The observed final optional field is empty; do not put the
             // authentication application key into an unrelated SDK slot.
             byte[] channel = Create(27, 656);

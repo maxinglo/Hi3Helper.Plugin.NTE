@@ -45,10 +45,10 @@ internal sealed class ProbeEnvironment : IDisposable
     public ProbeEnvironment(string gameRoot, bool supplyHostContext, bool supplyStartupContext = false, bool useOwnExecutable = false,
         string? hostExecutable = null, string launcherDirectoryName = "NTELauncher", string? applicationId = null)
     {
-        window = new(applicationId == "3000001" ? 100u : 1u);
+        window = new(applicationId is "3000001" or "2000013" ? 100u : 1u);
         hostContext = supplyHostContext;
         startupContext = supplyStartupContext;
-        if (launcherDirectoryName is not ("NTELauncher" or "NTEGlobal"))
+        if (launcherDirectoryName is not ("NTELauncher" or "NTEGlobal" or "NTETW"))
             throw new ArgumentException("Unsupported SDK platform directory.", nameof(launcherDirectoryName));
         launcher = Path.Combine(gameRoot, launcherDirectoryName);
         // These are SDK platform path references, not executables the probe

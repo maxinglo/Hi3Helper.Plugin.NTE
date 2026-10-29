@@ -11,6 +11,8 @@
     <Configurations>Debug;Release;DebugNoReflection;ReleaseNoReflection</Configurations>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.LoginHost/ViewModels/*.cs" Link="ViewModels/%(Filename)%(Extension)"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.LoginHost/Services/IGlobalLoginService.cs" Link="Services/IGlobalLoginService.cs"/>
     <Compile Include="../../tools/research/NteResourceCache.cs" Link="Development/NteResourceCache.cs"/>
     <Compile Include="../../src/Hi3Helper.Plugin.NTE.LoginHost/Accounts/LocalAccountStore.cs" Link="Login/LocalAccountStore.cs"/>
     <Compile Include="../../src/Hi3Helper.Plugin.NTE.LoginHost/Accounts/AccountDisplayStore.cs" Link="Login/AccountDisplayStore.cs"/>

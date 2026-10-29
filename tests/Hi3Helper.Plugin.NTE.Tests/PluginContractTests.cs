@@ -20,7 +20,7 @@ public sealed class PluginContractTests
             plugin.GetPluginName(out string name);
             Assert.Equal(pluginName, name);
             plugin.GetPresetConfigCount(out int count);
-            Assert.Equal(2, count);
+            Assert.Equal(3, count);
             plugin.GetPresetConfig(0, out var preset);
             preset.comGet_GameName(out string actualGameName);
             Assert.Equal(gameName, actualGameName);

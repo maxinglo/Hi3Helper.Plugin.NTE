@@ -22,7 +22,7 @@
     <Company>Collapse Launcher Team</Company>
     <Authors>$(Company)</Authors>
     <Copyright>Copyright 2022-2026 $(Company)</Copyright>
-    <Version>0.10.0</Version>
+    <Version>0.12.0</Version>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <NoWarn>$(NoWarn);CA2256</NoWarn>
     <Configurations>Debug;Release;DebugNoReflection;ReleaseNoReflection</Configurations>
@@ -39,6 +39,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="../Hi3Helper.Plugin.NTE.SdkShared/NteRegionSwitchOptions.cs" Link="Login/NteRegionSwitchOptions.cs" />
     <Compile Include="../Hi3Helper.Plugin.NTE.SdkShared/NteDetachedProcess.cs" Link="Login/NteDetachedProcess.cs" />
     <Compile Include="../Hi3Helper.Plugin.NTE.SdkShared/NteHostLaunchOptions.cs" Link="Login/NteHostLaunchOptions.cs" />
     <Compile Include="../Hi3Helper.Plugin.NTE.SdkShared/NteLoginPreferences.cs" Link="Login/NteLoginPreferences.cs" />

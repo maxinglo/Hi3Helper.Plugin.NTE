@@ -1,3 +1,4 @@
+using Nte.LoginHost.ViewModels;
 using System.IO;
 using System.Windows;
 using System.Windows.Automation;
@@ -9,7 +10,7 @@ using Nte.LoginHost.Localization;
 
 namespace Nte.LoginHost;
 
-internal sealed partial class GlobalLoginView
+internal sealed partial class OverseasLoginView
 {
     private void BuildLayout(Func<string, Style> style)
     {
@@ -68,7 +69,7 @@ internal sealed partial class GlobalLoginView
         AutomationProperties.SetAutomationId(remember, "remember");
         AutomationProperties.SetName(remember, LoginText.Get("SaveOnDevice"));
         newBody.Children.Add(remember);
-        newBody.Children.Add(new GlobalAgreementBlock(agreement, style("FormCheckBoxStyle")));
+        newBody.Children.Add(new GlobalAgreementBlock(agreement, style("FormCheckBoxStyle"), model.Region));
         Children.Add(newBody);
         status.Margin = new(0, 10, 0, 4);
         AutomationProperties.SetAutomationId(status, "status");
@@ -140,106 +141,44 @@ internal sealed partial class GlobalLoginView
         return row;
     }
 
-    private void SetPage(Page next)
-    {
-        if (busy) return;
-        if (next == Page.Saved && !picker.HasAccounts) next = Page.Methods;
-        if (page != next)
-        {
-            secret.Clear();
-            emailCode.Clear();
-        }
-
-        page = next;
-        picker.EndManage();
-        SetStatus("");
-        RefreshLayout();
-        if (next == Page.Email) Dispatcher.BeginInvoke(() => email.Focus());
-    }
-
     private void RefreshLayout()
     {
-        savedBody.Visibility = !busy && page == Page.Saved ? Visibility.Visible : Visibility.Collapsed;
-        newBody.Visibility = !busy && page is Page.Methods or Page.Email ? Visibility.Visible : Visibility.Collapsed;
-        methodsBody.Visibility = page == Page.Methods ? Visibility.Visible : Visibility.Collapsed;
-        emailBody.Visibility = page == Page.Email ? Visibility.Visible : Visibility.Collapsed;
-        helpBody.Visibility = !busy && page == Page.Help ? Visibility.Visible : Visibility.Collapsed;
-        back.Visibility = !busy && (page is Page.Email or Page.Help || page == Page.Methods && picker.HasAccounts)
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        back.Content = LoginText.Get(page == Page.Email ? "BackToMethods" :
-            page == Page.Help ? "BackToSignIn" : "BackToSavedAccounts");
-        signIn.Visibility = !busy && (page == Page.Email || page == Page.Saved && !picker.IsManaging)
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        otherAccount.Visibility = !busy && page == Page.Saved && !picker.IsManaging
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        retry.Visibility = !busy && !preview && !api.Initialized && page == Page.Methods
-            ? Visibility.Visible
-            : Visibility.Collapsed;
+        bool busy = model.IsBusy;
+        var page = model.Page;
+        savedBody.Visibility = !busy && page == GlobalLoginPage.Saved ? Visibility.Visible : Visibility.Collapsed;
+        newBody.Visibility = !busy && page is GlobalLoginPage.Methods or GlobalLoginPage.Email ? Visibility.Visible : Visibility.Collapsed;
+        methodsBody.Visibility = page == GlobalLoginPage.Methods ? Visibility.Visible : Visibility.Collapsed;
+        emailEntry.Visibility = model.SupportsEmail ? Visibility.Visible : Visibility.Collapsed;
+        emailBody.Visibility = page == GlobalLoginPage.Email ? Visibility.Visible : Visibility.Collapsed;
+        helpBody.Visibility = !busy && page == GlobalLoginPage.Help ? Visibility.Visible : Visibility.Collapsed;
+        back.Visibility = !busy && (page is GlobalLoginPage.Email or GlobalLoginPage.Help || page == GlobalLoginPage.Methods && picker.HasAccounts)
+            ? Visibility.Visible : Visibility.Collapsed;
+        back.Content = LoginText.Get(page == GlobalLoginPage.Email ? "BackToMethods" : page == GlobalLoginPage.Help ? "BackToSignIn" : "BackToSavedAccounts");
+        signIn.Visibility = !busy && (page == GlobalLoginPage.Email || page == GlobalLoginPage.Saved && !picker.IsManaging) ? Visibility.Visible : Visibility.Collapsed;
+        otherAccount.Visibility = !busy && page == GlobalLoginPage.Saved && !picker.IsManaging ? Visibility.Visible : Visibility.Collapsed;
+        retry.Visibility = !busy && !model.IsPreview && !model.Ready && page == GlobalLoginPage.Methods ? Visibility.Visible : Visibility.Collapsed;
         cancelWork.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
         help.Visibility = Visibility.Collapsed;
-        UpdateEnabled();
+        status.Visibility = string.IsNullOrWhiteSpace(model.Status) ? Visibility.Collapsed : Visibility.Visible;
+        passwordGroup.Visibility = model.UsePassword ? Visibility.Visible : Visibility.Collapsed;
+        codeGroup.Visibility = model.UsePassword ? Visibility.Collapsed : Visibility.Visible;
+        email.IsEnabled = secret.IsEnabled = emailCode.IsEnabled = passwordMode.IsEnabled = codeMode.IsEnabled = !busy;
+        agreement.IsEnabled = remember.IsEnabled = picker.IsEnabled = !busy;
+        captcha.Content = model.CaptchaLabel; signIn.Content = model.SubmitLabel;
+        signIn.IsDefault = model.SubmitCommand.CanExecute(null) && !picker.IsManaging;
         LayoutChanged?.Invoke();
     }
 
     private SavedAccountChoice Present(LocalAccount account)
     {
-        profiles.TryGetValue(account.Id, out AccountDisplayProfile? profile);
+        model.Profiles.TryGetValue(account.Id, out AccountDisplayProfile? profile);
         bool custom = profile?.InitialLabel == null || account.Label != profile.InitialLabel;
         string primary = custom ? account.Label : profile?.Email ?? profile?.Name ?? account.Label;
         string secondary = profile?.Email != null && primary != profile.Email ? profile.Email
-            : profile?.Email != null ? profile.Name ?? ""
-            : LoginText.Get("EmailNotProvided") + " · " +
-              LoginText.Get("SavedAccountNumber", picker.Reference(account.Id));
-        string source = profile?.Provider switch
-        {
-            2 => "Google", 1 => "Facebook", 8 => LoginText.Get("Email"), _ => LoginText.Get("LegacyAccount")
-        };
+            : profile?.Email != null ? profile.Name ?? "" : LoginText.Get("EmailNotProvided") + " · " + LoginText.Get("SavedAccountNumber", picker.Reference(account.Id));
+        string source = profile?.Provider switch { 2 => "Google", 1 => "Facebook", 8 => LoginText.Get("Email"), _ => LoginText.Get("LegacyAccount") };
         return new(account, primary, secondary, source);
     }
-
-    internal void SetPreviewProfileScenario(string variant)
-    {
-        if (!preview) throw new InvalidOperationException("Synthetic accounts only.");
-        IReadOnlyList<LocalAccount> entries = picker.Entries;
-        if (variant == "legacy-profile")
-        {
-            entries = entries.Select((account, index) => account with { Label = "Legacy label " + (index + 1) })
-                .ToArray();
-            foreach (LocalAccount account in entries)
-                profiles[account.Id] = new(2, Email: "user" + picker.Reference(account.Id) + "@example.com",
-                    Name: "Helix");
-        }
-        else if (variant == "legacy")
-        {
-            profiles.Clear();
-            entries = entries.Select(account => account with { Label = "Google" }).ToArray();
-        }
-        else if (variant == "missing")
-            foreach (LocalAccount account in entries)
-                profiles[account.Id] = new(2, Name: "Helix", InitialLabel: account.Label);
-        else throw new InvalidDataException("profile-variant");
-
-        picker.Reload(entries);
-    }
-
-    internal void SetPreviewAccounts(int count)
-    {
-        if (!preview || count is < 0 or > 16) throw new InvalidOperationException("Synthetic accounts only.");
-        profiles.Clear();
-        List<LocalAccount> entries = [];
-        for (int i = 0; i < count; i++)
-        {
-            Guid id = new(i + 1, 0, 0, new byte[8]);
-            string address = i == 2 ? "a.long.account.name.for.layout.testing@example.com" : $"user{i + 1}@example.com";
-            entries.Add(new(id, "Helix", DateTimeOffset.UtcNow, null));
-            profiles[id] = new(i < 2 ? 2 : i % 2 == 0 ? 8 : 1, address, "Helix", InitialLabel: "Helix");
-        }
-
-        picker.Reload(entries);
-        page = count == 0 ? Page.Methods : Page.Saved;
-        RefreshLayout();
-    }
+    internal void SetPreviewProfileScenario(string variant) => model.SetPreviewProfileScenario(variant);
+    internal void SetPreviewAccounts(int count) => model.SetPreviewAccounts(count);
 }

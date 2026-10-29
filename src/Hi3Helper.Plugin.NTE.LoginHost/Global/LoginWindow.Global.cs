@@ -6,18 +6,19 @@ namespace Nte.LoginHost;
 
 internal sealed partial class LoginWindow
 {
-    private GlobalLoginView? globalView;
+    private OverseasLoginView? globalView;
 
     internal async Task<bool> RequestGlobalAsync(NteGlobalAuthentication api,
         Func<NteGlobalIdentity, CancellationToken, Task> submit, CancellationToken token,
-        GlobalAccountStore? accounts = null, bool previewMode = false, string? notice = null)
+        OverseasAccountStore? accounts = null, bool previewMode = false, string? notice = null)
     {
         CancelFlow();
         await activeWork;
-        using GlobalLoginView content = new(api, submit, FindStyle, accounts, handle, previewMode, notice,
+        Services.OverseasLoginService service = new(api, accounts, handle, submit,
             (mayPrompt, action) => WithGlobalAccountOwnerAsync(mayPrompt, _ => action()));
+        using OverseasLoginView content = new(service, FindStyle, previewMode, notice);
         globalView = content;
-        Title = LoginText.Get("GlobalTitle");
+        Title = content.TitleLabel;
         content.LayoutChanged += () =>
         {
             QueueCardSize();
@@ -30,7 +31,7 @@ internal sealed partial class LoginWindow
         ResetBackdrop();
         form.Children.Clear();
         Add(form, content, 0);
-        title.Text = LoginText.Get("GlobalTitle");
+        title.Text = content.TitleLabel;
         subtitle.Visibility = modeRail.Visibility = status.Visibility = login.Visibility = Visibility.Collapsed;
         UpdateCardSize();
         QueueBodyWidth();
@@ -65,9 +66,9 @@ internal sealed partial class LoginWindow
         if (transient)
         {
             requested = true;
-            Title = LoginText.Get("GlobalTitle");
+            Title = LoginText.Get(launchOptions?.Region == NteHostRegion.Taiwan ? "TaiwanTitle" : "GlobalTitle");
             footer.Visibility = Visibility.Collapsed;
-            title.Text = LoginText.Get("GlobalTitle");
+            title.Text = Title;
             form.Children.Clear();
             Add(form, new System.Windows.Controls.TextBlock
             {
@@ -100,12 +101,15 @@ internal sealed partial class LoginWindow
         }
     }
 
-    internal async Task PreviewGlobalAsync(int pid)
+    internal Task PreviewGlobalAsync(int pid) => PreviewOverseasAsync(pid, NteOverseasRegion.Global);
+    internal Task PreviewTaiwanAsync(int pid) => PreviewOverseasAsync(pid, NteOverseasRegion.Taiwan);
+
+    private async Task PreviewOverseasAsync(int pid, NteOverseasRegion region)
     {
         Attach(pid);
         preview = true;
-        using NteGlobalApplicationConfiguration config = new(new byte[40], "com.hottagames.nte",
-            new("https://mapi.pwsdk.com"), "global-sg");
+        using NteOverseasApplicationConfiguration config = new(new byte[40], region.PackageName,
+            region.Service, region.Area, region: region);
         using NteGlobalAuthentication api = new(config, "preview");
         using CancellationTokenSource lifetime = new();
         Task formTask = RequestGlobalAsync(api, (_, _) => Task.CompletedTask, lifetime.Token, previewMode: true);

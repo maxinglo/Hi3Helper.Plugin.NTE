@@ -24,8 +24,8 @@ public sealed class LiveGlobalTests
         string directory = Path.Combine(repository.FullName, "artifacts", "research", "live-global-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss"));
         Directory.CreateDirectory(directory);
         using HttpClient client = new() { Timeout = TimeSpan.FromSeconds(120) };
-        NteCNGameManager manager = new(client, NteConfigProvider.Global);
-        NteCNGameInstaller installer = new(manager, client);
+        NteGameManager manager = new(client, NteConfigProvider.Global);
+        NteGameInstaller installer = new(manager, client);
         NtePlugin plugin = new();
         try
         {
@@ -34,7 +34,7 @@ public sealed class LiveGlobalTests
             Assert.NotEmpty(manifest.Resources);
             Assert.NotEmpty(manifest.Paks);
             Assert.All(manager.GameResBaseUrls, url => Assert.Contains("perfectworld.com", url));
-            var tasks = NteCNGameInstaller.BuildDownloadTasks(manifest, Path.Combine(directory, "plan"), false, false, TestContext.Current.CancellationToken);
+            var tasks = NteGameInstaller.BuildDownloadTasks(manifest, Path.Combine(directory, "plan"), false, false, TestContext.Current.CancellationToken);
             Assert.NotEmpty(tasks);
             string releaseHash = NteOfficialPatcherState.ParseXml(manager.ReleaseConfigXml!).SelectSingleNode("config/Extra/listHash")!.InnerText;
             await File.WriteAllTextAsync(Path.Combine(directory, "manifest-summary.json"), JsonSerializer.Serialize(new

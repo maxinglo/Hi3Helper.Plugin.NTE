@@ -115,6 +115,8 @@ internal sealed class NteLauncherResourceClient(HttpClient httpClient, string re
             "yhcdn2.wmupd.com" => "yhcdn1.wmupd.com",
             "ntecdn1.perfectworld.com" => "ntecdn2.perfectworld.com",
             "ntecdn2.perfectworld.com" => "ntecdn1.perfectworld.com",
+            "patchnte1.iwplay.com.tw" => "patchnte2.iwplay.com.tw",
+            "patchnte2.iwplay.com.tw" => "patchnte1.iwplay.com.tw",
             _ => null
         };
         if (otherHost != null)

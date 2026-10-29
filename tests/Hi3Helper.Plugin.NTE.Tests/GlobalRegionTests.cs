@@ -51,7 +51,7 @@ public sealed class GlobalRegionTests
     {
         using GlobalManifestHandler handler = new();
         using HttpClient client = new(handler);
-        NteCNGameManager manager = new(client, NteConfigProvider.Global);
+        NteGameManager manager = new(client, NteConfigProvider.Global);
         try
         {
             Assert.Equal(0, await manager.InitAsyncInner(true, TestContext.Current.CancellationToken));
@@ -69,7 +69,7 @@ public sealed class GlobalRegionTests
     {
         NteCNPresetConfig cn = new(), global = new(NteConfigProvider.Global);
         Assert.NotSame(cn.GameManager, global.GameManager);
-        Assert.Equal("3000001", Assert.IsType<NteCNGameManager>(global.GameManager).AppId);
+        Assert.Equal("3000001", Assert.IsType<NteGameManager>(global.GameManager).AppId);
         Assert.Equal(9, global.SupportedLanguages.Count);
         Assert.Contains("zh-TW", global.SupportedLanguages);
         Assert.Equal("NTE-Global", global.LauncherGameDirectoryName);

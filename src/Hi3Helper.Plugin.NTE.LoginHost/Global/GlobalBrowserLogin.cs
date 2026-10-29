@@ -1,3 +1,4 @@
+using Nte.Login;
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Text;
@@ -13,6 +14,7 @@ namespace Nte.LoginHost;
 internal sealed class GlobalBrowserLogin : IDisposable
 {
     private const string CommandKey = @"Software\Classes\wmgooglelogin\shell\open\command";
+    private readonly NteOverseasRegion region;
     private readonly string command;
     private readonly object? previous;
     private readonly RegistryValueKind previousKind;
@@ -21,8 +23,9 @@ internal sealed class GlobalBrowserLogin : IDisposable
     internal string Target { get; } = "collapse-nte-" + Guid.NewGuid().ToString("N");
     private readonly NamedPipeServerStream pipe;
 
-    internal GlobalBrowserLogin(string? callbackExecutable = null)
+    internal GlobalBrowserLogin(string? callbackExecutable = null, NteOverseasRegion? region = null)
     {
+        this.region = region ?? NteOverseasRegion.Global;
         string executable = callbackExecutable ?? Environment.ProcessPath ?? throw new InvalidOperationException("Login apphost unavailable.");
         if (!Path.GetFileName(executable).Equals("Nte.LoginHost.exe", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Browser callbacks require the installed login apphost.");
@@ -44,7 +47,7 @@ internal sealed class GlobalBrowserLogin : IDisposable
 
     internal async Task<JsonDocument> WaitAsync(Uri loginUri, CancellationToken token)
     {
-        if (loginUri.Scheme != "https" || loginUri.Host != "static.pwsdk.com") throw new InvalidDataException("Unexpected browser origin.");
+        if (!region.IsBrowserOrigin(loginUri)) throw new InvalidDataException("Unexpected browser origin.");
         Task connection = pipe.WaitForConnectionAsync(token);
         Process.Start(new ProcessStartInfo(loginUri.AbsoluteUri) { UseShellExecute = true });
         return await ReceiveAsync(connection, token);
