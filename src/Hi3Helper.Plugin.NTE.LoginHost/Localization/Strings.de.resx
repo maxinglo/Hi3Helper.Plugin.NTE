@@ -587,4 +587,7 @@ Download: {3} files ({4:F3} GB)</value></data>
   <data name="InvalidOverseasPhone" xml:space="preserve">
     <value>Wähle eine unterstützte Vorwahl und gib eine gültige Telefonnummer ein.</value>
   </data>
+  <data name="NoticeTaiwanData" xml:space="preserve">
+    <value>Taiwan: Konten und eine dauerhaft gespeicherte zufällige Geräte-ID liegen getrennt unter %LocalAppData%\Collapse\NTE\Accounts\Taiwan\. Die Telefonanzeige speichert nur Landesvorwahl und letzte vier Ziffern; vollständige Nummer, Passwort und Bestätigungscode werden nicht im Kontospeicher abgelegt. Taiwan übermittelt dem Spiel-SDK auch die unten für Global genannten Geräteinformationen. Lesbare Einstellungen: %LocalAppData%\CollapseLauncher\Plugins\NTE\Taiwan\login.json und NteTaiwan\launch.json. Rotierende Browser-Rückrufdiagnosen unter %LocalAppData%\Collapse\NTE\Diagnostics\ enthalten nur Zeit, Region, Phase und Byteanzahl, keine Rückruf-URLs, Token oder Kontodaten. Für den offiziellen Launcher muss NTETW\NTETWGame.exe im gewählten Spielordner vorhanden sein.</value>
+  </data>
 </root>

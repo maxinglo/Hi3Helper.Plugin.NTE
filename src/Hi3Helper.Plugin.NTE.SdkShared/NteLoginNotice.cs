@@ -6,7 +6,7 @@ namespace Nte.Login;
 
 internal sealed class NteLoginNotice(string path)
 {
-    internal const int CurrentRevision = 1;
+    internal const int CurrentRevision = 2;
     internal static string DefaultPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "Collapse", "NTE", "login-notice.json");

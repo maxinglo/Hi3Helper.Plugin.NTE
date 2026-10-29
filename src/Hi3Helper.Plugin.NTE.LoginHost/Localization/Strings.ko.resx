@@ -587,4 +587,7 @@ Download: {3} files ({4:F3} GB)</value></data>
   <data name="InvalidOverseasPhone" xml:space="preserve">
     <value>지원하는 국가 번호를 선택하고 올바른 전화번호를 입력하세요.</value>
   </data>
+  <data name="NoticeTaiwanData" xml:space="preserve">
+    <value>대만 버전: 계정과 계속 유지되는 임의 장치 ID는 %LocalAppData%\Collapse\NTE\Accounts\Taiwan\ 에 별도로 저장됩니다. 전화번호 표시 정보에는 국가 코드와 마지막 네 자리만 저장하며 전체 번호, 비밀번호, 인증 코드는 계정 저장소에 저장하지 않습니다. 대만 버전도 아래 국제 버전에 명시된 장치 정보를 게임 SDK에 제공합니다. 읽을 수 있는 설정: %LocalAppData%\CollapseLauncher\Plugins\NTE\Taiwan\login.json 및 NteTaiwan\launch.json. %LocalAppData%\Collapse\NTE\Diagnostics\ 의 브라우저 콜백 진단은 시간, 지역, 단계, 바이트 수만 순환 기록하며 콜백 URL, 토큰, 계정 정보는 기록하지 않습니다. 공식 런처 옵션을 사용하려면 선택한 게임 설치 폴더에 NTETW\NTETWGame.exe 가 필요합니다.</value>
+  </data>
 </root>

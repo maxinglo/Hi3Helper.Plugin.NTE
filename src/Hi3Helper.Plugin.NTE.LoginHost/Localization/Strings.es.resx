@@ -587,4 +587,7 @@ Download: {3} files ({4:F3} GB)</value></data>
   <data name="InvalidOverseasPhone" xml:space="preserve">
     <value>Elige un prefijo admitido e introduce un número de teléfono válido.</value>
   </data>
+  <data name="NoticeTaiwanData" xml:space="preserve">
+    <value>Taiwán: las cuentas y un ID de dispositivo aleatorio persistente se guardan por separado en %LocalAppData%\Collapse\NTE\Accounts\Taiwan\. La información visible del teléfono solo conserva el prefijo y los últimos cuatro dígitos; el número completo, la contraseña y el código de verificación no se guardan en el almacén de cuentas. Taiwán también proporciona al SDK del juego la información del dispositivo indicada abajo para Global. Ajustes legibles: %LocalAppData%\CollapseLauncher\Plugins\NTE\Taiwan\login.json y NteTaiwan\launch.json. Los diagnósticos rotativos de las devoluciones del navegador en %LocalAppData%\Collapse\NTE\Diagnostics\ solo registran hora, región, etapa y bytes, sin URL de devolución, tokens ni datos de cuenta. La opción del lanzador oficial requiere NTETW\NTETWGame.exe en la instalación del juego seleccionada.</value>
+  </data>
 </root>

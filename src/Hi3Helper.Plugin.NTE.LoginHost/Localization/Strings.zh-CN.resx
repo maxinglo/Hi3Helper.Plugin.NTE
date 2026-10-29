@@ -589,4 +589,7 @@
   <data name="InvalidOverseasPhone" xml:space="preserve">
     <value>请选择支持的电话区号，并输入正确的手机号。</value>
   </data>
+  <data name="NoticeTaiwanData" xml:space="preserve">
+    <value>台服：账号和持续保留的随机设备 ID 独立保存在 %LocalAppData%\Collapse\NTE\Accounts\Taiwan\。手机号显示资料只保留区号和末四位，完整手机号、密码与验证码不写入账号库。台服也向游戏 SDK 提供下文列出的国际版设备信息。可读设置：%LocalAppData%\CollapseLauncher\Plugins\NTE\Taiwan\login.json 和 NteTaiwan\launch.json。%LocalAppData%\Collapse\NTE\Diagnostics\ 中的浏览器回调诊断轮换记录时间、地区、阶段与字节数，不记录回调网址、令牌或账号。使用官方启动器需在当前游戏安装目录内提供 NTETW\NTETWGame.exe。</value>
+  </data>
 </root>

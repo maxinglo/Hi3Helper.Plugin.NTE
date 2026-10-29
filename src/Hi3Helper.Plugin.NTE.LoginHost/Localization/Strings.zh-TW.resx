@@ -587,4 +587,7 @@
   <data name="InvalidOverseasPhone" xml:space="preserve">
     <value>請選擇支援的電話區碼，並輸入正確的手機號碼。</value>
   </data>
+  <data name="NoticeTaiwanData" xml:space="preserve">
+    <value>台服：帳號和持續保留的隨機裝置 ID 獨立儲存在 %LocalAppData%\Collapse\NTE\Accounts\Taiwan\。手機號碼顯示資料只保留國碼和末四碼，完整號碼、密碼與驗證碼不寫入帳號庫。台服也向遊戲 SDK 提供下文列出的國際版裝置資訊。可讀設定：%LocalAppData%\CollapseLauncher\Plugins\NTE\Taiwan\login.json 和 NteTaiwan\launch.json。%LocalAppData%\Collapse\NTE\Diagnostics\ 中的瀏覽器回呼診斷輪替記錄時間、地區、階段與位元組數，不記錄回呼網址、權杖或帳號。使用官方啟動器需在目前遊戲安裝目錄內提供 NTETW\NTETWGame.exe。</value>
+  </data>
 </root>

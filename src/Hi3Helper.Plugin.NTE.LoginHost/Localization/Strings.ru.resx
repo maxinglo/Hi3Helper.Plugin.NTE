@@ -587,4 +587,7 @@ Download: {3} files ({4:F3} GB)</value></data>
   <data name="InvalidOverseasPhone" xml:space="preserve">
     <value>Выберите поддерживаемый код и введите корректный номер телефона.</value>
   </data>
+  <data name="NoticeTaiwanData" xml:space="preserve">
+    <value>Тайвань: учётные записи и постоянный случайный идентификатор устройства хранятся отдельно в %LocalAppData%\Collapse\NTE\Accounts\Taiwan\. Для отображения телефона сохраняются только код страны и последние четыре цифры; полный номер, пароль и проверочный код не записываются в хранилище учётных записей. Тайвань также передаёт SDK игры сведения об устройстве, перечисленные ниже для Global. Читаемые настройки: %LocalAppData%\CollapseLauncher\Plugins\NTE\Taiwan\login.json и NteTaiwan\launch.json. Ротационные журналы обратного вызова браузера в %LocalAppData%\Collapse\NTE\Diagnostics\ содержат только время, регион, этап и число байтов, без URL обратного вызова, токенов и данных учётной записи. Для официального лаунчера нужен NTETW\NTETWGame.exe в выбранной папке игры.</value>
+  </data>
 </root>

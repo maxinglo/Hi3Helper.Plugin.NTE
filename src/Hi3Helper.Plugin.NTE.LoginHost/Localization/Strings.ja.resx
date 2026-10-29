@@ -587,4 +587,7 @@ Download: {3} files ({4:F3} GB)</value></data>
   <data name="InvalidOverseasPhone" xml:space="preserve">
     <value>対応する国番号を選択し、有効な電話番号を入力してください。</value>
   </data>
+  <data name="NoticeTaiwanData" xml:space="preserve">
+    <value>台湾版：アカウントと継続して保持するランダムな端末 ID は %LocalAppData%\Collapse\NTE\Accounts\Taiwan\ に個別に保存されます。電話番号の表示情報には国番号と末尾4桁のみを保存し、完全な電話番号、パスワード、確認コードはアカウント庫に保存しません。台湾版も、下記の国際版と同じ端末情報をゲーム SDK に渡します。可読設定：%LocalAppData%\CollapseLauncher\Plugins\NTE\Taiwan\login.json および NteTaiwan\launch.json。%LocalAppData%\Collapse\NTE\Diagnostics\ のブラウザーコールバック診断は時刻、地域、段階、バイト数のみをローテーション記録し、コールバック URL、トークン、アカウント情報は記録しません。公式ランチャーを使用するには、選択したゲームのインストール先に NTETW\NTETWGame.exe が必要です。</value>
+  </data>
 </root>

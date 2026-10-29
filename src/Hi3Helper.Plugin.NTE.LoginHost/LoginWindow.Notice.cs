@@ -68,6 +68,8 @@ internal sealed partial class LoginWindow
                 ? LoginText.Get("NoticeSharing", LoginText.Get(noticeGlobal ? "NoticeSharingExamplesGlobal" : "NoticeSharingExamplesMainland"))
                 : LoginText.Get("Notice" + section);
             Add(form, new TextBlock { Text = body, FontSize = 12, TextWrapping = TextWrapping.Wrap });
+            if (section == "Storage" && (launchOptions?.Region == NteHostRegion.Taiwan || globalView?.Region == NteHostRegion.Taiwan))
+                Add(form, new TextBlock { Text = LoginText.Get("NoticeTaiwanData"), FontSize = 12, TextWrapping = TextWrapping.Wrap });
             if (section == "Network" && !noticeGlobal)
                 Add(form, new TextBlock { Text = LoginText.Get("NoticeRealName"), FontSize = 12, TextWrapping = TextWrapping.Wrap });
         }

@@ -19,6 +19,9 @@ public sealed class LoginNoticeTests : IDisposable
         Assert.False(notice.IsAcknowledged());
         notice.Acknowledge();
         Assert.True(new NteLoginNotice(path).IsAcknowledged());
+        // A previous disclosure must not suppress the expanded Taiwan notice.
+        File.WriteAllText(path, $"{{\"acknowledgedRevision\":{NteLoginNotice.CurrentRevision - 1}}}");
+        Assert.False(notice.IsAcknowledged());
         foreach (string invalid in new[] { "{", "[]", "{\"acknowledgedRevision\":0}", "{\"acknowledgedRevision\":\"1\"}" })
         {
             File.WriteAllText(path, invalid);

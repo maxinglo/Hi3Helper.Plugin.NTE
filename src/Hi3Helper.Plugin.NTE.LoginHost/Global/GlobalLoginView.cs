@@ -29,6 +29,7 @@ internal sealed partial class OverseasLoginView : StackPanel, IDisposable
     private readonly StackPanel passwordGroup = new(), codeGroup = new();
     private readonly System.Windows.Threading.DispatcherTimer cooldown = new() { Interval = TimeSpan.FromSeconds(1) };
     internal string TitleLabel => model.Title;
+    internal Nte.Login.NteHostRegion Region => model.Region.HostRegion;
     internal event Action? LayoutChanged;
 
     internal OverseasLoginView(IOverseasLoginService service, Func<string, Style> style, bool preview = false, string? notice = null)
