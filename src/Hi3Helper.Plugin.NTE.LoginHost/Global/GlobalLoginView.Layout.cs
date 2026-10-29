@@ -25,6 +25,9 @@ internal sealed partial class OverseasLoginView
         google.Content = ProviderLabel("google-g.png", "SignInGoogle");
         facebook.Content = ProviderLabel("facebook-primary.png", "SignInFacebook");
         Configure(emailEntry, "SignInEmail", "email-login", "SmsButtonStyle");
+        Configure(phoneEntry, "PhoneSignIn", "phone-login", "SmsButtonStyle");
+        phoneEntry.Margin = new(0, 0, 0, 10);
+        methodsBody.Children.Add(phoneEntry);
         emailEntry.FontSize = 14;
         google.Margin = facebook.Margin = new(0, 0, 0, 10);
         methodsBody.Children.Add(google);
@@ -46,7 +49,15 @@ internal sealed partial class OverseasLoginView
         AutomationProperties.SetAutomationId(codeMode, "email-code-mode");
         SlidingModeSelector rail = new(passwordMode, codeMode) { Margin = new(0, 0, 0, 14) };
         emailBody.Children.Add(rail);
-        emailBody.Children.Add(Group("Email", email));
+        AutomationProperties.SetAutomationId(phoneCountry, "phone-country");
+        phoneCountry.Style = style("LoginComboBoxStyle");
+        AutomationProperties.SetName(phoneCountry, LoginText.Get("CountryCode"));
+        identifierRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        identifierRow.ColumnDefinitions.Add(new());
+        phoneCountry.Width = 120; phoneCountry.Margin = new(0, 0, 8, 0);
+        identifierRow.Children.Add(phoneCountry);
+        Grid.SetColumn(email, 1); identifierRow.Children.Add(email);
+        emailBody.Children.Add(LabeledGroup(identifierLabel, identifierRow));
         passwordGroup.Children.Add(Group("Password", secret));
         emailBody.Children.Add(passwordGroup);
         Grid codeRow = new();
@@ -60,7 +71,7 @@ internal sealed partial class OverseasLoginView
         captcha.Margin = new(8, 0, 0, 0);
         Grid.SetColumn(captcha, 1);
         codeRow.Children.Add(captcha);
-        codeGroup.Children.Add(Group("EmailCode", codeRow));
+        codeGroup.Children.Add(LabeledGroup(codeLabel, codeRow));
         emailBody.Children.Add(codeGroup);
         newBody.Children.Add(emailBody);
         remember.Style = style("FormCheckBoxStyle");
@@ -111,6 +122,13 @@ internal sealed partial class OverseasLoginView
         return group;
     }
 
+    private static StackPanel LabeledGroup(TextBlock label, UIElement input)
+    {
+        StackPanel group = new() { Margin = new(0, 0, 0, 12) };
+        label.FontSize = 12; label.Margin = new(0, 0, 0, 7);
+        group.Children.Add(label); group.Children.Add(input); return group;
+    }
+
     private static Grid ProviderLabel(string asset, string key)
     {
         Grid row = new();
@@ -145,16 +163,30 @@ internal sealed partial class OverseasLoginView
     {
         bool busy = model.IsBusy;
         var page = model.Page;
+        bool phone = page == GlobalLoginPage.Phone;
+        bool credentials = phone || page == GlobalLoginPage.Email;
         savedBody.Visibility = !busy && page == GlobalLoginPage.Saved ? Visibility.Visible : Visibility.Collapsed;
-        newBody.Visibility = !busy && page is GlobalLoginPage.Methods or GlobalLoginPage.Email ? Visibility.Visible : Visibility.Collapsed;
+        newBody.Visibility = !busy && (page == GlobalLoginPage.Methods || credentials) ? Visibility.Visible : Visibility.Collapsed;
         methodsBody.Visibility = page == GlobalLoginPage.Methods ? Visibility.Visible : Visibility.Collapsed;
         emailEntry.Visibility = model.SupportsEmail ? Visibility.Visible : Visibility.Collapsed;
-        emailBody.Visibility = page == GlobalLoginPage.Email ? Visibility.Visible : Visibility.Collapsed;
+        phoneEntry.Visibility = model.SupportsPhone ? Visibility.Visible : Visibility.Collapsed;
+        emailBody.Visibility = credentials ? Visibility.Visible : Visibility.Collapsed;
+        phoneCountry.Visibility = phone ? Visibility.Visible : Visibility.Collapsed;
+        identifierLabel.Text = LoginText.Get(phone ? "Phone" : "Email");
+        codeLabel.Text = LoginText.Get(phone ? "SmsCode" : "EmailCode");
+        AutomationProperties.SetName(email, identifierLabel.Text);
+        AutomationProperties.SetAutomationId(email, phone ? "phone" : "email");
+        AutomationProperties.SetName(emailCode, codeLabel.Text);
+        AutomationProperties.SetAutomationId(emailCode, phone ? "phone-code" : "email-code");
+        AutomationProperties.SetAutomationId(passwordMode, phone ? "phone-password-mode" : "email-password-mode");
+        AutomationProperties.SetAutomationId(codeMode, phone ? "phone-code-mode" : "email-code-mode");
+        passwordMode.SetCurrentValue(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, model.UsePassword);
+        codeMode.SetCurrentValue(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, !model.UsePassword);
         helpBody.Visibility = !busy && page == GlobalLoginPage.Help ? Visibility.Visible : Visibility.Collapsed;
-        back.Visibility = !busy && (page is GlobalLoginPage.Email or GlobalLoginPage.Help || page == GlobalLoginPage.Methods && picker.HasAccounts)
+        back.Visibility = !busy && (credentials || page == GlobalLoginPage.Help || page == GlobalLoginPage.Methods && picker.HasAccounts)
             ? Visibility.Visible : Visibility.Collapsed;
-        back.Content = LoginText.Get(page == GlobalLoginPage.Email ? "BackToMethods" : page == GlobalLoginPage.Help ? "BackToSignIn" : "BackToSavedAccounts");
-        signIn.Visibility = !busy && (page == GlobalLoginPage.Email || page == GlobalLoginPage.Saved && !picker.IsManaging) ? Visibility.Visible : Visibility.Collapsed;
+        back.Content = LoginText.Get(credentials ? "BackToMethods" : page == GlobalLoginPage.Help ? "BackToSignIn" : "BackToSavedAccounts");
+        signIn.Visibility = !busy && (credentials || page == GlobalLoginPage.Saved && !picker.IsManaging) ? Visibility.Visible : Visibility.Collapsed;
         otherAccount.Visibility = !busy && page == GlobalLoginPage.Saved && !picker.IsManaging ? Visibility.Visible : Visibility.Collapsed;
         retry.Visibility = !busy && !model.IsPreview && !model.Ready && page == GlobalLoginPage.Methods ? Visibility.Visible : Visibility.Collapsed;
         cancelWork.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
@@ -163,6 +195,7 @@ internal sealed partial class OverseasLoginView
         passwordGroup.Visibility = model.UsePassword ? Visibility.Visible : Visibility.Collapsed;
         codeGroup.Visibility = model.UsePassword ? Visibility.Collapsed : Visibility.Visible;
         email.IsEnabled = secret.IsEnabled = emailCode.IsEnabled = passwordMode.IsEnabled = codeMode.IsEnabled = !busy;
+        phoneCountry.IsEnabled = !busy;
         agreement.IsEnabled = remember.IsEnabled = picker.IsEnabled = !busy;
         captcha.Content = model.CaptchaLabel; signIn.Content = model.SubmitLabel;
         signIn.IsDefault = model.SubmitCommand.CanExecute(null) && !picker.IsManaging;
@@ -173,10 +206,10 @@ internal sealed partial class OverseasLoginView
     {
         model.Profiles.TryGetValue(account.Id, out AccountDisplayProfile? profile);
         bool custom = profile?.InitialLabel == null || account.Label != profile.InitialLabel;
-        string primary = custom ? account.Label : profile?.Email ?? profile?.Name ?? account.Label;
+        string primary = custom ? account.Label : profile?.MaskedPhone ?? profile?.Email ?? profile?.Name ?? account.Label;
         string secondary = profile?.Email != null && primary != profile.Email ? profile.Email
-            : profile?.Email != null ? profile.Name ?? "" : LoginText.Get("EmailNotProvided") + " · " + LoginText.Get("SavedAccountNumber", picker.Reference(account.Id));
-        string source = profile?.Provider switch { 2 => "Google", 1 => "Facebook", 8 => LoginText.Get("Email"), _ => LoginText.Get("LegacyAccount") };
+            : profile?.Email != null ? profile.Name ?? "" : profile?.Provider == 7 ? LoginText.Get("Phone") : LoginText.Get("EmailNotProvided") + " · " + LoginText.Get("SavedAccountNumber", picker.Reference(account.Id));
+        string source = profile?.Provider switch { 2 => "Google", 1 => "Facebook", 7 => LoginText.Get("Phone"), 8 => LoginText.Get("Email"), _ => LoginText.Get("LegacyAccount") };
         return new(account, primary, secondary, source);
     }
     internal void SetPreviewProfileScenario(string variant) => model.SetPreviewProfileScenario(variant);

@@ -8,6 +8,62 @@
  <SolidColorBrush x:Key="TextBrush" Color="#EDF4F8" />
  <SolidColorBrush x:Key="InputBrush" Color="#12FFFFFF" />
  <SolidColorBrush x:Key="InputBorderBrush" Color="#18FFFFFF" />
+ <Style x:Key="LoginComboBoxStyle" TargetType="ComboBox">
+  <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  <Setter Property="Background" Value="{DynamicResource InputBrush}" />
+  <Setter Property="BorderBrush" Value="{DynamicResource InputBorderBrush}" />
+  <Setter Property="BorderThickness" Value="1" />
+  <Setter Property="FontSize" Value="12" />
+  <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+  <Setter Property="ItemContainerStyle">
+   <Setter.Value>
+    <Style TargetType="ComboBoxItem">
+     <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+     <Setter Property="Padding" Value="10,8" />
+     <Setter Property="Template">
+      <Setter.Value>
+       <ControlTemplate TargetType="ComboBoxItem">
+        <Border x:Name="ItemSurface" Background="Transparent" Padding="{TemplateBinding Padding}" CornerRadius="4">
+         <ContentPresenter />
+        </Border>
+        <ControlTemplate.Triggers>
+         <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="ItemSurface" Property="Background" Value="{DynamicResource InputBrush}" /></Trigger>
+         <Trigger Property="IsSelected" Value="True"><Setter Property="Foreground" Value="{DynamicResource AccentBrush}" /></Trigger>
+        </ControlTemplate.Triggers>
+       </ControlTemplate>
+      </Setter.Value>
+     </Setter>
+    </Style>
+   </Setter.Value>
+  </Setter>
+  <Setter Property="Template">
+   <Setter.Value>
+    <ControlTemplate TargetType="ComboBox">
+     <Grid>
+      <ToggleButton Focusable="False" ClickMode="Press" IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+       <ToggleButton.Template>
+        <ControlTemplate TargetType="ToggleButton">
+         <Border Background="{DynamicResource InputBrush}" BorderBrush="{DynamicResource InputBorderBrush}" BorderThickness="1" CornerRadius="7" />
+        </ControlTemplate>
+       </ToggleButton.Template>
+      </ToggleButton>
+      <TextBlock IsHitTestVisible="False" Text="{Binding SelectedItem.DisplayName, RelativeSource={RelativeSource TemplatedParent}}"
+                 Margin="10,0,22,0" VerticalAlignment="Center" />
+      <Path IsHitTestVisible="False" Data="M 0 0 L 4 4 L 8 0" Stroke="{DynamicResource TextBrush}" StrokeThickness="1.2"
+            HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,9,0" />
+      <Popup x:Name="PART_Popup" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}" AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
+       <Border MinWidth="{TemplateBinding ActualWidth}" Background="{DynamicResource GlobalPopupBrush}" BorderBrush="{DynamicResource InputBorderBrush}" BorderThickness="1" CornerRadius="7" Padding="3">
+        <ScrollViewer MaxHeight="180" CanContentScroll="True"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" /></ScrollViewer>
+       </Border>
+      </Popup>
+     </Grid>
+     <ControlTemplate.Triggers>
+      <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.65" /></Trigger>
+     </ControlTemplate.Triggers>
+    </ControlTemplate>
+   </Setter.Value>
+  </Setter>
+ </Style>
  <Style x:Key="AccentButtonStyle" TargetType="Button">
   <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
   <Setter Property="Foreground" Value="White" />

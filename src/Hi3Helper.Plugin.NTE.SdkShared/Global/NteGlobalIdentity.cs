@@ -54,7 +54,7 @@ internal sealed class NteGlobalIdentity : IDisposable
     internal static NteGlobalIdentity FromService(JsonElement response, int provider, NteOverseasRegion? region = null)
     {
         JsonElement result = NteGlobalAuthentication.RequireResult(response);
-        if (provider is not (1 or 2 or 8) || !result.TryGetProperty("uid", out JsonElement uid) ||
+        if ((provider is not (1 or 2 or 8) && !(provider == 7 && region?.HostRegion == NteHostRegion.Taiwan)) || !result.TryGetProperty("uid", out JsonElement uid) ||
             ReadUserId(uid) is not { Length: > 0 and <= 256 } ||
             !result.TryGetProperty("token", out JsonElement token) ||
             token.ValueKind != JsonValueKind.String || token.GetString() is not { Length: > 0 and <= 8192 })

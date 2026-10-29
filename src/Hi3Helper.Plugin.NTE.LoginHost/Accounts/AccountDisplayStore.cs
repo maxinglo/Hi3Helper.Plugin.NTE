@@ -122,10 +122,11 @@ internal sealed class AccountDisplayStore(string directory, IAccountKeyProtector
 
     private static void Validate(AccountDisplayProfile value)
     {
-        if (value.Provider is not (0 or 1 or 2 or 8) || !Valid(value.Email, 128) || !Valid(value.Name, 80)
+        if (value.Provider is not (0 or 1 or 2 or 7 or 8) || !Valid(value.Email, 128) || !Valid(value.Name, 80)
             || !Valid(value.InitialLabel, 32) || !Valid(value.MaskedPhone, 32)
             || (value.MaskedPhone != null &&
-                !System.Text.RegularExpressions.Regex.IsMatch(value.MaskedPhone, @"\A1[0-9]{2}\*{4}[0-9]{4}\z")))
+                !System.Text.RegularExpressions.Regex.IsMatch(value.MaskedPhone, value.Provider == 7
+                    ? @"\A\+[1-9][0-9]{0,3} \*{3} [0-9]{4}\z" : @"\A1[0-9]{2}\*{4}[0-9]{4}\z")))
             throw new InvalidDataException("Invalid account display contract.");
     }
 

@@ -578,4 +578,13 @@ Download: {3} files ({4:F3} GB)</value></data>
   <data name="ServerSwitchCancelledHint" xml:space="preserve"><value>Any activated files are rolled back. Verified downloads are kept for the next attempt.</value></data>
   <data name="TaiwanTitle" xml:space="preserve"><value>Taiwan account sign-in</value></data>
   <data name="LoginMethodUnavailable" xml:space="preserve"><value>This sign-in method is not available in the selected region.</value></data>
+  <data name="PhoneSignIn" xml:space="preserve">
+    <value>電話番号でログイン</value>
+  </data>
+  <data name="CountryCode" xml:space="preserve">
+    <value>地域 / 国番号</value>
+  </data>
+  <data name="InvalidOverseasPhone" xml:space="preserve">
+    <value>対応する国番号を選択し、有効な電話番号を入力してください。</value>
+  </data>
 </root>

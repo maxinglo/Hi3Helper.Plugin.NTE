@@ -221,5 +221,5 @@ internal sealed class OverseasAccountStore
     }
 
     private static AccountDisplayProfile Display(NteGlobalIdentity identity) =>
-        new(identity.Provider, identity.Profile.Email, identity.Profile.Name);
+        new(identity.Provider, identity.Profile.Email, identity.Profile.Name, MaskedPhone: identity.Profile.MaskedPhone);
 }

@@ -6,12 +6,13 @@ namespace Nte.Login;
 
 // Optional presentation only: never used for authentication, account matching,
 // or SDK identity. The PC service must accept the provider exchange first.
-internal sealed record NteGlobalProfile(string? Email = null, string? Name = null)
+internal sealed record NteGlobalProfile(string? Email = null, string? Name = null, string? MaskedPhone = null)
 {
     internal static NteGlobalProfile FromService(JsonElement result) => new(
         EmailValue(Read(result, "email")), TextValue(Read(result, "username"), 80));
     internal static NteGlobalProfile FromEmail(string email) => new(EmailValue(email));
-    internal NteGlobalProfile Merge(NteGlobalProfile older) => new(Email ?? older.Email, Name ?? older.Name);
+    internal static NteGlobalProfile FromPhone(string countryCode, string phone) => new(MaskedPhone: countryCode + " *** " + phone[^4..]);
+    internal NteGlobalProfile Merge(NteGlobalProfile older) => new(Email ?? older.Email, Name ?? older.Name, MaskedPhone ?? older.MaskedPhone);
 
     internal static NteGlobalProfile AfterBrowserExchange(int provider, IReadOnlyDictionary<string, string> fields,
         string? googleProject)

@@ -8,7 +8,7 @@ using System.Text.Json;
 
 namespace Nte.Login;
 
-internal sealed class NteGlobalAuthentication : IDisposable
+internal sealed partial class NteGlobalAuthentication : IDisposable
 {
     private readonly NteOverseasApplicationConfiguration configuration;
     private readonly HttpClient http;
@@ -84,30 +84,7 @@ internal sealed class NteGlobalAuthentication : IDisposable
         Dictionary<string, string> fields = new() { ["email"] = configuration.EncodeEmail(email) };
         if (password)
         {
-            byte[] publicKey =
-                Convert.FromBase64String(initialization!.RootElement.GetProperty("clientPublicKey").GetString()!);
-            byte[] plain = Encoding.UTF8.GetBytes(secret);
-            try
-            {
-                using RSA rsa = RSA.Create();
-                rsa.ImportSubjectPublicKeyInfo(publicKey, out int used);
-                if (used != publicKey.Length || rsa.KeySize < 1024)
-                    throw new InvalidDataException("Unsupported password public key.");
-                byte[] cipher = rsa.Encrypt(plain, RSAEncryptionPadding.Pkcs1);
-                try
-                {
-                    fields["password"] = Convert.ToBase64String(cipher);
-                }
-                finally
-                {
-                    CryptographicOperations.ZeroMemory(cipher);
-                }
-            }
-            finally
-            {
-                CryptographicOperations.ZeroMemory(plain);
-                CryptographicOperations.ZeroMemory(publicKey);
-            }
+            fields["password"] = EncryptPassword(secret);
         }
         else fields["captcha"] = secret;
 

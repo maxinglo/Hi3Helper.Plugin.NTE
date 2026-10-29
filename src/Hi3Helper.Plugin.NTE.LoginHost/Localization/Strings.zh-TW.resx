@@ -578,4 +578,13 @@
   <data name="ServerSwitchCancelledHint" xml:space="preserve"><value>已啟用的檔案會還原，通過驗證的下載會保留供下次使用。</value></data>
   <data name="TaiwanTitle" xml:space="preserve"><value>台港澳帳號登入</value></data>
   <data name="LoginMethodUnavailable" xml:space="preserve"><value>此地區未開放這種登入方式。</value></data>
+  <data name="PhoneSignIn" xml:space="preserve">
+    <value>手機號碼登入</value>
+  </data>
+  <data name="CountryCode" xml:space="preserve">
+    <value>地區 / 電話區碼</value>
+  </data>
+  <data name="InvalidOverseasPhone" xml:space="preserve">
+    <value>請選擇支援的電話區碼，並輸入正確的手機號碼。</value>
+  </data>
 </root>

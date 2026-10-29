@@ -258,9 +258,9 @@ internal sealed class UiSession : IDisposable
                 x = Math.Round(position.X, 2), y = Math.Round(position.Y, 2),
                 width = Math.Round(current.ActualWidth, 2), height = Math.Round(current.ActualHeight, 2),
                 @checked = current is ToggleButton toggle ? toggle.IsChecked : null,
-                value = current is TextBox input && Role(current) is not ("secret" or "email-code") ? input.Text : null,
+                value = current is TextBox input && Role(current) is not ("secret" or "email-code" or "phone-code") ? input.Text : null,
                 secretCharacters = current is PasswordBox password ? password.Password.Length :
-                    current is TextBox code && Role(current) is "secret" or "email-code" ? code.Text.Length :
+                    current is TextBox code && Role(current) is "secret" or "email-code" or "phone-code" ? code.Text.Length :
                     (int?)null,
                 selectedIndex = current is Selector selector ? selector.SelectedIndex : (int?)null,
                 choices = current is Selector list ? list.Items.Cast<object>().Select(Label).ToArray() : null,

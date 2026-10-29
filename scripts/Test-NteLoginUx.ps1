@@ -179,7 +179,7 @@ try {
                 Capture methods-returned
                 Act invoke back
             } elseif($region -eq 'Taiwan') {
-                Check ($state.state.page -eq 'Methods' -and @(Nodes provider-google).Count -eq 1 -and @(Nodes provider-facebook).Count -eq 1 -and @(Nodes email-login).Count -eq 0) 'taiwan-only-enabled-login-methods'
+                Check ($state.state.page -eq 'Methods' -and @(Nodes provider-google).Count -eq 1 -and @(Nodes provider-facebook).Count -eq 1 -and @(Nodes phone-login).Count -eq 1 -and @(Nodes email-login).Count -eq 0) 'taiwan-three-enabled-login-methods'
                 Check (@(Nodes terms).Count -eq 1 -and @(Nodes privacy).Count -eq 1) 'taiwan-publisher-agreements'
                 foreach($theme in @('night','day','sunset')) { Capture methods $theme }
                 Act invoke provider-google
@@ -187,6 +187,28 @@ try {
                 Act toggle agreement @{Checked=$true}
                 Act invoke provider-google
                 Check ($state.state.page -eq 'Methods' -and -not $state.state.previewTaskFaulted) 'taiwan-preview-never-authenticates'
+                Act invoke phone-login
+                Check ($state.state.page -eq 'Phone' -and @(Nodes phone-country).Count -eq 1 -and @(Nodes phone).Count -eq 1 -and @(Nodes phone-code).Count -eq 1 -and (Node phone-code-mode).checked) 'taiwan-phone-sms-is-default'
+                Check ((Node phone-country).choices.Count -eq 3 -and (Node phone-country).selectedIndex -eq 0) 'taiwan-supported-calling-codes'
+                Check (@($state.state.nodes|Where-Object {$_.kind -eq 'TextBlock' -and $_.text -like '*+886*'}).Count -ge 1 -and @($state.state.nodes|Where-Object {$_.kind -eq 'TextBlock' -and $_.text -like '*NtePhoneCountry*'}).Count -eq 0) 'taiwan-calling-code-renders-label'
+                Check (-not $state.state.card.scrollbarVisible -and $state.state.card.scrollableHeight -le 1) 'taiwan-phone-fits-without-scrollbar'
+                Act fill phone @{Value='0910000000'}
+                Act fill phone-code @{Value='123456'}
+                Check ((Node phone-code).secretCharacters -eq 6 -and $null -eq (Node phone-code).value) 'taiwan-sms-code-redacted-in-report'
+                foreach($theme in @('night','day','sunset')) { Capture phone-code $theme }
+                Act invoke send-code
+                Check (-not (Node send-code).enabled) 'taiwan-sms-cooldown'
+                Act invoke phone-password-mode
+                Check (@(Nodes secret).Count -eq 1 -and @(Nodes phone-code).Count -eq 0 -and (Node phone-password-mode).checked) 'taiwan-phone-password-separate'
+                Act fill secret @{Value='fixture-password'}
+                Capture phone-password
+                Act invoke phone-code-mode
+                Check ((Node phone-code).secretCharacters -eq 0 -and -not (Node send-code).enabled) 'taiwan-mode-change-clears-secret-keeps-cooldown'
+                Act fill phone-code @{Value='654321'}
+                Act select phone-country @{Index=1}
+                Check ((Node phone-country).selectedIndex -eq 1 -and (Node phone-code).secretCharacters -eq 0 -and -not (Node send-code).enabled) 'taiwan-country-change-clears-code-and-keeps-cooldown'
+                Act key phone @{Key='Escape'}
+                Check ($state.state.page -eq 'Methods') 'taiwan-phone-back-to-methods'
                 Act invoke back
             } else {
                 Check ($state.state.page -eq 'Sms' -and @(Nodes phone).Count -eq 1 -and @(Nodes remember).Count -eq 1 -and (Node remember).kind -eq 'CheckBox') 'direct-sms-form-with-checkbox'

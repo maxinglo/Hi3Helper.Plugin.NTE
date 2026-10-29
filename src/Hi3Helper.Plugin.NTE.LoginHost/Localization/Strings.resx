@@ -580,4 +580,13 @@ Download: {3} files ({4:F3} GB)</value></data>
   <data name="ServerSwitchCancelledHint" xml:space="preserve"><value>Any activated files are rolled back. Verified downloads are kept for the next attempt.</value></data>
   <data name="TaiwanTitle" xml:space="preserve"><value>Taiwan account sign-in</value></data>
   <data name="LoginMethodUnavailable" xml:space="preserve"><value>This sign-in method is not available in the selected region.</value></data>
+  <data name="PhoneSignIn" xml:space="preserve">
+    <value>Sign in with phone</value>
+  </data>
+  <data name="CountryCode" xml:space="preserve">
+    <value>Country / calling code</value>
+  </data>
+  <data name="InvalidOverseasPhone" xml:space="preserve">
+    <value>Choose a supported calling code and enter a valid phone number.</value>
+  </data>
 </root>

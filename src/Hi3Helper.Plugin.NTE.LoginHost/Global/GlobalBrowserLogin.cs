@@ -48,6 +48,7 @@ internal sealed class GlobalBrowserLogin : IDisposable
     internal async Task<JsonDocument> WaitAsync(Uri loginUri, CancellationToken token)
     {
         if (!region.IsBrowserOrigin(loginUri)) throw new InvalidDataException("Unexpected browser origin.");
+        Trace("waiting", 0);
         Task connection = pipe.WaitForConnectionAsync(token);
         Process.Start(new ProcessStartInfo(loginUri.AbsoluteUri) { UseShellExecute = true });
         return await ReceiveAsync(connection, token);
@@ -56,6 +57,7 @@ internal sealed class GlobalBrowserLogin : IDisposable
     private async Task<JsonDocument> ReceiveAsync(Task connection, CancellationToken token)
     {
         await connection;
+        Trace("connected", 0);
         byte[] size = new byte[4]; await pipe.ReadExactlyAsync(size, token);
         int length = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(size);
         if (length is < 2 or > 60 * 1024) throw new InvalidDataException("Browser callback size bound.");
@@ -63,10 +65,25 @@ internal sealed class GlobalBrowserLogin : IDisposable
         try
         {
             await pipe.ReadExactlyAsync(data, token);
+            Trace("received", length);
             Utf8JsonReader reader = new(data);
             return JsonDocument.ParseValue(ref reader);
         }
         finally { System.Security.Cryptography.CryptographicOperations.ZeroMemory(data); }
+    }
+
+    private void Trace(string stage, int bytes)
+    {
+        try
+        {
+            string directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Collapse", "NTE", "Diagnostics");
+            Directory.CreateDirectory(directory);
+            string path = Path.Combine(directory, "browser-callback.log");
+            if (File.Exists(path) && new FileInfo(path).Length > 64 * 1024) File.Move(path, path + ".previous", true);
+            // Never record the callback target, URL, provider fields or account.
+            File.AppendAllText(path, DateTimeOffset.UtcNow.ToString("O") + " " + region.Name + " " + stage + " bytes=" + bytes + Environment.NewLine);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
     }
 
     internal static async Task<bool> ForwardAsync(string uriText)

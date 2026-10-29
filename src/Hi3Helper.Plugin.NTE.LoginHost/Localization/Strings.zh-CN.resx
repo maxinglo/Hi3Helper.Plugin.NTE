@@ -580,4 +580,13 @@
   <data name="ServerSwitchCancelledHint" xml:space="preserve"><value>已激活的文件会回退，校验通过的下载会保留供下次使用。</value></data>
   <data name="TaiwanTitle" xml:space="preserve"><value>台服账号登录</value></data>
   <data name="LoginMethodUnavailable" xml:space="preserve"><value>此地区未开放这种登录方式。</value></data>
+  <data name="PhoneSignIn" xml:space="preserve">
+    <value>手机号登录</value>
+  </data>
+  <data name="CountryCode" xml:space="preserve">
+    <value>地区 / 电话区号</value>
+  </data>
+  <data name="InvalidOverseasPhone" xml:space="preserve">
+    <value>请选择支持的电话区号，并输入正确的手机号。</value>
+  </data>
 </root>

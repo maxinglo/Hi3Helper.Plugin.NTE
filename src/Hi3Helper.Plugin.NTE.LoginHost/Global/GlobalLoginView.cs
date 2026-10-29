@@ -20,6 +20,10 @@ internal sealed partial class OverseasLoginView : StackPanel, IDisposable
     private readonly TextBox emailCode = new() { Height = 42, MaxLength = 16 };
     private readonly RadioButton passwordMode = new() { GroupName = "EmailMethod", IsChecked = true }, codeMode = new() { GroupName = "EmailMethod" };
     private readonly Button google = new(), facebook = new(), emailEntry = new(), signIn = new(), captcha = new();
+    private readonly Button phoneEntry = new();
+    private readonly ComboBox phoneCountry = new() { MinHeight = 42, DisplayMemberPath = "DisplayName", SelectedValuePath = "CountryCode" };
+    private readonly TextBlock identifierLabel = new(), codeLabel = new();
+    private readonly Grid identifierRow = new();
     private readonly Button otherAccount = new(), back = new(), help = new(), retry = new(), cancelWork = new();
     private readonly TextBlock status = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap };
     private readonly StackPanel passwordGroup = new(), codeGroup = new();
@@ -33,13 +37,16 @@ internal sealed partial class OverseasLoginView : StackPanel, IDisposable
         DataContext = model;
         picker = new(style, Present);
         BuildLayout(style);
-        email.SetBinding(TextBox.TextProperty, TwoWay(nameof(model.Email)));
+        email.SetBinding(TextBox.TextProperty, TwoWay(nameof(model.Identifier)));
+        phoneCountry.SetBinding(ItemsControl.ItemsSourceProperty, new Binding(nameof(model.PhoneCountries)));
+        phoneCountry.SetBinding(System.Windows.Controls.Primitives.Selector.SelectedValueProperty, TwoWay(nameof(model.CountryCode)));
         emailCode.SetBinding(TextBox.TextProperty, TwoWay(nameof(model.EmailCode)));
         remember.SetBinding(CheckBox.IsCheckedProperty, TwoWay(nameof(model.Remember)));
         agreement.SetBinding(CheckBox.IsCheckedProperty, TwoWay(nameof(model.Agreement)));
         status.SetBinding(TextBlock.TextProperty, new Binding(nameof(model.Status)));
         google.Command = model.GoogleCommand; facebook.Command = model.FacebookCommand;
         emailEntry.Command = model.EmailCommand; signIn.Command = model.SubmitCommand; captcha.Command = model.SendCodeCommand;
+        phoneEntry.Command = model.PhoneCommand;
         otherAccount.Command = model.MethodsCommand; back.Command = model.BackCommand; help.Command = model.HelpCommand;
         retry.Command = model.RetryCommand; cancelWork.Command = model.CancelOperationCommand;
         picker.SelectionChanged += () => model.SelectedAccountId = picker.Selected?.Id;
@@ -54,7 +61,7 @@ internal sealed partial class OverseasLoginView : StackPanel, IDisposable
             if (args.PropertyName == nameof(model.Page))
             {
                 picker.EndManage();
-                if (model.Page == GlobalLoginPage.Email) Dispatcher.BeginInvoke(() => email.Focus());
+                if (model.Page is GlobalLoginPage.Email or GlobalLoginPage.Phone) Dispatcher.BeginInvoke(() => email.Focus());
             }
             RefreshLayout();
         };
@@ -64,7 +71,7 @@ internal sealed partial class OverseasLoginView : StackPanel, IDisposable
         {
             if (args.Key == Key.Escape && model.IsBusy) { model.CancelOperationCommand.Execute(null); args.Handled = true; }
             else if (args.Key == Key.Escape && picker.IsManaging) { picker.EndManage(); args.Handled = true; }
-            else if (args.Key == Key.Escape && model.Page is GlobalLoginPage.Email or GlobalLoginPage.Help) { model.BackCommand.Execute(null); args.Handled = true; }
+            else if (args.Key == Key.Escape && model.Page is GlobalLoginPage.Email or GlobalLoginPage.Phone or GlobalLoginPage.Help) { model.BackCommand.Execute(null); args.Handled = true; }
             else if (args.Key == Key.Enter && !picker.IsManaging && model.SubmitCommand.CanExecute(null))
             { args.Handled = true; await model.SubmitCommand.ExecuteAsync(); }
         };

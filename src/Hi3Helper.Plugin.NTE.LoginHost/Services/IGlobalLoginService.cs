@@ -15,6 +15,9 @@ internal interface IOverseasLoginService
 {
     Nte.Login.NteOverseasRegion Region => Nte.Login.NteOverseasRegion.Global;
     bool SupportsEmail => Region.HostRegion == Nte.Login.NteHostRegion.Global;
+    bool SupportsPhone => Region.HostRegion == Nte.Login.NteHostRegion.Taiwan;
+    IReadOnlyList<Nte.Login.NtePhoneCountry> PhoneCountries => [];
+    string DefaultCountryCode => "+886";
     bool Initialized { get; }
     TimeSpan CaptchaCooldown { get; }
     IReadOnlyList<LocalAccount> ListAccounts();
@@ -27,4 +30,6 @@ internal interface IOverseasLoginService
     Task SendCodeAsync(string email, CancellationToken token);
     Task SignInEmailAsync(string email, string secret, bool password, bool remember, CancellationToken token);
     Task SignInBrowserAsync(int provider, bool remember, CancellationToken token);
+    Task SendPhoneCodeAsync(string countryCode, string phone, CancellationToken token) => Task.FromException(new InvalidOperationException("Phone authentication is unavailable."));
+    Task SignInPhoneAsync(string countryCode, string phone, string secret, bool password, bool remember, CancellationToken token) => Task.FromException(new InvalidOperationException("Phone authentication is unavailable."));
 }

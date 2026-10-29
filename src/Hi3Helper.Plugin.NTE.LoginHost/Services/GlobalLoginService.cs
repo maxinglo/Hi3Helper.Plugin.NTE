@@ -11,10 +11,16 @@ internal sealed class OverseasLoginService(NteGlobalAuthentication api, Overseas
     Func<NteGlobalIdentity, CancellationToken, Task> deliver, Func<bool, Func<Task>, Task> protectOperation) : IOverseasLoginService
 {
     public NteOverseasRegion Region => api.Region;
-    public bool Initialized => api.Initialized;
+    public bool Initialized => api.Initialized && (!api.SupportsPhone || api.PhoneCountries.Count != 0);
+    public IReadOnlyList<NtePhoneCountry> PhoneCountries => api.PhoneCountries;
+    public string DefaultCountryCode => api.DefaultCountryCode;
     public TimeSpan CaptchaCooldown => api.CaptchaCooldown;
     public IReadOnlyList<LocalAccount> ListAccounts() => accounts?.List() ?? [];
-    public Task InitializeAsync(CancellationToken token) => api.InitializeAsync(token);
+    public async Task InitializeAsync(CancellationToken token)
+    {
+        if (!api.Initialized) await api.InitializeAsync(token);
+        if (api.SupportsPhone && api.PhoneCountries.Count == 0) await api.LoadPhoneCountriesAsync(token);
+    }
     public async Task<GlobalAccountSnapshot> LoadAccountsAsync(CancellationToken token)
     {
         if (accounts == null) return new([], new Dictionary<Guid, AccountDisplayProfile>(), null, false);
@@ -42,6 +48,12 @@ internal sealed class OverseasLoginService(NteGlobalAuthentication api, Overseas
     }
     public Task RemoveAsync(Guid id, CancellationToken token) => accounts?.RemoveAsync(id, token) ?? Task.CompletedTask;
     public Task SendCodeAsync(string email, CancellationToken token) => api.SendEmailCaptchaAsync(email, token);
+    public Task SendPhoneCodeAsync(string countryCode, string phone, CancellationToken token) => api.SendPhoneCaptchaAsync(countryCode, phone, token);
+    public async Task SignInPhoneAsync(string countryCode, string phone, string secret, bool password, bool remember, CancellationToken token)
+    {
+        using NteGlobalIdentity identity = await api.LoginPhoneAsync(countryCode, phone, secret, password, token);
+        await DeliverAsync(identity, remember, token);
+    }
     public async Task SignInEmailAsync(string email, string secret, bool password, bool remember, CancellationToken token)
     {
         using NteGlobalIdentity identity = await api.LoginEmailAsync(email, secret, password, token);
@@ -62,7 +74,7 @@ internal sealed class OverseasLoginService(NteGlobalAuthentication api, Overseas
         if (accounts == null) { await deliver(identity, token); return; }
         bool hello = OverseasAccountStore.ReadProtectionPreference(api.Region);
         string uid = NteGlobalIdentity.ReadUserId(identity.Result.GetProperty("uid"));
-        string label = identity.Profile.Name ?? identity.Profile.Email ?? LoginText.Get("SavedAccountNumber", uid[^Math.Min(6, uid.Length)..]);
+        string label = identity.Profile.Name ?? identity.Profile.Email ?? identity.Profile.MaskedPhone ?? LoginText.Get("SavedAccountNumber", uid[^Math.Min(6, uid.Length)..]);
         if (label.Length > 32) label = label[..(char.IsHighSurrogate(label[31]) ? 31 : 32)];
         await protectOperation(accounts.SaveMayPrompt(hello), () => accounts.SaveAndDeliverAsync(identity, label, remember, owner, deliver, token, hello));
     }
