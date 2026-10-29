@@ -23,7 +23,7 @@ internal static class Program
             if (args.Length == 3 && args[0] == "call") return CallAsync(args[1], args[2]).GetAwaiter().GetResult();
             if (args.Length != 6 || args[0] != "serve")
                 throw new ArgumentException(
-                    "serve <published-host-dir> <session-dir> <fixture-pid> <CN|Global> <language>, or call <session-dir> <request-json>");
+                    "serve <published-host-dir> <session-dir> <fixture-pid> <CN|Global|Taiwan> <language>, or call <session-dir> <request-json>");
             string root = RepositoryRoot();
             string hostDirectory = UnderArtifacts(root, args[1]);
             string sessionDirectory = UnderArtifacts(root, args[2]);

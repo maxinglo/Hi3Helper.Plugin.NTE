@@ -90,13 +90,13 @@
     <value>装饰叠图</value>
   </data>
     <data name="AppearanceCanvasWidth" xml:space="preserve">
-    <value>参考画布宽度</value>
+    <value>画布宽度</value>
   </data>
     <data name="AppearanceCanvasHeight" xml:space="preserve">
-    <value>参考画布高度</value>
+    <value>画布高度</value>
   </data>
     <data name="AppearanceRestartHint" xml:space="preserve">
-    <value>保存后，重新选择区服或重启启动器生效。坐标随背景等比缩放。</value>
+    <value>应用后重新选择区服或重启 Collapse 生效。图片位置随背景等比缩放。</value>
   </data>
     <data name="AppearanceSlogan" xml:space="preserve">
     <value>版本标题图</value>
@@ -130,29 +130,29 @@
   </data>
     <data name="GameSettingsTitle" xml:space="preserve"><value>异环 · 游戏设置</value></data>
     <data name="LoginSettingsSection" xml:space="preserve"><value>账号与登录</value></data>
-    <data name="LoginExperimentalHello" xml:space="preserve"><value>Windows Hello 保护已保存账号（实验性）</value></data>
-    <data name="LoginExperimentalHelloHint" xml:space="preserve"><value>默认关闭，使用当前 Windows 用户的系统加密保护。开启后，保存及恢复账号须通过 Windows Hello。下一次账号操作生效；旧 Hello 记录关闭保护时仍需解锁一次以转换。本地记录保留至手动移除，服务端仍可使已保存凭据失效。</value></data>
+    <data name="LoginExperimentalHello" xml:space="preserve"><value>Windows Hello 账号保护（实验性）</value></data>
+    <data name="LoginExperimentalHelloHint" xml:space="preserve"><value>保存和恢复账号时使用 Windows Hello 验证。默认关闭，使用当前 Windows 用户加密保护。关闭 Hello 保护时，每个已有的受保护账号仍需解锁一次；账号记录保留至手动移除。</value></data>
     <data name="ZoneName" xml:space="preserve"><value>中国大陆</value></data>
     <data name="GlobalZoneName" xml:space="preserve"><value>国际服</value></data>
     <data name="GlobalZoneFullName" xml:space="preserve"><value>异环（国际服）</value></data>
-    <data name="GlobalZoneDescription" xml:space="preserve"><value>国际服。支持下载、更新及修复，国际服登录适配开发中。</value></data>
+    <data name="GlobalZoneDescription" xml:space="preserve"><value>国际服，支持下载、更新、修复及账号登录。</value></data>
     <data name="GlobalLoginPending" xml:space="preserve"><value>国际服登录尚未适配。当前可通过 Collapse 下载、更新及修复国际服游戏。</value></data>
     <data name="LaunchSettingsSection" xml:space="preserve"><value>启动选项</value></data>
     <data name="LaunchGraphicsApi" xml:space="preserve"><value>图形接口</value></data>
     <data name="LaunchGraphicsDefault" xml:space="preserve"><value>游戏默认</value></data>
   <data name="LaunchOfficialLauncher" xml:space="preserve">
-    <value>使用官方启动器后台静默启动</value>
+    <value>使用官方启动器</value>
   </data>
   <data name="LaunchOfficialLauncherHint" xml:space="preserve">
-    <value>官方启动器必须安装在当前游戏安装目录内（国服 NTELauncher，国际版 NTEGlobal）。下次启动生效；登录、验证或更新所需窗口仍可能显示。</value>
+    <value>下次启动时使用当前游戏目录内的官方启动器。登录、验证或更新窗口仍可能显示。</value>
   </data>
   <data name="TaiwanZoneName" xml:space="preserve"><value>台港澳</value></data>
   <data name="TaiwanZoneFullName" xml:space="preserve"><value>异环（台港澳）</value></data>
   <data name="TaiwanZoneDescription" xml:space="preserve"><value>艾玩天地发行的繁体中文地区，使用独立的官方账号和启动器配置。</value></data>
   <data name="ServerSettingsSection" xml:space="preserve"><value>服务器与共享安装</value></data>
-  <data name="ServerSwitchTarget" xml:space="preserve"><value>将此安装切换到</value></data>
+  <data name="ServerSwitchTarget" xml:space="preserve"><value>目标服务器</value></data>
   <data name="ServerSwitchNoChange" xml:space="preserve"><value>保持当前服务器</value></data>
-  <data name="ServerSwitchSettingsHint" xml:space="preserve"><value>选择台港澳或国际服并应用。切服窗口会检查可复用资源，显示所需下载并切换安装。两个地区在 Collapse 中分别显示。</value></data>
+  <data name="ServerSwitchSettingsHint" xml:space="preserve"><value>应用后先检查共享文件与所需下载，再确认切换。各地区账号分别保存。</value></data>
   <data name="ServerSwitchSelectInstallation" xml:space="preserve"><value>请先选择已安装的异环游戏目录。</value></data>
 </root>
 

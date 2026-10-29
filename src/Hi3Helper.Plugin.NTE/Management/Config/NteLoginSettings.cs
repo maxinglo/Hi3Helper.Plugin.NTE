@@ -8,22 +8,37 @@ namespace Hi3Helper.Plugin.NTE.Management.Config;
 internal sealed class NteLoginSettings(string path)
 {
     internal const string HelloKey = "login.experimentalWindowsHello";
-    private readonly Lock sync = new();
-    private bool? pending;
+    private readonly Lock _sync = new();
+    private bool? _pending;
+
     internal GameSettingsSection GetSection()
     {
-        using (sync.EnterScope())
+        using (_sync.EnterScope())
         {
-            pending ??= NteLoginPreferences.ReadExperimentalHello(path);
+            _pending ??= NteLoginPreferences.ReadExperimentalHello(path);
             return new(NteResourceProvider.GetString("LoginSettingsSection"),
-                [GameSettingEntry.Toggle(HelloKey, NteResourceProvider.GetString("LoginExperimentalHello"), pending.Value)])
-                { Description = NteResourceProvider.GetString("LoginExperimentalHelloHint") };
+            [
+                GameSettingEntry.Toggle(HelloKey, NteResourceProvider.GetString("LoginExperimentalHello"),
+                    _pending.Value,
+                    NteResourceProvider.GetString("LoginExperimentalHelloHint"))
+            ]);
         }
     }
-    internal void SetHello(bool enabled) { using (sync.EnterScope()) pending = enabled; }
+
+    internal void SetHello(bool enabled)
+    {
+        using (_sync.EnterScope()) _pending = enabled;
+    }
+
     internal void Apply()
     {
-        using (sync.EnterScope())
-        { if (pending is bool value) { NteLoginPreferences.WriteExperimentalHello(path, value); pending = null; } }
+        using (_sync.EnterScope())
+        {
+            if (_pending is bool value)
+            {
+                NteLoginPreferences.WriteExperimentalHello(path, value);
+                _pending = null;
+            }
+        }
     }
 }

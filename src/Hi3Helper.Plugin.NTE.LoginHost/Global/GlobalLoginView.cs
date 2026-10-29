@@ -7,8 +7,6 @@ using Nte.LoginHost.ViewModels;
 
 namespace Nte.LoginHost;
 
-// View-only code: visual tree, bindings, focus and account-picker adaptation.
-// Commands, validation, cancellation and authentication state live in the VM.
 internal sealed partial class OverseasLoginView : StackPanel, IDisposable
 {
     private readonly OverseasLoginViewModel model;

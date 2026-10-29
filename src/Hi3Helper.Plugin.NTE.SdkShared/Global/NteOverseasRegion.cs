@@ -2,8 +2,6 @@ using System.Globalization;
 
 namespace Nte.Login;
 
-// Explicit trust and storage boundaries for the two Global-SDK publishers.
-// Domain and application values are verified against each installed resource.
 internal sealed class NteOverseasRegion
 {
     internal static NteOverseasRegion Global { get; } = new(NteHostRegion.Global, 3000001, "NTEGlobal", "com.hottagames.nte",

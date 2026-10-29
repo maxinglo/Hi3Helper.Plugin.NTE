@@ -5,8 +5,6 @@ using System.Text.Json;
 
 namespace Nte.LoginHost.Services;
 
-// Authentication, protected account persistence and game delivery are separate
-// from both WPF controls and the view model's presentation state.
 internal sealed class OverseasLoginService(NteGlobalAuthentication api, OverseasAccountStore? accounts, nint owner,
     Func<NteGlobalIdentity, CancellationToken, Task> deliver, Func<bool, Func<Task>, Task> protectOperation) : IOverseasLoginService
 {

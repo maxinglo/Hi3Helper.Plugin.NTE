@@ -80,7 +80,7 @@
     <data name="ZoneName" xml:space="preserve"><value>Mainland China</value></data>
     <data name="GlobalZoneName" xml:space="preserve"><value>Global</value></data>
     <data name="GlobalZoneFullName" xml:space="preserve"><value>Neverness to Everness (Global)</value></data>
-    <data name="GlobalZoneDescription" xml:space="preserve"><value>International release. Download, update and repair are available. International login support is in development.</value></data>
+    <data name="GlobalZoneDescription" xml:space="preserve"><value>International service. Supports downloading, updating, repair and account sign-in.</value></data>
     <data name="GlobalLoginPending" xml:space="preserve"><value>International login is not yet supported. You can download, update and repair this region in Collapse.</value></data>
     <data name="LaunchSettingsSection" xml:space="preserve"><value>Launch options</value></data>
     <data name="LaunchGraphicsApi" xml:space="preserve"><value>Graphics API</value></data>
@@ -98,13 +98,13 @@
     <value>Decorative layers</value>
   </data>
     <data name="AppearanceCanvasWidth" xml:space="preserve">
-    <value>Reference canvas width</value>
+    <value>Canvas width</value>
   </data>
     <data name="AppearanceCanvasHeight" xml:space="preserve">
-    <value>Reference canvas height</value>
+    <value>Canvas height</value>
   </data>
     <data name="AppearanceRestartHint" xml:space="preserve">
-    <value>Save, then reselect the game region or restart the launcher to apply. Positions scale with the background.</value>
+    <value>Reselect the region or restart Collapse after applying. Image positions scale with the background.</value>
   </data>
     <data name="AppearanceSlogan" xml:space="preserve">
     <value>Version title image</value>
@@ -138,21 +138,21 @@
   </data>
     <data name="GameSettingsTitle" xml:space="preserve"><value>NTE · Game settings</value></data>
     <data name="LoginSettingsSection" xml:space="preserve"><value>Accounts and sign-in</value></data>
-    <data name="LoginExperimentalHello" xml:space="preserve"><value>Protect saved accounts with Windows Hello (experimental)</value></data>
-    <data name="LoginExperimentalHelloHint" xml:space="preserve"><value>Off by default: saved credentials use current-user Windows encryption. Enable to require Windows Hello when saving or restoring an account. Takes effect on the next account operation; converting an existing Hello record requires one last unlock. Local accounts remain until removed; the server can still invalidate saved sign-in credentials.</value></data>
+    <data name="LoginExperimentalHello" xml:space="preserve"><value>Windows Hello account protection (experimental)</value></data>
+    <data name="LoginExperimentalHelloHint" xml:space="preserve"><value>Require Windows Hello when saving or restoring accounts. Off by default; Windows user encryption is used instead. Disabling Hello requires one unlock for each protected account. Saved accounts remain until removed.</value></data>
   <data name="LaunchOfficialLauncher" xml:space="preserve">
-    <value>Launch using the official launcher in the background</value>
+    <value>Use official launcher</value>
   </data>
   <data name="LaunchOfficialLauncherHint" xml:space="preserve">
-    <value>The official launcher must be inside the selected game installation directory (NTELauncher for Mainland China, NTEGlobal for Global). Applies on the next launch; required login, verification or update windows may still appear.</value>
+    <value>Use the official launcher from this game folder on the next launch. Sign-in or update windows may still appear.</value>
   </data>
   <data name="TaiwanZoneName" xml:space="preserve"><value>Taiwan / Hong Kong / Macau</value></data>
   <data name="TaiwanZoneFullName" xml:space="preserve"><value>Neverness to Everness — Taiwan / Hong Kong / Macau</value></data>
   <data name="TaiwanZoneDescription" xml:space="preserve"><value>Traditional Chinese service published by Iwplay. Uses its own official account and launcher configuration.</value></data>
   <data name="ServerSettingsSection" xml:space="preserve"><value>Servers and shared installation</value></data>
-  <data name="ServerSwitchTarget" xml:space="preserve"><value>Switch this installation to</value></data>
-  <data name="ServerSwitchNoChange" xml:space="preserve"><value>Keep the current server</value></data>
-  <data name="ServerSwitchSettingsHint" xml:space="preserve"><value>Choose Taiwan or Global and apply. A separate window will check reuse, show missing downloads and switch the installation. Both regions remain separately listed in Collapse.</value></data>
+  <data name="ServerSwitchTarget" xml:space="preserve"><value>Target server</value></data>
+  <data name="ServerSwitchNoChange" xml:space="preserve"><value>Keep current server</value></data>
+  <data name="ServerSwitchSettingsHint" xml:space="preserve"><value>Apply to review shared files and required downloads before switching. Accounts stay separate.</value></data>
   <data name="ServerSwitchSelectInstallation" xml:space="preserve"><value>Select an installed NTE game directory first.</value></data>
 </root>
 

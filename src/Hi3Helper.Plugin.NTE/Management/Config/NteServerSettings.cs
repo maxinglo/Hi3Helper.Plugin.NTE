@@ -10,31 +10,42 @@ namespace Hi3Helper.Plugin.NTE.Management.Config;
 internal sealed class NteServerSettings
 {
     internal const string TargetKey = "server.switchTarget";
-    private readonly Lock gate = new();
-    private string pending = "none";
+    private readonly Lock _gate = new();
+    private string _pending = "none";
+
     internal GameSettingsSection GetSection()
     {
-        using (gate.EnterScope())
+        using (_gate.EnterScope())
             return new(NteResourceProvider.GetString("ServerSettingsSection"),
-            [GameSettingEntry.Choice(TargetKey, NteResourceProvider.GetString("ServerSwitchTarget"), pending,
-                [new("none", NteResourceProvider.GetString("ServerSwitchNoChange")),
-                 new("Global", NteResourceProvider.GetString("GlobalZoneName")),
-                 new("Taiwan", NteResourceProvider.GetString("TaiwanZoneName"))],
-                NteResourceProvider.GetString("ServerSwitchSettingsHint"))]);
+                [
+                    GameSettingEntry.Choice(TargetKey, NteResourceProvider.GetString("ServerSwitchTarget"), _pending,
+                    [
+                        new("none", NteResourceProvider.GetString("ServerSwitchNoChange")),
+                        new("Global", NteResourceProvider.GetString("GlobalZoneName")),
+                        new("Taiwan", NteResourceProvider.GetString("TaiwanZoneName"))
+                    ])
+                ])
+                { Description = NteResourceProvider.GetString("ServerSwitchSettingsHint") };
     }
+
     internal void SetTarget(string value)
     {
-        if (value is not ("none" or "Global" or "Taiwan")) throw new ArgumentException("Unsupported server switch target.");
-        using (gate.EnterScope()) pending = value;
+        if (value is not ("none" or "Global" or "Taiwan"))
+            throw new ArgumentException("Unsupported server switch target.");
+        using (_gate.EnterScope()) _pending = value;
     }
+
     internal NteRegionSwitchOptions? TakeRequest(string? root, string language)
     {
-        using (gate.EnterScope())
+        using (_gate.EnterScope())
         {
-            if (pending == "none") return null;
-            if (string.IsNullOrWhiteSpace(root) || !Path.IsPathFullyQualified(root)) throw new InvalidOperationException(NteResourceProvider.GetString("ServerSwitchSelectInstallation"));
-            NteRegionSwitchOptions request = new(root, Enum.Parse<NteHostRegion>(pending), language);
-            _ = request.ToArguments(); pending = "none"; return request;
+            if (_pending == "none") return null;
+            if (string.IsNullOrWhiteSpace(root) || !Path.IsPathFullyQualified(root))
+                throw new InvalidOperationException(NteResourceProvider.GetString("ServerSwitchSelectInstallation"));
+            NteRegionSwitchOptions request = new(root, Enum.Parse<NteHostRegion>(_pending), language);
+            _ = request.ToArguments();
+            _pending = "none";
+            return request;
         }
     }
 }

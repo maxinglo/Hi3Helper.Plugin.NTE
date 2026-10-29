@@ -1,25 +1,34 @@
 # 架构
 
-原生插件将游戏目录、区服、语言和启动参数交给独立的 `Nte.LoginHost.exe`。宿主脱离 Collapse 的作业对象，持有本次游戏、SDK 通信和 WPF 窗口，关闭 Collapse 不会主动结束游戏。
+原生插件将游戏目录、区服、语言和启动参数交给独立的 `Nte.LoginHost.exe`。宿主脱离 Collapse 的作业对象，持有本次游戏、SDK 通信和
+WPF 窗口，关闭 Collapse 不会主动结束游戏。
 
 独立模式由游戏的登录请求驱动界面与账号恢复。首次说明在自动恢复前显示；国际版在提供设备测量信息前显示。确认版本与时间单独持久化，损坏或旧版本的记录不能跳过说明。国服与国际版复用说明页面，仅区分实名段落和公开社媒示例。
 
-账号使用独立 AES-GCM 密钥。默认 Windows DPAPI CurrentUser 或可选 Windows Hello 保护该密钥，显示资料单独使用 DPAPI。官方启动器账号库不作为本组件输入。
+账号使用独立 AES-GCM 密钥。默认 Windows DPAPI CurrentUser 或可选 Windows Hello 保护该密钥，显示资料单独使用
+DPAPI。官方启动器账号库不作为本组件输入。
 
-`NteLaunchPreferences` 在插件设置页与宿主之间共享每区服的 `launch.json`。官方模式使用安装目录内的启动组件及其 direct/autoplay 入口，由官方组件负责认证。说明页切换先验证路径、保存设置，再关闭当前宿主拥有的游戏进程。
+`NteLaunchPreferences` 在插件设置页与宿主之间共享每区服的 `launch.json`。官方模式使用安装目录内的启动组件及其
+direct/autoplay 入口，由官方组件负责认证。说明页切换先验证路径、保存设置，再关闭当前宿主拥有的游戏进程。
 
-登录卡片以实际内宽测量内容，只有超过高度上限才显示滚动条。登录方式由两个语义化单选项和一个移动的选中底块组成，尊重 Windows 关闭动画的设置。账号与新登录页面各自保留草稿和验证码冷却状态。
+登录卡片以实际内宽测量内容，只有超过高度上限才显示滚动条。登录方式由两个语义化单选项和一个移动的选中底块组成，尊重 Windows
+关闭动画的设置。账号与新登录页面各自保留草稿和验证码冷却状态。
 
 界面验证工具只接受仓库内的虚构窗口，控件操作依赖当前观测版本。截图由实际 WPF 树与固定背景合成，不捕获真实桌面，不调用账号认证。工具不进入发布包。
 
 ## 海外地区与登录分层
 
-国际服和台港澳共用 Global SDK 协议，通过不可变的 `NteOverseasRegion` 明确应用编号、包名、服务域名、官方组件路径及存储作用域。`OverseasGameLoginHost` 持有游戏进程和 SDK 会话，`OverseasLoginView` 只处理视觉、绑定和焦点，`OverseasLoginViewModel` 负责状态与命令，`IOverseasLoginService` 负责认证与受保护账号持久化。
+国际服和台港澳共用 Global SDK 协议，通过不可变的 `NteOverseasRegion` 明确应用编号、包名、服务域名、官方组件路径及存储作用域。
+`OverseasGameLoginHost` 持有游戏进程和 SDK 会话，`OverseasLoginView` 只处理视觉、绑定和焦点，`OverseasLoginViewModel`
+负责状态与命令，`IOverseasLoginService` 负责认证与受保护账号持久化。
 
-浏览器回调使用随机目标及当前用户私有管道，验证管道所有者；管道的强制完整性标签允许从 LocalLow 安装目录启动的同用户回调进程写入。诊断仅记录地区、接收阶段和字节数。网页返回的第三方凭据经对应 PC 服务交换后才能成为游戏身份。
+浏览器回调使用随机目标及当前用户私有管道，验证管道所有者；管道的强制完整性标签允许从 LocalLow
+安装目录启动的同用户回调进程写入。诊断仅记录地区、接收阶段和字节数。网页返回的第三方凭据经对应 PC 服务交换后才能成为游戏身份。
 
 ## 共享安装与内容
 
-`NteSharedInstallation` 保存当前激活地区和各地区资源状态；`NteRegionSwitchService` 计算目标差异，`NteRegionSwitchTransaction` 负责阶段化准备、激活、回滚与恢复。地区设置 ViewModel 经原生客户端调用可选的预览／执行导出，Core 0.1.6 合约保持兼容。
+`NteSharedInstallation` 保存当前激活地区和各地区资源状态；`NteRegionSwitchService` 计算目标差异，
+`NteRegionSwitchTransaction` 负责阶段化准备、激活、回滚与恢复。地区设置 ViewModel 经原生客户端调用可选的预览／执行导出，Core
+0.1.6 合约保持兼容。
 
 台服新闻和轮播读取官方动态 HTML 片段，轮播按 UTC+8 的上下架时间筛选。社交图标支持拼接图片和独立普通／悬停图片，缓存身份包含实际内容哈希；标题图从台服繁体语言资源读取。

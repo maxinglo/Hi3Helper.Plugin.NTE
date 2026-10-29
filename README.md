@@ -1,26 +1,67 @@
+<div align="center">
+
 # Hi3Helper.Plugin.NTE
 
-为 Collapse Launcher 提供《异环 / Neverness to Everness》中国大陆、国际服和台港澳三个独立地区，包含安装更新、完整性检查、游戏启动和账号登录。当前版本为 0.12.1，目标平台为 Windows x64，使用 Plugin Core API 0.1.6。
+为 [Collapse Launcher](https://collapselauncher.com/) 提供《异环 / Neverness to Everness》支持的第三方插件。
 
-本插件使用自行实现的登录流程，未经游戏官方认可或授权。可能触发风控、登录限制、账号封禁或永久封号，无法保证账号安全和持续兼容。使用前请阅读[登录说明与隐私](docs/login-privacy.md)。
+**中国大陆 · 国际服 · 台港澳**
 
-因插件的特殊性，不得在任何公开社交媒体面向不特定人群宣传或推荐本插件，例如 B站、抖音、公开论坛，国际平台如 YouTube、TikTok、Reddit、X 等。上述仅为举例，并非完整清单。否则，作者将直接停止维护并删除仓库（删库跑路）。
+[下载插件](https://github.com/maxinglo/Hi3Helper.Plugin.NTE/releases) · [开发构建](https://github.com/maxinglo/Hi3Helper.Plugin.NTE/actions/workflows/build.yml) · [反馈问题](https://github.com/maxinglo/Hi3Helper.Plugin.NTE/issues)
 
-## 使用
+</div>
 
-从本仓库 Actions 的成功构建下载 `NTE-ReleasePublish-O1`，将其中 `NTE_*.zip` 导入 Collapse。插件包包含自包含的 WPF 登录宿主，无须另行安装 .NET 桌面运行时。官方游戏和启动组件仍须位于所选安装目录。
+> [!IMPORTANT]
+> 本插件由社区维护，并非 Collapse 或游戏官方插件。使用中遇到的问题请在本仓库反馈。
 
-首次使用独立登录时会直接展示说明，只有点击“我知道了”并成功保存后，下次才不再默认展示。之后可通过面板侧面的角色头像重新查看。
+> [!CAUTION]
+> 插件使用自行实现的登录流程，未经游戏官方认可或授权，可能触发风控、登录限制或账号封禁，无法保证账号安全及持续兼容。使用前请阅读[登录说明与隐私](docs/login-privacy.md)，也可选择使用官方启动器登录。
 
-台港澳使用独立登录宿主，支持 Google、Facebook 及手机号验证码／密码登录，区号为台湾、香港和澳门；其账号、设备和设置与国际服隔离。已安装的官方组件仍是经过校验的 SDK 和静态配置来源。0.12.1 修复 LocalLow 安装目录的浏览器回调，并恢复台服活动、新闻、社交图标和繁体标题资源。
+## 功能
 
-国际服和台港澳可以共享同一安装根目录及 `Client`。在游戏设置的“服务器与共享安装”中选择目标地区，先检查预览再执行切换；首次启用会校验现有安装、准备差异文件并保留恢复状态。详见[地区与共享安装](docs/regions.md)。
+- 下载、安装、更新游戏，识别已有安装目录。
+- 检查文件完整性并修复损坏、缺失的资源。
+- 展示官方新闻、公告、活动、轮播和社交媒体入口。
+- 显示动态背景、版本标题图和游戏标识，支持调整装饰图片的位置与大小。
+- 提供独立登录窗口，支持保存账号、账号备注及恢复上次登录。
+- 使用当前 Windows 用户加密保护账号，可选 Windows Hello 保护。
+- 选择游戏默认图形接口、DirectX 11 或 DirectX 12，也可使用官方启动器启动。
+- 国际服与台港澳支持共用游戏目录、下载差异文件及切换服务器。
 
-不希望使用独立登录时，可在 Collapse → 游戏设置 → 启动设置启用“使用官方启动器后台静默启动”。官方启动器必须位于同一游戏安装目录内：国服 `NTELauncher/NTEGame.exe`，国际版 `NTEGlobal/NTEGlobalGame.exe`，台港澳 `NTETW/NTETWGame.exe`。说明页也提供此选项；确认后保存该区服设置并关闭当前游戏，下次启动生效。官方登录、验证或更新所需窗口仍可能出现。
+| 地区     | 登录方式                           |
+|----------|------------------------------------|
+| 中国大陆 | 手机验证码                         |
+| 国际服   | 邮箱、Google、Facebook             |
+| 台港澳   | 手机验证码／密码、Google、Facebook |
 
-## 构建
+各地区的账号和设置分别保存。共用安装目录不会转换账号，也不会合并角色或服务端数据。台港澳手机号支持台湾、香港及澳门区号。
 
-使用 Windows x64、`global.json` 指定的 .NET SDK 和 Visual Studio C++ 桌面工具链。首次获取源码后初始化固定版本的子模块：
+## 安装插件
+
+需要 Windows 10／11 x64，以及支持 **Plugin Core API 0.1.6** 的 Collapse Launcher。
+
+1. 从本仓库下载插件压缩包 `NTE_*.zip`。开发构建可在 [Actions](https://github.com/maxinglo/Hi3Helper.Plugin.NTE/actions/workflows/build.yml) 的成功运行中下载
+   `NTE-ReleasePublish-O1` 产物，解压外层后取得插件 ZIP。
+2. 打开 Collapse 的 **设置 → 插件管理**，选择添加 ZIP 或 `manifest.json`，导入插件 ZIP。
+3. 重启 Collapse，在游戏列表中选择 **异环** 及对应地区。
+4. 安装游戏，或选择已有的游戏安装目录。
+
+插件包已包含登录窗口所需的 .NET 桌面运行时，无须单独安装。更新插件时同样导入新版本 ZIP；账号和游戏文件不保存在插件目录中。
+
+## 登录与服务器切换
+
+首次使用独立登录时会显示登录说明。阅读后点击“我知道了”继续；之后可从登录窗口侧面的角色头像重新查看。保存的账号可以在登录窗口中备注或移除。
+
+如需使用官方登录，在 **游戏设置 → 启动选项**中启用“使用官方启动器”，下次启动生效。官方启动器须位于当前游戏目录内：国服
+`NTELauncher`，国际服 `NTEGlobal`，台港澳 `NTETW`。登录、验证或更新需要的官方窗口仍可能出现。
+
+国际服与台港澳共享目录时，先关闭游戏及官方启动器，再到 **游戏设置 → 服务器与共享安装**
+选择目标服务器并应用。切换窗口会显示可复用资源和所需下载，确认后开始准备文件并切换。不要手工混合两服文件或删除未完成的恢复记录。详见[地区与共享安装](docs/regions.md)。
+
+台服第三方授权、短信登录及共享目录切换后的实际游戏运行仍需进一步确认；目前未接入台服配置中的其他登录类型。
+
+## 从源码构建
+
+需要 `global.json` 指定的 .NET SDK、PowerShell 7、Visual Studio C++ 桌面工具链及 Windows SDK。
 
 ```powershell
 git submodule update --init --recursive
@@ -28,20 +69,14 @@ git submodule update --init --recursive
 ./scripts/Publish.ps1 -Profile ReleasePublish-O1 -Package
 ```
 
-构建脚本执行锁定还原、编译和离线回归，报告位于 `artifacts/test-results/`；三个需要访问官方在线服务的显式测试默认不运行。发布脚本验证原生 ABI、自包含运行时和完整性检查接口，生成可导入包到 `artifacts/packages/`。离线回归、界面预览和公开 CDN 读取不能代替真实账号认证或游戏进入验收。
+可导入的 ZIP 位于 `artifacts/packages/`。构建脚本会运行回归测试，发布脚本会检查原生接口、自包含登录宿主和包内容。更多说明见[构建与验证](docs/development.md)。
 
-GitHub Actions 在 `main` 的推送和拉取请求时自动运行测试，并生成普通与 NoReflection 两种 NativeAOT 包。也可手动运行构建。`Release NTE Plugin` 工作流允许手动指定版本制作 GitHub Release。
+[架构说明](docs/architecture.md) · [地区与共享安装](docs/regions.md) · [登录说明与隐私](docs/login-privacy.md)
 
-## 源码结构
+## 使用限制与许可
 
-- `src/Hi3Helper.Plugin.NTE`：Collapse 插件、安装更新、媒体、游戏设置及启动交接。
-- `src/Hi3Helper.Plugin.NTE.LoginHost`：独立 WPF 登录窗口、账号保护与游戏会话生命周期。
-- `src/Hi3Helper.Plugin.NTE.SdkShared`：宿主、插件与测试共用的协议和设置代码。
-- `tests`：使用虚构输入的离线回归与界面背景夹具。
-- `tools/NteLoginUiVerification`、`tools/NteLoginHostHarness`：离屏 WPF 界面验证，不属于交付包。
+因插件的特殊性，不得在任何公开社交媒体面向不特定人群宣传或推荐本插件，例如 B站、抖音、公开论坛，国际平台如
+YouTube、TikTok、Reddit、X 等。上述仅为举例，并非完整清单。否则，作者将直接停止维护并删除仓库（删库跑路）。
 
-[架构说明](docs/architecture.md) · [地区与共享安装](docs/regions.md) · [构建与验证](docs/development.md) · [登录说明与隐私](docs/login-privacy.md)
-
-## 许可与标识
-
-源代码许可证见 [LICENSE](LICENSE)。保留 Collapse 样式的原作者声明与 MIT 许可证；Google、Facebook 标识归各自权利人所有，来源保存在对应资产目录的 `UPSTREAM.json`。本插件不隶属于游戏运营方，也不随包分发官方启动器、更新器或账号数据。`Indexer.exe` 为插件包元数据构建工具，仅用于制作发布包。
+本项目与 Perfect World、Hotta Studio、艾玩天地及其关联实体无隶属关系。源代码许可证见 [LICENSE](LICENSE)。所用 Collapse
+样式保留原作者声明及 MIT 许可证；Google、Facebook 标识归各自权利人所有。

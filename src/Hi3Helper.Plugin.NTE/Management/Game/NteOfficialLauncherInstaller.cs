@@ -10,8 +10,7 @@ using System.Threading.Tasks;
 
 namespace Hi3Helper.Plugin.NTE.Management.Game;
 
-// Taiwan currently delegates authentication to the official platform. Install
-// its verified components as part of installation/repair, leaving UserData alone.
+// Keep UserData intact when installing official SDK and fallback-launcher components.
 internal sealed class NteOfficialLauncherInstaller(HttpClient http)
 {
     internal async Task InstallAsync(string root, NteRegionConfig region,
