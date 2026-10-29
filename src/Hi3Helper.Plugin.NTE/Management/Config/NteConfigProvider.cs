@@ -16,6 +16,7 @@ public static class NteConfigProvider
                     return GetRegion(line[6..].Trim());
             return CN; // Existing China installations predate the application identifier.
         }
+
         if (File.Exists(Path.Combine(root, Global.SdkDirectory, "config.xml"))) return Global;
         if (File.Exists(Path.Combine(root, Taiwan.SdkDirectory, "config.xml"))) return Taiwan;
         if (File.Exists(Path.Combine(root, CN.SdkDirectory, "config.xml"))) return CN;
@@ -30,12 +31,16 @@ public static class NteConfigProvider
         _ => throw new InvalidDataException("Unknown installed NTE region.")
     };
 
-    public static string SwiperScriptUrl { get; } = "https://static.games.wanmei.com/public/commonData/gamesData/gameSwiper/yh-gameSwiper.js";
+    public static string SwiperScriptUrl { get; } =
+        "https://static.games.wanmei.com/public/commonData/gamesData/gameSwiper/yh-gameSwiper.js";
+
     public static string LauncherVersionIniUrl { get; } = "https://yhcdn1.wmupd.com/hd/publish_ob/launcher/Version.ini";
 
     public static string OfficialSiteUrl { get; } = "https://yh.wanmei.com/";
     public static string LauncherHtmlUrl { get; } = "https://yh.wanmei.com/launcher/launcher_ob.html?expand=1";
-    public static string[] ConfigXmlUrls { get; } = [
+
+    public static string[] ConfigXmlUrls { get; } =
+    [
         "https://yhcdn1.wmupd.com/clientRes/publish_PC/Version/Windows/config.xml",
         "https://yhcdn2.wmupd.com/clientRes/publish_PC/Version/Windows/config.xml"
     ];
@@ -49,7 +54,8 @@ public static class NteConfigProvider
     public static string DefaultAppId { get; } = "1289";
 
     /// <summary>CDN 资源基础 URL 列表</summary>
-    public static string[] GameResBaseUrls { get; } = [
+    public static string[] GameResBaseUrls { get; } =
+    [
         "https://yhcdn1.wmupd.com/clientRes",
         "https://yhcdn2.wmupd.com/clientRes"
     ];
@@ -146,9 +152,8 @@ public static class NteConfigProvider
         AppId = "2000013",
         LauncherVersionIniUrl = "https://patchnte1.iwplay.com.tw/hd/OBpublish_PC/launcher/Version.ini",
         LauncherDirectoryName = "NTETW",
-        LauncherPageUrl = "https://nte.iwplay.com.tw/",
+        LauncherPageUrl = "https://nte.iwplay.com.tw/platform/index.html",
         DefaultBranch = "PC_140",
         ResourceUrls = ["https://patchnte1.iwplay.com.tw/clientRes", "https://patchnte2.iwplay.com.tw/clientRes"]
     };
 }
-

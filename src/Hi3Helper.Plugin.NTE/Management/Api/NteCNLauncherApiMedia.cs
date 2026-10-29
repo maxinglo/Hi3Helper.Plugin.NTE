@@ -155,6 +155,7 @@ internal partial class NteCNLauncherApiMedia : LauncherApiMediaBase
                         {
                             byte[] packed = await File.ReadAllBytesAsync(localResource, token).ConfigureAwait(false);
                             string artwork = _region.IsGlobal ? NteGlobalLocalization.GetArtworkPath(SharedStatic.PluginLocaleCode)
+                                : _region.IsTaiwan ? "res/res/" + _region.AppId + "/image_lang/zh-tw/main/slogan.png"
                                 : "res/res/" + _region.AppId + "/main/slogan.png";
                             nativeImages["slogan"] = NteQtResourceImage.ReadPng(packed, artwork);
                         }
