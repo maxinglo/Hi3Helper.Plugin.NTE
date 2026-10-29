@@ -9,3 +9,7 @@ TestResults/
 *.DotSettings.user
 *.log
 *.tmp
+**/publish/
+.codex/
+NteGlobal/
+UpdateTest/
