@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0-windows</TargetFramework><UseWindowsForms>true</UseWindowsForms><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><TreatWarningsAsErrors>true</TreatWarningsAsErrors><PlatformTarget>x64</PlatformTarget></PropertyGroup>
+ <ItemGroup><Compile Include="../../src/Hi3Helper.Plugin.NTE.LoginHost/WindowNative.cs" Link="WindowNative.cs" /></ItemGroup>
+</Project>

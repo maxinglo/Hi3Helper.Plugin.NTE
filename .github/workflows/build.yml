@@ -1,0 +1,77 @@
+name: Build and Test NTE Plugin
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [ Release, ReleaseNoReflection ]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: |
+            src/**/packages.lock.json
+            tests/**/packages.lock.json
+            eng/locks/*.json
+      - name: Build and run regression tests
+        shell: pwsh
+        run: ./scripts/Build.ps1 -Configuration '${{ matrix.configuration }}'
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tests-${{ matrix.configuration }}
+          path: artifacts/test-results/${{ matrix.configuration }}/
+          retention-days: 14
+          if-no-files-found: warn
+
+  publish:
+    needs: test
+    runs-on: windows-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [ ReleasePublish-O1, ReleaseNoReflectionPublish-O1 ]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Publish, verify native ABI and package
+        shell: pwsh
+        run: ./scripts/Publish.ps1 -Profile '${{ matrix.profile }}' -Package
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: NTE-${{ matrix.profile }}
+          path: artifacts/packages/*_${{ matrix.profile }}.zip
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14

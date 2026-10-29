@@ -1,0 +1,54 @@
+name: Release NTE Plugin
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Plugin version (three or four numeric components)
+        required: true
+        type: string
+      publish_profile:
+        description: NativeAOT publish profile
+        required: true
+        type: choice
+        default: ReleasePublish-O1
+        options:
+          - ReleasePublish-O1
+          - ReleasePublish-O2
+          - ReleaseNoReflectionPublish-O1
+          - ReleaseNoReflectionPublish-O2
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+      PUBLISH_PROFILE: ${{ inputs.publish_profile }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Verify both managed configurations
+        shell: pwsh
+        run: |
+          ./scripts/Build.ps1 -Configuration Release
+          ./scripts/Build.ps1 -Configuration ReleaseNoReflection
+      - name: Publish, verify native ABI and package
+        shell: pwsh
+        run: ./scripts/Publish.ps1 -Profile $env:PUBLISH_PROFILE -Version $env:RELEASE_VERSION -Package
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          tag_name: v${{ inputs.version }}
+          name: NTE Plugin v${{ inputs.version }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: artifacts/packages/*.zip

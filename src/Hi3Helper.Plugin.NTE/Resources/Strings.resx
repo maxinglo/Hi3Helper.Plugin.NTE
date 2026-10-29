@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+    <xsd:schema id="root" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns=""
+                xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+        <xsd:element name="root" msdata:IsDataSet="true">
+            <xsd:complexType>
+                <xsd:choice maxOccurs="unbounded">
+                    <xsd:element name="metadata">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="value" type="xsd:string" minOccurs="0"/>
+                            </xsd:sequence>
+                            <xsd:attribute name="name" type="xsd:string"/>
+                            <xsd:attribute name="type" type="xsd:string"/>
+                            <xsd:attribute name="mimetype" type="xsd:string"/>
+                            <xsd:attribute ref="xml:space"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                    <xsd:element name="assembly">
+                        <xsd:complexType>
+                            <xsd:attribute name="alias" type="xsd:string"/>
+                            <xsd:attribute name="name" type="xsd:string"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                    <xsd:element name="data">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1"/>
+                                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2"/>
+                            </xsd:sequence>
+                            <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1"/>
+                            <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3"/>
+                            <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4"/>
+                            <xsd:attribute ref="xml:space"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                    <xsd:element name="resheader">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1"/>
+                            </xsd:sequence>
+                            <xsd:attribute name="name" type="xsd:string" use="required"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:choice>
+            </xsd:complexType>
+        </xsd:element>
+    </xsd:schema>
+    <resheader name="resmimetype">
+        <value>text/microsoft-resx</value>
+    </resheader>
+    <resheader name="version">
+        <value>2.0</value>
+    </resheader>
+    <resheader name="reader">
+        <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral,
+            PublicKeyToken=b77a5c561934e089
+        </value>
+    </resheader>
+    <resheader name="writer">
+        <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral,
+            PublicKeyToken=b77a5c561934e089
+        </value>
+    </resheader>
+    <data name="PluginName" xml:space="preserve">
+    <value>Neverness to Everness Plugin</value>
+  </data>
+    <data name="PluginDescription" xml:space="preserve">
+    <value>A plugin for Neverness to Everness (NTE) in Collapse Launcher</value>
+  </data>
+    <data name="GameName" xml:space="preserve">
+    <value>Neverness to Everness</value>
+  </data>
+    <data name="ZoneDescription" xml:space="preserve">
+    <value>NTE China server profile.</value>
+  </data>
+    <data name="ZoneFullName" xml:space="preserve">
+    <value>Neverness to Everness (Mainland China)</value>
+  </data>
+    <data name="ZoneName" xml:space="preserve"><value>Mainland China</value></data>
+    <data name="GlobalZoneName" xml:space="preserve"><value>Global</value></data>
+    <data name="GlobalZoneFullName" xml:space="preserve"><value>Neverness to Everness (Global)</value></data>
+    <data name="GlobalZoneDescription" xml:space="preserve"><value>International release. Download, update and repair are available. International login support is in development.</value></data>
+    <data name="GlobalLoginPending" xml:space="preserve"><value>International login is not yet supported. You can download, update and repair this region in Collapse.</value></data>
+    <data name="LaunchSettingsSection" xml:space="preserve"><value>Launch options</value></data>
+    <data name="LaunchGraphicsApi" xml:space="preserve"><value>Graphics API</value></data>
+    <data name="LaunchGraphicsDefault" xml:space="preserve"><value>Game default</value></data>
+    <data name="AppearanceTitle" xml:space="preserve">
+    <value>NTE · Appearance</value>
+  </data>
+    <data name="AppearanceBackgroundSection" xml:space="preserve">
+    <value>Background and decorative layers</value>
+  </data>
+    <data name="AppearanceDynamicBackground" xml:space="preserve">
+    <value>Dynamic background</value>
+  </data>
+    <data name="AppearanceOverlayEnabled" xml:space="preserve">
+    <value>Decorative layers</value>
+  </data>
+    <data name="AppearanceCanvasWidth" xml:space="preserve">
+    <value>Reference canvas width</value>
+  </data>
+    <data name="AppearanceCanvasHeight" xml:space="preserve">
+    <value>Reference canvas height</value>
+  </data>
+    <data name="AppearanceRestartHint" xml:space="preserve">
+    <value>Save, then reselect the game region or restart the launcher to apply. Positions scale with the background.</value>
+  </data>
+    <data name="AppearanceSlogan" xml:space="preserve">
+    <value>Version title image</value>
+  </data>
+    <data name="AppearanceLogo" xml:space="preserve">
+    <value>Game logo</value>
+  </data>
+    <data name="AppearanceElementEnabled" xml:space="preserve">
+    <value>Show this image</value>
+  </data>
+    <data name="AppearanceSource" xml:space="preserve">
+    <value>Image source</value>
+  </data>
+    <data name="AppearanceSourceHint" xml:space="preserve">
+    <value>Use slogan or logo to follow the official page, or enter an HTTPS URL or an absolute file path.</value>
+  </data>
+    <data name="AppearanceX" xml:space="preserve">
+    <value>Horizontal position</value>
+  </data>
+    <data name="AppearanceY" xml:space="preserve">
+    <value>Vertical position</value>
+  </data>
+    <data name="AppearanceWidth" xml:space="preserve">
+    <value>Width</value>
+  </data>
+    <data name="AppearanceHeight" xml:space="preserve">
+    <value>Height</value>
+  </data>
+    <data name="AppearanceOpacity" xml:space="preserve">
+    <value>Opacity</value>
+  </data>
+    <data name="GameSettingsTitle" xml:space="preserve"><value>NTE · Game settings</value></data>
+    <data name="LoginSettingsSection" xml:space="preserve"><value>Accounts and sign-in</value></data>
+    <data name="LoginExperimentalHello" xml:space="preserve"><value>Protect saved accounts with Windows Hello (experimental)</value></data>
+    <data name="LoginExperimentalHelloHint" xml:space="preserve"><value>Off by default: saved credentials use current-user Windows encryption. Enable to require Windows Hello when saving or restoring an account. Takes effect on the next account operation; converting an existing Hello record requires one last unlock. Local accounts remain until removed; the server can still invalidate saved sign-in credentials.</value></data>
+  <data name="LaunchOfficialLauncher" xml:space="preserve">
+    <value>Launch using the official launcher in the background</value>
+  </data>
+  <data name="LaunchOfficialLauncherHint" xml:space="preserve">
+    <value>The official launcher must be inside the selected game installation directory (NTELauncher for Mainland China, NTEGlobal for Global). Applies on the next launch; required login, verification or update windows may still appear.</value>
+  </data>
+</root>
+

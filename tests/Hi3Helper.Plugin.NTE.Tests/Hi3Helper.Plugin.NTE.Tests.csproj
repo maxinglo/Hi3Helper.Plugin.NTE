@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Platforms>x64</Platforms>
+    <Configurations>Debug;Release;DebugNoReflection;ReleaseNoReflection</Configurations>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../tools/research/NteResourceCache.cs" Link="Development/NteResourceCache.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.LoginHost/Accounts/LocalAccountStore.cs" Link="Login/LocalAccountStore.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.LoginHost/Accounts/AccountDisplayStore.cs" Link="Login/AccountDisplayStore.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.LoginHost/Global/StoredGlobalIdentity.cs" Link="Login/StoredGlobalIdentity.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.LoginHost/Global/GlobalAccountStore.cs" Link="Login/GlobalAccountStore.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.LoginHost/Accounts/StoredChannelIdentity.cs" Link="Login/StoredChannelIdentity.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.LoginHost/Accounts/SavedChannelLogin.cs" Link="Login/SavedChannelLogin.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.LoginHost/Accounts/WindowsAccountKeyProtector.cs" Link="Login/WindowsAccountKeyProtector.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.LoginHost/Accounts/HelloKeyPolicy.cs" Link="Login/HelloKeyPolicy.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.LoginHost/Accounts/HelloKeyCipher.cs" Link="Login/HelloKeyCipher.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.LoginHost/Accounts/AccountLabels.cs" Link="Login/AccountLabels.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.LoginHost/Accounts/AccountSaveTransaction.cs" Link="Login/AccountSaveTransaction.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.LoginHost/Accounts/RememberedLogin.cs" Link="Login/RememberedLogin.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.LoginHost/CachedBackdropPixels.cs" Link="Login/CachedBackdropPixels.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.LoginHost/LoginTheme.cs" Link="Login/LoginTheme.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.LoginHost/BackdropRefreshSchedule.cs" Link="Login/BackdropRefreshSchedule.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.LoginHost/GameStartedLifetime.cs" Link="Login/GameStartedLifetime.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.SdkShared/NteGlobalLaunchPlan.cs" Link="Login/NteGlobalLaunchPlan.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.SdkShared/Global/*.cs" Link="Global/%(Filename)%(Extension)"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.LoginHost/PatcherLaunchEnvironment.cs" Link="Login/PatcherLaunchEnvironment.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.SdkShared/ProbeLoginRequests.cs" Link="Sdk/ProbeLoginRequests.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.SdkShared/ProbeBootConfig.cs" Link="Research/ProbeBootConfig.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.SdkShared/ProbeAnonymousInit.cs" Link="Research/ProbeAnonymousInit.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.SdkShared/ProbeAuthenticationClient.cs" Link="Research/ProbeAuthenticationClient.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.SdkShared/ProbeChannelValidation.cs" Link="Research/ProbeChannelValidation.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.SdkShared/ProbePreLogin.cs" Link="Research/ProbePreLogin.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.SdkShared/ProbeLoginAdmission.cs" Link="Research/ProbeLoginAdmission.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.SdkShared/ProbeAntifatigueQueries.cs" Link="Research/ProbeAntifatigueQueries.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.SdkShared/ProbeLoginContract.cs" Link="Research/ProbeLoginContract.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.SdkShared/ProbeGameEnvelopeCodec.cs" Link="Research/ProbeGameEnvelopeCodec.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.SdkShared/ProbeSessionStore.cs" Link="Research/ProbeSessionStore.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.SdkShared/ProbeSdkLog.cs" Link="Research/ProbeSdkLog.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.SdkShared/ProbeIdentityEnvelope.cs" Link="Research/ProbeIdentityEnvelope.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.SdkShared/ProbeLoginPacket.cs" Link="Research/ProbeLoginPacket.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.SdkShared/ProbeLoginSequence.cs" Link="Research/ProbeLoginSequence.cs"/>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.SdkShared/ProbeFrameShape.cs" Link="Research/ProbeFrameShape.cs"/>
+    <None Update="Fixtures/**" CopyToOutputDirectory="PreserveNewest"/>
+    <PackageReference Include="xunit.v3" Version="4.0.2"/>
+    <ProjectReference Include="../../src/Hi3Helper.Plugin.NTE/Hi3Helper.Plugin.NTE.csproj"/>
+  </ItemGroup>
+</Project>

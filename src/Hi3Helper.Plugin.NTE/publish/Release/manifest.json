@@ -1,0 +1,23 @@
+{
+  "MainLibraryName": "NTE.dll",
+  "MainPluginName": "Neverness to Everness Plugin",
+  "MainPluginAuthor": "Maxing",
+  "MainPluginDescription": "A plugin for Neverness to Everness (NTE) in Collapse Launcher",
+  "PluginStandardVersion": "0.1.5.0",
+  "PluginVersion": "0.1.0.0",
+  "PluginCreationDate": "2026-04-21T00:00:00+00:00",
+  "ManifestDate": "2026-05-07T07:15:04.2600219+00:00",
+  "PluginAlternativeIcon": null,
+  "Assets": [
+    {
+      "FilePath": "zh-CN\\NTE.resources.dll",
+      "Size": 4608,
+      "FileHash": "O/nFIKeDfikNOAmNaJA5aQ=="
+    },
+    {
+      "FilePath": "NTE.dll",
+      "Size": 7137280,
+      "FileHash": "NiSSxD+OYE2aFwxoy9cKgQ=="
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Platforms>x64</Platforms>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PublishAot>true</PublishAot>
+    <NativeLib>Shared</NativeLib>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <DebugType>embedded</DebugType>
+    <Deterministic>true</Deterministic>
+    <LangVersion>preview</LangVersion>
+    <AssemblyName>NTE</AssemblyName>
+    <ProductName>Neverness to Everness Plugin</ProductName>
+    <Product>Collapse</Product>
+    <Description>This library is a plugin for adding support for Neverness to Everness (NTE) into Collapse Launcher</Description>
+    <AssemblyTitle>Neverness to Everness Plugin</AssemblyTitle>
+    <Company>Collapse Launcher Team</Company>
+    <Authors>$(Company)</Authors>
+    <Copyright>Copyright 2022-2026 $(Company)</Copyright>
+    <Version>0.10.0</Version>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CA2256</NoWarn>
+    <Configurations>Debug;Release;DebugNoReflection;ReleaseNoReflection</Configurations>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='DebugNoReflection'">
+    <DefineConstants>$(DefineConstants);DEBUG;USELIGHTWEIGHTJSONPARSER;MANUALCOM</DefineConstants>
+    <Optimize>false</Optimize>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='ReleaseNoReflection'">
+    <DefineConstants>$(DefineConstants);USELIGHTWEIGHTJSONPARSER;MANUALCOM</DefineConstants>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../Hi3Helper.Plugin.NTE.SdkShared/NteDetachedProcess.cs" Link="Login/NteDetachedProcess.cs" />
+    <Compile Include="../Hi3Helper.Plugin.NTE.SdkShared/NteHostLaunchOptions.cs" Link="Login/NteHostLaunchOptions.cs" />
+    <Compile Include="../Hi3Helper.Plugin.NTE.SdkShared/NteLoginPreferences.cs" Link="Login/NteLoginPreferences.cs" />
+    <Compile Include="../Hi3Helper.Plugin.NTE.SdkShared/NteLaunchPreferences.cs" Link="Login/NteLaunchPreferences.cs" />
+    <Compile Include="../Hi3Helper.Plugin.NTE.SdkShared/NteLoginNotice.cs" Link="Login/NteLoginNotice.cs" />
+    <Compile Include="../Hi3Helper.Plugin.NTE.SdkShared/NteOfficialLaunchPlan.cs" Link="Login/NteOfficialLaunchPlan.cs" />
+    <ProjectReference Include="..\..\Hi3Helper.Plugin.Core\Hi3Helper.Plugin.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="HtmlAgilityPack" Version="1.13.1" />
+    <PackageReference Include="StbImageSharp" Version="2.30.16" />
+    <PackageReference Include="StbImageWriteSharp" Version="1.16.7" />
+    <InternalsVisibleTo Include="Hi3Helper.Plugin.NTE.Tests" />
+    <InternalsVisibleTo Include="NteStateAudit" />
+    <None Include="../../scripts/Check-NteIntegrity.ps1" Link="Check-NteIntegrity.ps1" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Target Name="GeneratePluginVersion" BeforeTargets="CoreCompile" DependsOnTargets="GetAssemblyVersion">
+    <WriteLinesToFile File="$(IntermediateOutputPath)PluginVersion.g.cs"
+      Lines="namespace Hi3Helper.Plugin.NTE%3B internal static class PluginVersion { internal static readonly Hi3Helper.Plugin.Core.Management.GameVersion Value = new(&quot;$(AssemblyVersion)&quot;)%3B }"
+      Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <Compile Include="$(IntermediateOutputPath)PluginVersion.g.cs" />
+    </ItemGroup>
+  </Target>
+
+</Project>

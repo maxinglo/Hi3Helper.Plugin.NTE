@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+artifacts/
+TestResults/
+.vs/
+.idea/
+*.user
+*.suo
+*.DotSettings.user
+*.log
+*.tmp

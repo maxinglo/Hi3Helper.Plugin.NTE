@@ -1,0 +1,30 @@
+﻿<Solution>
+  <Configurations>
+    <BuildType Name="Debug" />
+    <BuildType Name="Release" />
+    <BuildType Name="DebugNoReflection" />
+    <BuildType Name="ReleaseNoReflection" />
+    <Platform Name="x64" />
+  </Configurations>
+  <Project Path="Hi3Helper.Plugin.Core/Hi3Helper.Plugin.Core.csproj">
+    <Platform Project="x64" />
+  </Project>
+  <Folder Name="/src/">
+    <Project Path="src/Hi3Helper.Plugin.NTE.LoginHost/Hi3Helper.Plugin.NTE.LoginHost.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="src/Hi3Helper.Plugin.NTE/Hi3Helper.Plugin.NTE.csproj">
+      <Platform Project="x64" />
+    </Project>
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Hi3Helper.Plugin.NTE.Tests/Hi3Helper.Plugin.NTE.Tests.csproj">
+      <Platform Project="x64" />
+    </Project>
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/NteLoginUiVerification/NteLoginUiVerification.csproj">
+      <Platform Project="x64" />
+    </Project>
+  </Folder>
+</Solution>

@@ -1,0 +1,334 @@
+using Hi3Helper.Plugin.Core;
+using Hi3Helper.Plugin.Core.Management;
+using Hi3Helper.Plugin.Core.Utility;
+using Hi3Helper.Plugin.NTE.Management.Config;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
+using System.Net;
+using System.Net.Http;
+using System.Runtime.InteropServices.Marshalling;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Hi3Helper.Plugin.NTE.Management.Game;
+
+[GeneratedComClass]
+internal partial class NteCNGameInstaller(IGameManager gameManager, HttpClient? downloadHttpClient = null) : GameInstallerBase(gameManager)
+{
+    private readonly HttpClient _downloadHttpClient = downloadHttpClient ?? new PluginHttpClientBuilder()
+        .SetAllowedDecompression(DecompressionMethods.GZip)
+        .AllowCookies()
+        .AllowRedirections()
+        .AllowUntrustedCert()
+        .Create();
+
+    /// <summary>缓存的资源清单</summary>
+    private NteResListParser? _cachedResList;
+    private byte[]? _originalRemoteManifest;
+    private byte[]? _selectedManifest;
+    private NteResListParser? _installedResList;
+    private readonly NteFileVerificationCache _verificationCache = new();
+    internal Action<long, long> ReportPerFileProgress { get; set; } = SharedStaticV1Ext.InvokePerFileProgress;
+
+    internal async Task<NteResListParser> GetIntegrityManifestAsync(CancellationToken token)
+    {
+        if (_cachedResList == null) await InitAsync(token).ConfigureAwait(false);
+        return _cachedResList ?? throw new InvalidOperationException("Cannot load the official resource manifest.");
+    }
+
+    internal Task RepairFilesAsync(NteIntegrityReport report, InstallProgressDelegate? progress,
+        InstallProgressStateDelegate? state, CancellationToken token)
+    {
+        if (!report.Completed || _cachedResList == null || report.Version != _cachedResList.Version)
+            throw new InvalidOperationException("Repair requires a completed check of the active resource manifest.");
+        HashSet<string> paths = new(StringComparer.OrdinalIgnoreCase);
+        foreach (NteIntegrityIssue issue in report.Issues)
+            paths.Add(ResolveResourcePath(EnsureAndGetGamePath(), issue.Path));
+        return RunInstallAsync(progress, state, GameInstallerKind.Update, token, paths, operationHeld: true);
+    }
+
+    /// <summary>
+    /// 初始化安装器：
+    /// 1. 初始化 GameManager 以获取 API 版本
+    /// 2. 下载并解密 ResList.bin.zip
+    /// 3. 解析资源清单
+    /// </summary>
+    protected override async Task<int> InitAsync(CancellationToken token)
+    {
+        SharedStatic.InstanceLogger.LogDebug("[NteCNInstaller::InitAsync] Starting initialization...");
+
+        // 初始化 GameManager
+        if (GameManager is not NteCNGameManager mgr)
+            throw new InvalidOperationException("GameManager is not NteCNGameManager");
+
+        int mgrResult = await mgr.InitAsyncInner(true, token).ConfigureAwait(false);
+        if (mgrResult != 0)
+        {
+            SharedStatic.InstanceLogger.LogError("[NteCNInstaller::InitAsync] GameManager init failed: {Result}", mgrResult);
+            return mgrResult;
+        }
+
+        GameManager.GetApiGameVersion(out GameVersion apiVer);
+        string gameVersion = apiVer.ToString();
+        string branchName = mgr.BranchName;
+
+        SharedStatic.InstanceLogger.LogInformation(
+            "[NteCNInstaller::InitAsync] API Version={V}, Branch={B}", gameVersion, branchName);
+
+        // 下载 ResList.bin.zip
+        byte[] resListXmlBytes = await DownloadAndDecryptResListAsync(branchName, gameVersion, token)
+            .ConfigureAwait(false);
+
+        // 解析资源清单
+        _originalRemoteManifest = resListXmlBytes;
+        GameManager.GetGamePath(out string? currentPath);
+        _selectedManifest = NteOfficialPatcherState.SelectInstalledBaseVersions(resListXmlBytes, currentPath, mgr.Region);
+        _cachedResList = NteResListParser.Parse(_selectedManifest);
+        if (_cachedResList.Version != gameVersion)
+            throw new InvalidDataException("Resource manifest does not match the selected game version.");
+
+        // Ordinary updates compare manifests first. A missing basis falls back to a full integrity check.
+        _installedResList = null;
+        GameManager.GetCurrentGameVersion(out GameVersion installedVersion);
+        if (installedVersion != GameVersion.Empty && installedVersion < apiVer)
+        {
+            GameManager.GetGamePath(out string? installedPath);
+            string? localManifest = string.IsNullOrEmpty(installedPath) ? null : Path.Combine(installedPath,
+                mgr.Region.SdkDirectory, "ResList.xml");
+            try
+            {
+                if (localManifest != null && File.Exists(localManifest))
+                {
+                    byte[] bytes = await File.ReadAllBytesAsync(localManifest, token).ConfigureAwait(false);
+                    NteResListParser previous = NteResListParser.Parse(NteResListDecryptor.Decrypt(bytes, mgr.AppId));
+                    if (previous.Version == installedVersion.ToString()) _installedResList = previous;
+                }
+                if (_installedResList == null)
+                {
+                    NteResListParser previous = NteResListParser.Parse(await DownloadAndDecryptResListAsync(
+                        branchName, installedVersion.ToString(), token).ConfigureAwait(false));
+                    if (previous.Version == installedVersion.ToString()) _installedResList = previous;
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                SharedStatic.InstanceLogger.LogWarning(ex, "[NteCNInstaller] No installed-version manifest; using full verification.");
+            }
+        }
+
+        SharedStatic.InstanceLogger.LogInformation(
+            "[NteCNInstaller::InitAsync] Parsed ResList: {ResCount} resources, {PakCount} paks, " +
+            "{BvResCount} base-version resources, {BvPakCount} base-version paks, " +
+            "total install size: {Size:F2} GB",
+            _cachedResList.Resources.Count,
+            _cachedResList.Paks.Count,
+            _cachedResList.BaseVersionResources.Count,
+            _cachedResList.BaseVersionPaks.Count,
+            _cachedResList.GetTotalInstallSize() / 1024.0 / 1024.0 / 1024.0);
+
+        return 0;
+    }
+
+    /// <summary>
+    /// 获取游戏安装所需的总大小。
+    /// </summary>
+    protected override async Task<long> GetGameSizeAsyncInner(GameInstallerKind gameInstallerKind, CancellationToken token)
+    {
+        if (_cachedResList == null)
+            await InitAsync(token).ConfigureAwait(false);
+
+        if (_cachedResList == null)
+            return 0L;
+
+        if (gameInstallerKind == GameInstallerKind.Install)
+            return _cachedResList.GetTotalExtractedSize();
+
+        if (gameInstallerKind == GameInstallerKind.Update)
+        {
+            GameManager.GetGamePath(out string? gamePath);
+            if (string.IsNullOrEmpty(gamePath))
+                return _cachedResList.GetTotalExtractedSize();
+
+            return await Task.Factory.StartNew(() => CalculateTotalBytes(BuildDownloadTasks(
+                _cachedResList,
+                gamePath,
+                onlyMissing: true,
+                verifyIntegrity: false,
+                token, _installedResList)), token, TaskCreationOptions.LongRunning, TaskScheduler.Default).ConfigureAwait(false);
+        }
+
+        return 0L;
+    }
+
+    /// <summary>
+    /// 获取已下载的文件总大小。
+    /// </summary>
+    protected override async Task<long> GetGameDownloadedSizeAsyncInner(GameInstallerKind gameInstallerKind, CancellationToken token)
+    {
+        if (_cachedResList == null)
+            await InitAsync(token).ConfigureAwait(false);
+
+        if (_cachedResList == null)
+            return 0L;
+
+        GameManager.GetGamePath(out string? gamePath);
+        if (string.IsNullOrEmpty(gamePath))
+            return 0L;
+
+        bool onlyMissing = gameInstallerKind == GameInstallerKind.Update;
+
+        return await Task.Factory.StartNew(() =>
+        {
+            List<DownloadTask> tasks = BuildDownloadTasks(_cachedResList, gamePath, onlyMissing, false, token, _installedResList);
+            return CalculateDownloadedBytes(tasks, includeCompletedFiles: gameInstallerKind == GameInstallerKind.Install);
+        }, token, TaskCreationOptions.LongRunning, TaskScheduler.Default).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 开始全新安装。
+    /// </summary>
+    protected override async Task StartInstallAsyncInner(
+        InstallProgressDelegate? progressDelegate,
+        InstallProgressStateDelegate? progressStateDelegate,
+        CancellationToken token)
+    {
+        if (_cachedResList == null)
+            await InitAsync(token).ConfigureAwait(false);
+
+        await RunInstallAsync(progressDelegate, progressStateDelegate, GameInstallerKind.Install, token)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 开始更新（当前实现：重新下载有变化的文件）。
+    /// </summary>
+    protected override async Task StartUpdateAsyncInner(
+        InstallProgressDelegate? progressDelegate,
+        InstallProgressStateDelegate? progressStateDelegate,
+        CancellationToken token)
+    {
+        if (_cachedResList == null)
+            await InitAsync(token).ConfigureAwait(false);
+
+        await RunInstallAsync(progressDelegate, progressStateDelegate, GameInstallerKind.Update, token)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 预加载（当前未实现）。
+    /// </summary>
+    protected override Task StartPreloadAsyncInner(
+        InstallProgressDelegate? progressDelegate,
+        InstallProgressStateDelegate? progressStateDelegate,
+        CancellationToken token)
+        => Task.CompletedTask;
+
+    /// <summary>
+    /// 卸载游戏。
+    /// </summary>
+    protected override async Task UninstallAsyncInner(CancellationToken token)
+    {
+        GameManager.IsGameInstalled(out bool isInstalled);
+        if (!isInstalled)
+            return;
+
+        GameManager.GetGamePath(out string? installPath);
+        if (string.IsNullOrEmpty(installPath))
+            return;
+
+        SharedStatic.InstanceLogger.LogInformation("[NteCNInstaller::UninstallAsyncInner] Uninstalling from: {Path}", installPath);
+        await Task.Run(() => Directory.Delete(installPath, true), token).ConfigureAwait(false);
+    }
+
+    public override void Dispose()
+    {
+        _downloadHttpClient.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
+    #region ResList 下载和解密
+
+    /// <summary>
+    /// 下载 ResList.bin.zip，解压并解密，返回 XML 字节。
+    /// </summary>
+    private async Task<byte[]> DownloadAndDecryptResListAsync(
+        string branchName, string gameVersion, CancellationToken token)
+    {
+        Exception? lastException = null;
+
+        // 尝试所有 CDN
+        string[] resourceRoots = ((NteCNGameManager)GameManager).GameResBaseUrls;
+        for (int i = 0; i < resourceRoots.Length; i++)
+        {
+            string url = $"{resourceRoots[i].TrimEnd('/')}/{branchName}/Version/Windows/version/{gameVersion}/ResList.bin.zip";
+
+            try
+            {
+                SharedStatic.InstanceLogger.LogDebug(
+                    "[NteCNInstaller::DownloadAndDecryptResListAsync] Downloading ResList from: {Url}", url);
+
+                using HttpResponseMessage response = await _downloadHttpClient
+                    .GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token)
+                    .ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+
+                await using Stream zipStream = await response.Content.ReadAsStreamAsync(token)
+                    .ConfigureAwait(false);
+
+                // 解压 zip（包含 ResList.bin 和 lastdiff.bin）
+                using ZipArchive archive = new(zipStream, ZipArchiveMode.Read, leaveOpen: false);
+
+                ZipArchiveEntry? resListEntry = null;
+                foreach (ZipArchiveEntry entry in archive.Entries)
+                {
+                    if (entry.FullName.EndsWith("ResList.bin", StringComparison.OrdinalIgnoreCase))
+                    {
+                        resListEntry = entry;
+                        break;
+                    }
+                }
+
+                if (resListEntry == null)
+                    throw new InvalidDataException("ResList.bin not found in zip archive");
+
+                // 读取加密数据
+                await using Stream entryStream = resListEntry.Open();
+                byte[] encryptedData = await ReadAllBytesAsync(entryStream, token).ConfigureAwait(false);
+
+                // 解密
+                byte[] decryptedXml = NteResListDecryptor.Decrypt(encryptedData.AsSpan(), ((NteCNGameManager)GameManager).AppId);
+
+                SharedStatic.InstanceLogger.LogInformation(
+                    "[NteCNInstaller::DownloadAndDecryptResListAsync] Successfully decrypted ResList: {Size} bytes",
+                    decryptedXml.Length);
+
+                return decryptedXml;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                SharedStatic.InstanceLogger.LogWarning(ex,
+                    "[NteCNInstaller::DownloadAndDecryptResListAsync] CDN {Index} failed: {Msg}", i, ex.Message);
+                lastException = ex;
+            }
+        }
+
+        throw lastException ?? new HttpRequestException("Failed to download ResList from all CDNs");
+    }
+
+    private static async Task<byte[]> ReadAllBytesAsync(Stream stream, CancellationToken token)
+    {
+        using MemoryStream ms = new();
+        byte[] buffer = new byte[81920];
+        int read;
+        while ((read = await stream.ReadAsync(buffer, 0, buffer.Length, token).ConfigureAwait(false)) > 0)
+        {
+            ms.Write(buffer, 0, read);
+        }
+        return ms.ToArray();
+    }
+
+    #endregion
+}

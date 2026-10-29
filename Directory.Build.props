@@ -1,0 +1,13 @@
+<Project>
+  <!-- Leave the pinned upstream submodule's build settings under upstream control. -->
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Hi3Helper.Plugin.NTE' Or '$(MSBuildProjectName)' == 'Hi3Helper.Plugin.NTE.Tests'">
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Hi3Helper.Plugin.Core'">
+    <!-- The host's RID-specific restore must not modify the submodule's own lock file. -->
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <NuGetLockFilePath>$(MSBuildThisFileDirectory)eng/locks/Hi3Helper.Plugin.Core.packages.lock.json</NuGetLockFilePath>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+    <xsd:schema id="root" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns=""
+                xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+        <xsd:element name="root" msdata:IsDataSet="true">
+            <xsd:complexType>
+                <xsd:choice maxOccurs="unbounded">
+                    <xsd:element name="metadata">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="value" type="xsd:string" minOccurs="0"/>
+                            </xsd:sequence>
+                            <xsd:attribute name="name" type="xsd:string"/>
+                            <xsd:attribute name="type" type="xsd:string"/>
+                            <xsd:attribute name="mimetype" type="xsd:string"/>
+                            <xsd:attribute ref="xml:space"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                    <xsd:element name="assembly">
+                        <xsd:complexType>
+                            <xsd:attribute name="alias" type="xsd:string"/>
+                            <xsd:attribute name="name" type="xsd:string"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                    <xsd:element name="data">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1"/>
+                                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2"/>
+                            </xsd:sequence>
+                            <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1"/>
+                            <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3"/>
+                            <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4"/>
+                            <xsd:attribute ref="xml:space"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                    <xsd:element name="resheader">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1"/>
+                            </xsd:sequence>
+                            <xsd:attribute name="name" type="xsd:string" use="required"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:choice>
+            </xsd:complexType>
+        </xsd:element>
+    </xsd:schema>
+    <resheader name="resmimetype">
+        <value>text/microsoft-resx</value>
+    </resheader>
+    <resheader name="version">
+        <value>2.0</value>
+    </resheader>
+    <resheader name="reader">
+        <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral,
+            PublicKeyToken=b77a5c561934e089
+        </value>
+    </resheader>
+    <resheader name="writer">
+        <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral,
+            PublicKeyToken=b77a5c561934e089
+        </value>
+    </resheader>
+    <data name="PluginName" xml:space="preserve">
+    <value>异环插件</value>
+  </data>
+    <data name="PluginDescription" xml:space="preserve">
+    <value>用于 Collapse Launcher 的 Neverness to Everness（NTE）插件</value>
+  </data>
+    <data name="GameName" xml:space="preserve">
+    <value>异环</value>
+  </data>
+    <data name="ZoneDescription" xml:space="preserve">
+    <value>NTE 国服配置。</value>
+  </data>
+    <data name="ZoneFullName" xml:space="preserve">
+    <value>异环（中国大陆）</value>
+  </data>
+    <data name="AppearanceTitle" xml:space="preserve">
+    <value>异环 · 外观</value>
+  </data>
+    <data name="AppearanceBackgroundSection" xml:space="preserve">
+    <value>背景与装饰叠图</value>
+  </data>
+    <data name="AppearanceDynamicBackground" xml:space="preserve">
+    <value>动态背景</value>
+  </data>
+    <data name="AppearanceOverlayEnabled" xml:space="preserve">
+    <value>装饰叠图</value>
+  </data>
+    <data name="AppearanceCanvasWidth" xml:space="preserve">
+    <value>参考画布宽度</value>
+  </data>
+    <data name="AppearanceCanvasHeight" xml:space="preserve">
+    <value>参考画布高度</value>
+  </data>
+    <data name="AppearanceRestartHint" xml:space="preserve">
+    <value>保存后，重新选择区服或重启启动器生效。坐标随背景等比缩放。</value>
+  </data>
+    <data name="AppearanceSlogan" xml:space="preserve">
+    <value>版本标题图</value>
+  </data>
+    <data name="AppearanceLogo" xml:space="preserve">
+    <value>游戏 Logo</value>
+  </data>
+    <data name="AppearanceElementEnabled" xml:space="preserve">
+    <value>显示此图片</value>
+  </data>
+    <data name="AppearanceSource" xml:space="preserve">
+    <value>图片来源</value>
+  </data>
+    <data name="AppearanceSourceHint" xml:space="preserve">
+    <value>填写 slogan 或 logo 自动读取官网，也可填写 HTTPS 图片地址或本地文件绝对路径。</value>
+  </data>
+    <data name="AppearanceX" xml:space="preserve">
+    <value>水平位置</value>
+  </data>
+    <data name="AppearanceY" xml:space="preserve">
+    <value>垂直位置</value>
+  </data>
+    <data name="AppearanceWidth" xml:space="preserve">
+    <value>宽度</value>
+  </data>
+    <data name="AppearanceHeight" xml:space="preserve">
+    <value>高度</value>
+  </data>
+    <data name="AppearanceOpacity" xml:space="preserve">
+    <value>不透明度</value>
+  </data>
+    <data name="GameSettingsTitle" xml:space="preserve"><value>异环 · 游戏设置</value></data>
+    <data name="LoginSettingsSection" xml:space="preserve"><value>账号与登录</value></data>
+    <data name="LoginExperimentalHello" xml:space="preserve"><value>Windows Hello 保护已保存账号（实验性）</value></data>
+    <data name="LoginExperimentalHelloHint" xml:space="preserve"><value>默认关闭，使用当前 Windows 用户的系统加密保护。开启后，保存及恢复账号须通过 Windows Hello。下一次账号操作生效；旧 Hello 记录关闭保护时仍需解锁一次以转换。本地记录保留至手动移除，服务端仍可使已保存凭据失效。</value></data>
+    <data name="ZoneName" xml:space="preserve"><value>中国大陆</value></data>
+    <data name="GlobalZoneName" xml:space="preserve"><value>国际服</value></data>
+    <data name="GlobalZoneFullName" xml:space="preserve"><value>异环（国际服）</value></data>
+    <data name="GlobalZoneDescription" xml:space="preserve"><value>国际服。支持下载、更新及修复，国际服登录适配开发中。</value></data>
+    <data name="GlobalLoginPending" xml:space="preserve"><value>国际服登录尚未适配。当前可通过 Collapse 下载、更新及修复国际服游戏。</value></data>
+    <data name="LaunchSettingsSection" xml:space="preserve"><value>启动选项</value></data>
+    <data name="LaunchGraphicsApi" xml:space="preserve"><value>图形接口</value></data>
+    <data name="LaunchGraphicsDefault" xml:space="preserve"><value>游戏默认</value></data>
+  <data name="LaunchOfficialLauncher" xml:space="preserve">
+    <value>使用官方启动器后台静默启动</value>
+  </data>
+  <data name="LaunchOfficialLauncherHint" xml:space="preserve">
+    <value>官方启动器必须安装在当前游戏安装目录内（国服 NTELauncher，国际版 NTEGlobal）。下次启动生效；登录、验证或更新所需窗口仍可能显示。</value>
+  </data>
+</root>
+
