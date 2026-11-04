@@ -25,3 +25,9 @@ dotnet tests/Hi3Helper.Plugin.NTE.Tests/bin/x64/Release/net10.0/Hi3Helper.Plugin
 ```
 
 `NteMediaAudit` 的 `--preload-info` 模式可检查已发布原生 DLL 的版本、预下载可用性和大小接口，只创建空 EXE 夹具，不开始资源下载。完整预下载、大文件合成与实际 Collapse 交互需分别验证。
+
+该工具包含在解决方案构建中。对新报告目录运行：
+
+```powershell
+dotnet tools/NteMediaAudit/bin/x64/Release/net10.0/NteMediaAudit.dll <NTE.dll> <新报告路径> 0 --preload-info
+```
