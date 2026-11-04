@@ -111,7 +111,15 @@ internal static class NteOfficialPatcherState
         if (root.Name != "config" || target.Name != "config")
             throw new InvalidDataException("Invalid official configuration root.");
         if (root.SelectSingleNode("LocalBranch")?.InnerText != branch)
-            throw new InvalidDataException("Official game branch changed during the update.");
+        {
+            // A major-version preload is published on a new branch. Only the branch previously
+            // advertised by the installed official configuration may be promoted here.
+            if (root["LocalBranch"] == null || root["PreReleaseBranch"]?.InnerText != branch ||
+                !Core.Management.GameVersion.TryParse(root["PreReleaseVersion"]?.InnerText, out var preview) ||
+                !Core.Management.GameVersion.TryParse(target["ResVersion"]?.InnerText, out var released) || released < preview)
+                throw new InvalidDataException("Official game branch changed during the update.");
+            root["LocalBranch"]!.InnerText = branch;
+        }
 
         void Set(string name, string value)
         {
@@ -123,6 +131,11 @@ internal static class NteOfficialPatcherState
             Set(field,
                 target.SelectSingleNode(field)?.InnerText ??
                 throw new InvalidDataException("Missing release field: " + field));
+        foreach (string field in new[] { "PreReleaseBranch", "PreReleaseVersion" })
+        {
+            if (target[field] is { } advertised) Set(field, advertised.InnerText);
+            else if (root[field] is { } obsolete) root.RemoveChild(obsolete);
+        }
         XmlDocument manifest = ParseXml(Encoding.UTF8.GetString(selectedManifest));
         Set("ResCount",
             (manifest.DocumentElement!.SelectNodes("Res")!.Count +

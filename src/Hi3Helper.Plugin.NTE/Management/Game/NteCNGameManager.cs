@@ -29,6 +29,7 @@ internal partial class NteGameManager : GameManagerBase
     }
 
     internal string? ReleaseConfigXml { get; private set; }
+    internal NtePreloadRelease? PreloadRelease { get; private set; }
     private string? _lastSelectedPath;
 
     internal bool IsGamePathCompatible(string gamePath)
@@ -69,7 +70,8 @@ internal partial class NteGameManager : GameManagerBase
     /// <summary>应用 ID（从 PatcherConfig 或默认值）</summary>
     internal string AppId { get; private set; } = NteConfigProvider.DefaultAppId;
 
-    protected override bool HasPreload => false;
+    protected override bool HasPreload => IsInstalled && CurrentGameVersion == ApiGameVersion && !HasUpdate &&
+        PreloadRelease != null && CurrentGameVersion < PreloadRelease.Version;
 
     protected override bool HasUpdate =>
         IsInstalled &&
@@ -246,6 +248,8 @@ internal partial class NteGameManager : GameManagerBase
         if (!forceRefresh && ApiGameVersion != GameVersion.Empty)
             return 0;
 
+        PreloadRelease = null;
+        ApiPreloadGameVersion = GameVersion.Empty;
         try
         {
             NtePatcherConfig patcher = await NtePatcherConfig.DiscoverAsync(ApiResponseHttpClient, token, Region).ConfigureAwait(false);
@@ -256,12 +260,16 @@ internal partial class NteGameManager : GameManagerBase
             AppId = patcher.AppId;
             ReleaseConfigXml = xml;
             ApiGameVersion = version;
+            PreloadRelease = NtePreloadRelease.Parse(xml, version);
+            ApiPreloadGameVersion = PreloadRelease?.Version ?? GameVersion.Empty;
             SharedStatic.InstanceLogger.LogInformation(
                 "[NteCNGameManager::InitAsyncInner] Active branch={Branch}, API version={Version}", BranchName, version);
             return 0;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            PreloadRelease = null;
+            ApiPreloadGameVersion = GameVersion.Empty;
             SharedStatic.InstanceLogger.LogError(ex, "[NteCNGameManager::InitAsyncInner] Cannot resolve the active official game release");
             return -1;
         }

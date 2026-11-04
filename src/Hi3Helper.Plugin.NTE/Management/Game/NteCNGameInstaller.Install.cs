@@ -33,16 +33,17 @@ internal partial class NteGameInstaller
         GameInstallerKind installerKind,
         CancellationToken token,
         HashSet<string>? repairPaths = null,
-        bool operationHeld = false)
+        bool operationHeld = false,
+        NtePreloadPlan? preload = null)
     {
-        NteResListParser? resListParser = _cachedResList;
+        NteResListParser? resListParser = preload?.Manifest ?? _cachedResList;
         if (resListParser == null)
             throw new InvalidOperationException("Resource list not initialized. Call InitAsync first.");
 
         string gamePath = EnsureAndGetGamePath();
         using FileStream? operation = operationHeld ? null : NteGameOperation.Acquire(gamePath);
         NteGameManager mgr = (NteGameManager)GameManager;
-        if (NteSharedInstallation.NeedsActivation(gamePath, mgr.Region))
+        if (preload == null && NteSharedInstallation.NeedsActivation(gamePath, mgr.Region))
         {
             using var client = new PluginHttpClientBuilder().AllowRedirections().Create();
             NteRegionSwitchService service = new(client);
@@ -65,13 +66,18 @@ internal partial class NteGameInstaller
         if (installedRegion != null && installedRegion.AppId != mgr.AppId)
             throw new InvalidDataException(
                 "This game directory belongs to a different NTE region. Select a separate installation directory.");
-        NteOfficialPatcherState.EnsureOfficialLauncherClosed(gamePath, mgr.Region);
-        if (NteSharedInstallation.Load(gamePath) != null) NteSharedInstallation.EnsureGamesClosed(gamePath);
+        if (preload == null)
+        {
+            NteOfficialPatcherState.EnsureOfficialLauncherClosed(gamePath, mgr.Region);
+            if (NteSharedInstallation.Load(gamePath) != null) NteSharedInstallation.EnsureGamesClosed(gamePath);
+        }
         string[] cdnBaseUrls = mgr.GameResBaseUrls;
-        string branchName = mgr.BranchName;
+        string branchName = preload?.BranchName ?? mgr.BranchName;
         // Build the complete target list separately from the unfinished work.
         progressStateDelegate?.Invoke(InstallProgressState.Preparing);
-        List<DownloadTask> allTasks = BuildDownloadTasks(resListParser, gamePath, false, false, token);
+        List<DownloadTask> allTasks = preload == null
+            ? BuildDownloadTasks(resListParser, gamePath, false, false, token)
+            : BuildPreloadTasks(preload, _cachedResList!, gamePath, mgr.AppId, token);
         if (repairPaths != null) allTasks.RemoveAll(task => !repairPaths.Contains(task.OutputPath));
         long lastPreparation = 0, lastPreparationFile = 0;
         int lastPreparedCount = -1;
@@ -93,7 +99,14 @@ internal partial class NteGameInstaller
             ReportPerFileProgress(done, total);
         }
 
-        List<DownloadTask> downloadTasks = repairPaths != null
+        if (preload == null)
+            await Task.Factory.StartNew(() => RestorePreloadedFiles(allTasks, gamePath, mgr.AppId, token, Preparing, PreparingFile), token,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default).ConfigureAwait(false);
+
+        List<DownloadTask> downloadTasks = preload != null
+            ? await Task.Factory.StartNew(() => FindMissingPreloadTasks(allTasks, token, Preparing, PreparingFile), token,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default).ConfigureAwait(false)
+            : repairPaths != null
             ? allTasks
             : await Task.Factory.StartNew(() =>
                     BuildDownloadTasks(resListParser, gamePath, true, true, token, _installedResList,
@@ -277,6 +290,17 @@ internal partial class NteGameInstaller
                 job.Attempt + 1, Path.GetFileName(job.File.OutputPath), error.Message);
         }, token).ConfigureAwait(false);
         token.ThrowIfCancellationRequested();
+
+        if (preload != null)
+        {
+            progress.StateCount = 2;
+            progress.DownloadedBytes = totalBytes;
+            progress.DownloadedCount = totalFileCount;
+            progressStateDelegate?.Invoke(InstallProgressState.Completed);
+            progressDelegate?.Invoke(in progress);
+            SharedStatic.InstanceLogger.LogInformation("[NTE Preload] Cached version {Version}; installed resources and version are unchanged.", preload.Version);
+            return;
+        }
 
         if (mgr.Region.IsTaiwan)
         {
