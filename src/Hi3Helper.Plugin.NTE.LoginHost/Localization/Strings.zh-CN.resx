@@ -592,4 +592,8 @@
   <data name="NoticeTaiwanData" xml:space="preserve">
     <value>台服：账号和持续保留的随机设备 ID 独立保存在 %LocalAppData%\Collapse\NTE\Accounts\Taiwan\。手机号显示资料只保留区号和末四位，完整手机号、密码与验证码不写入账号库。台服也向游戏 SDK 提供下文列出的国际版设备信息。可读设置：%LocalAppData%\CollapseLauncher\Plugins\NTE\Taiwan\login.json 和 NteTaiwan\launch.json。%LocalAppData%\Collapse\NTE\Diagnostics\ 中的浏览器回调诊断轮换记录时间、地区、阶段与字节数，不记录回调网址、令牌或账号。使用官方启动器需在当前游戏安装目录内提供 NTETW\NTETWGame.exe。</value>
   </data>
+  <data name="CnUnsupportedSdk" xml:space="preserve"><value>当前国服启动器或 SDK 版本尚未适配。请更新插件后重试。</value></data>
+  <data name="CnFilesMissing" xml:space="preserve"><value>游戏安装缺少登录所需文件。请校验或修复游戏后重试。</value></data>
+  <data name="CnClientRunning" xml:space="preserve"><value>游戏或官方启动器仍在运行。请先退出后重试。</value></data>
+  <data name="CnLoginHostRunning" xml:space="preserve"><value>已有登录组件正在运行。请返回现有窗口或关闭后重试。</value></data>
 </root>

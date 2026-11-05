@@ -16,7 +16,8 @@ internal sealed class ProbeCallbackTransport
         ValidateWindows();
     }
 
-    internal static ProbeCallbackTransport FromRegistration(ReadOnlySpan<byte> frame, int clientId, nint source, string expectedApplication = "1289")
+    internal static ProbeCallbackTransport FromRegistration(ReadOnlySpan<byte> frame, int clientId, nint source,
+        string expectedApplication = "1289", string expectedBridgeVersion = "2.0.8.0")
     {
         if (clientId <= 0 || frame.Length != 1244 || BinaryPrimitives.ReadUInt32LittleEndian(frame) != 0x6B647331 ||
             BinaryPrimitives.ReadUInt32LittleEndian(frame[4..]) != 0 || BinaryPrimitives.ReadInt32LittleEndian(frame[8..]) != frame.Length)
@@ -29,7 +30,9 @@ internal sealed class ProbeCallbackTransport
             nint window = (nint)BinaryPrimitives.ReadUInt32LittleEndian(body);
             string app = System.Text.Encoding.Unicode.GetString(body, 4, 256).Split('\0')[0];
             string version = System.Text.Encoding.Unicode.GetString(body, 0x40C, 64).Split('\0')[0];
-            if (expectedApplication is not ("1289" or "global") || app != expectedApplication || version != "2.0.8.0") throw new InvalidDataException("Unverified application or bridge version.");
+            if (expectedApplication is not ("1289" or "global") || expectedBridgeVersion is not ("2.0.8.0" or "2.0.9.0") ||
+                app != expectedApplication || version != expectedBridgeVersion)
+                throw new InvalidDataException("Unverified application or bridge version.");
             return new ProbeCallbackTransport(window, source, clientId);
         }
         finally { CryptographicOperations.ZeroMemory(body); }

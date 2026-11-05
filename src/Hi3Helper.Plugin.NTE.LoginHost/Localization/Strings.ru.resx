@@ -590,4 +590,8 @@ Download: {3} files ({4:F3} GB)</value></data>
   <data name="NoticeTaiwanData" xml:space="preserve">
     <value>Тайвань: учётные записи и постоянный случайный идентификатор устройства хранятся отдельно в %LocalAppData%\Collapse\NTE\Accounts\Taiwan\. Для отображения телефона сохраняются только код страны и последние четыре цифры; полный номер, пароль и проверочный код не записываются в хранилище учётных записей. Тайвань также передаёт SDK игры сведения об устройстве, перечисленные ниже для Global. Читаемые настройки: %LocalAppData%\CollapseLauncher\Plugins\NTE\Taiwan\login.json и NteTaiwan\launch.json. Ротационные журналы обратного вызова браузера в %LocalAppData%\Collapse\NTE\Diagnostics\ содержат только время, регион, этап и число байтов, без URL обратного вызова, токенов и данных учётной записи. Для официального лаунчера нужен NTETW\NTETWGame.exe в выбранной папке игры.</value>
   </data>
+  <data name="CnUnsupportedSdk" xml:space="preserve"><value>Установленная китайская версия лаунчера или SDK пока не поддерживается. Обновите плагин.</value></data>
+  <data name="CnFilesMissing" xml:space="preserve"><value>Отсутствуют файлы игры, необходимые для входа. Проверьте или восстановите игру.</value></data>
+  <data name="CnClientRunning" xml:space="preserve"><value>Игра или официальный лаунчер ещё запущены. Закройте их и повторите попытку.</value></data>
+  <data name="CnLoginHostRunning" xml:space="preserve"><value>Компонент входа уже запущен. Вернитесь в его окно или закройте его и повторите попытку.</value></data>
 </root>

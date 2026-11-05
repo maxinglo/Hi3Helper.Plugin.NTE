@@ -19,28 +19,25 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
     private ProbeCallbackTransport? callback;
     private Task loginTask = Task.CompletedTask;
     private ProbeEnvironment? context;
+    private NteCnSdkCompatibility? compatibility;
     private bool disposed;
     private readonly SynchronizationContext ui = SynchronizationContext.Current ?? throw new InvalidOperationException("UI context required.");
 
     internal async Task<bool> RunAsync()
     {
         string executable = Path.Combine(root, "Client/WindowsNoEditor/HT/Binaries/Win64/HTGame.exe");
-        if (!File.Exists(executable)) throw new FileNotFoundException("Installed client missing.");
+        if (!File.Exists(executable)) throw new NteCnLaunchException("CnFilesMissing");
         foreach (string name in new[] { "HTGame", "NTEGame", "NTEBrowser", "NTEUpdate", "NTELauncher" })
         {
             Process[] running = Process.GetProcessesByName(name);
-            try { if (running.Length != 0) throw new InvalidOperationException("A game or official platform is already running."); }
+            try { if (running.Length != 0) throw new NteCnLaunchException("CnClientRunning"); }
             finally { foreach (Process process in running) process.Dispose(); }
         }
-        string launcherImage = Path.Combine(root, "NTELauncher/NTEGame.exe");
-        if (await HashAsync(launcherImage) != "3CF58ECBE4CD33A83E741C12437CA9BB67678D166548C5972579C1266F250D9F")
-            throw new InvalidDataException("Unverified authentication configuration image.");
-        string sdkPath = Path.GetFullPath(File.ReadAllText(Path.Combine(Path.GetDirectoryName(executable)!, "GameLauncher.config")).Trim());
-        if (!sdkPath.EndsWith("WPGameClientSDK_64.dll", StringComparison.OrdinalIgnoreCase) ||
-            await HashAsync(sdkPath) != "4101B035406BECDA3EACBF0B2DABD7F43D9DF3F9294906706FC504623E7CD13B")
-            throw new InvalidDataException("Unverified SDK callback image.");
+        var validated = await NteCnSdkCompatibility.LoadAsync(root);
+        compatibility = validated.Profile;
+        string sdkPath = validated.BridgePath;
         using Mutex instance = new(false, @"Local\Collapse.NTE.LoginHost.1289", out bool created);
-        if (!created) throw new InvalidOperationException("An independent login host is already running.");
+        if (!created) throw new NteCnLaunchException("CnLoginHostRunning");
         context = new(root, true, useOwnExecutable: true, hostExecutable: Environment.ProcessPath!);
         context.GameWindowChanged += window.NotifySdkGeometryChanged;
         context.LogoutRequested += () => ui.Post(_ => window.OnSdkLogout(), null);
@@ -150,7 +147,8 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
                         }
                         if (operation == 0 && count == 1244 && authentication == null)
                         {
-                            callback = ProbeCallbackTransport.FromRegistration(buffer.AsSpan(0, count), clientId, context!.WindowHandle);
+                            callback = ProbeCallbackTransport.FromRegistration(buffer.AsSpan(0, count), clientId, context!.WindowHandle,
+                                expectedBridgeVersion: compatibility!.ProtocolVersion);
                             _ = ProbeBootConfig.Inspect(buffer.AsSpan(0, count), clientId, application, root,
                                 inspectWithApplicationKey: (configuration, key) =>
                                 {
@@ -218,11 +216,6 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch (IOException) when (token.IsCancellationRequested) { }
         finally { Array.Clear(buffer); }
-    }
-    private static async Task<string> HashAsync(string path)
-    {
-        await using FileStream file = File.OpenRead(path);
-        return Convert.ToHexString(await SHA256.HashDataAsync(file));
     }
     public void Dispose()
     {

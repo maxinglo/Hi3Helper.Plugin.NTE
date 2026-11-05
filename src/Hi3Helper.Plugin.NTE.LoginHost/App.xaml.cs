@@ -125,13 +125,16 @@ public partial class App : Application
             if (arguments.Length == 2 && arguments[0] is "--preview-pid" or "--preview-welcome-pid")
                 System.IO.File.WriteAllText(
                     System.IO.Path.Combine(AppContext.BaseDirectory, "preview-startup-error.txt"), ex.ToString());
-            await window!.ShowFailureAsync(officialLaunch && ex is System.IO.FileNotFoundException
-                ? Localization.LoginText.Get("OfficialLauncherMissing")
+            string key = officialLaunch && ex is System.IO.FileNotFoundException
+                ? "OfficialLauncherMissing"
                 : ex is NteGlobalLaunchException global
-                ? Localization.LoginText.Get(global.Key)
+                ? global.Key
+                : ex is NteCnLaunchException china
+                ? china.Key
                 : ex is System.ComponentModel.Win32Exception native && native.NativeErrorCode == 740
-                    ? Localization.LoginText.Get("ElevationRequired")
-                    : Localization.LoginText.Get("StartupFailed"));
+                    ? "ElevationRequired" : "StartupFailed";
+            NteHostStartupDiagnostics.TryWrite(NteHostStartupDiagnostics.DefaultPath, ex, key);
+            await window!.ShowFailureAsync(Localization.LoginText.Get(key));
         }
         finally
         {

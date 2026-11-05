@@ -592,4 +592,8 @@ Download: {3} files ({4:F3} GB)</value></data>
   <data name="NoticeTaiwanData" xml:space="preserve">
     <value>Taiwan: accounts and a persistent random device ID are stored separately in %LocalAppData%\Collapse\NTE\Accounts\Taiwan\. Phone display data contains only the calling code and last four digits; the full number, password and verification code are not saved in the account store. Taiwan also provides the device information listed for Global below to the game SDK. Readable settings: %LocalAppData%\CollapseLauncher\Plugins\NTE\Taiwan\login.json and NteTaiwan\launch.json. Rotating browser callback diagnostics in %LocalAppData%\Collapse\NTE\Diagnostics\ contain only time, region, stage and byte count, without callback URLs, tokens or account data. The official launcher option requires NTETW\NTETWGame.exe in the selected game installation.</value>
   </data>
+  <data name="CnUnsupportedSdk" xml:space="preserve"><value>The installed China launcher or SDK version is not supported. Update this plugin and try again.</value></data>
+  <data name="CnFilesMissing" xml:space="preserve"><value>Game files required for sign-in are missing. Verify or repair the game and try again.</value></data>
+  <data name="CnClientRunning" xml:space="preserve"><value>The game or official launcher is still running. Close it and try again.</value></data>
+  <data name="CnLoginHostRunning" xml:space="preserve"><value>A sign-in component is already running. Return to its window or close it and try again.</value></data>
 </root>

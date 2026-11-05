@@ -590,4 +590,8 @@ Download: {3} files ({4:F3} GB)</value></data>
   <data name="NoticeTaiwanData" xml:space="preserve">
     <value>Taiwán: las cuentas y un ID de dispositivo aleatorio persistente se guardan por separado en %LocalAppData%\Collapse\NTE\Accounts\Taiwan\. La información visible del teléfono solo conserva el prefijo y los últimos cuatro dígitos; el número completo, la contraseña y el código de verificación no se guardan en el almacén de cuentas. Taiwán también proporciona al SDK del juego la información del dispositivo indicada abajo para Global. Ajustes legibles: %LocalAppData%\CollapseLauncher\Plugins\NTE\Taiwan\login.json y NteTaiwan\launch.json. Los diagnósticos rotativos de las devoluciones del navegador en %LocalAppData%\Collapse\NTE\Diagnostics\ solo registran hora, región, etapa y bytes, sin URL de devolución, tokens ni datos de cuenta. La opción del lanzador oficial requiere NTETW\NTETWGame.exe en la instalación del juego seleccionada.</value>
   </data>
+  <data name="CnUnsupportedSdk" xml:space="preserve"><value>La versión china del iniciador o del SDK instalado aún no es compatible. Actualiza el complemento.</value></data>
+  <data name="CnFilesMissing" xml:space="preserve"><value>Faltan archivos del juego necesarios para iniciar sesión. Verifica o repara el juego.</value></data>
+  <data name="CnClientRunning" xml:space="preserve"><value>El juego o el iniciador oficial sigue abierto. Ciérralo y vuelve a intentarlo.</value></data>
+  <data name="CnLoginHostRunning" xml:space="preserve"><value>Ya hay un componente de inicio de sesión abierto. Vuelve a su ventana o ciérralo e inténtalo de nuevo.</value></data>
 </root>

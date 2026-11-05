@@ -46,7 +46,7 @@ try {
     $loginOutput = Join-Path $outputDirectory 'LoginHost'
     dotnet publish $loginProject -c Release -r win-x64 -p:Platform=x64 --self-contained true `
         -p:PublishSingleFile=false -p:PublishTrimmed=false -p:CopyOutputSymbolsToPublishDirectory=false `
-        -p:RestoreLockedMode=true -p:NuGetAudit=false --nologo -o $loginOutput
+        -p:RestoreLockedMode=true -p:NuGetAudit=false "-p:Version=$((Get-Item (Join-Path $outputDirectory 'NTE.dll')).VersionInfo.ProductVersion.Split('+')[0])" --nologo -o $loginOutput
     if ($LASTEXITCODE -ne 0) { throw "Bundled WPF login host publish failed ($LASTEXITCODE)." }
 
     & (Join-Path $PSScriptRoot 'Test-NteLoginHostResources.ps1') -HostDirectory $loginOutput | Out-Host
