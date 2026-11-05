@@ -6,12 +6,16 @@ namespace Nte.LoginHost;
 internal static class GameStartedLifetime
 {
     internal static async Task<bool> RunAsync(Task gameExit, Func<Task> run, Func<Exception, Task> reportFailure,
-        Func<bool> stopping, Func<Task> cleanup)
+        Func<bool> stopping, Func<Task> cleanup, Task? backgroundFailure = null)
     {
         bool succeeded = true;
         try
         {
-            try { await run(); }
+            try
+            {
+                Task operation = run();
+                await (backgroundFailure == null ? operation : await Task.WhenAny(operation, backgroundFailure));
+            }
             catch (OperationCanceledException) when (stopping() || gameExit.IsCompleted) { }
             catch (Exception ex)
             {

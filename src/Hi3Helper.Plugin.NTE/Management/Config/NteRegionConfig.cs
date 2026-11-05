@@ -1,5 +1,6 @@
 using Hi3Helper.Plugin.Core.Management;
 using System.Collections.Generic;
+using Nte.Login;
 
 namespace Hi3Helper.Plugin.NTE.Management.Config;
 
@@ -20,16 +21,16 @@ public sealed record NteRegionConfig(
     IReadOnlyList<string> SupportedLanguages
 )
 {
-    public string AppId { get; init; } = "1289";
+    public string AppId { get; init; } = NteRegionDefinition.CnAppId;
     public string LauncherVersionIniUrl { get; init; } = NteConfigProvider.LauncherVersionIniUrl;
-    public string LauncherDirectoryName { get; init; } = "NTELauncher";
-    public string DefaultBranch { get; init; } = "publish_PC";
+    public string LauncherDirectoryName { get; init; } = NteRegionDefinition.CnLauncherDirectory;
+    public string DefaultBranch { get; init; } = NteConfigProvider.DefaultBranchName;
     public string[] ResourceUrls { get; init; } = NteConfigProvider.GameResBaseUrls;
-    public bool IsGlobal => AppId == "3000001";
-    public bool IsTaiwan => AppId == "2000013";
+    public bool IsGlobal => AppId == NteRegionDefinition.GlobalAppId;
+    public bool IsTaiwan => AppId == NteRegionDefinition.TaiwanAppId;
     public bool IsOverseas => IsGlobal || IsTaiwan;
     public string LauncherPageUrl { get; init; } = NteConfigProvider.LauncherHtmlUrl;
     public string StorageName => IsGlobal ? "Global" : IsTaiwan ? "Taiwan" : "";
-    public string SdkDirectory => LauncherDirectoryName + "/UserData/Patcher/PatcherSDK";
+    public string SdkDirectory => LauncherDirectoryName + "/" + NteRegionDefinition.PatcherSdkRelativePath;
 }
 

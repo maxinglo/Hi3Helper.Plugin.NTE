@@ -15,6 +15,8 @@ public sealed class CnSdkCompatibilityTests
     {
         Assert.Equal("2.0.8.0", NteCnSdkCompatibility.Resolve(OldLauncher, OldBridge).ProtocolVersion);
         Assert.Equal("2.0.9.0", NteCnSdkCompatibility.Resolve(NewLauncher.ToLowerInvariant(), NewBridge).ProtocolVersion);
+        Assert.Same(NteSdkProtocol.Cn208, NteCnSdkCompatibility.Resolve(OldLauncher, OldBridge).Protocol);
+        Assert.Same(NteSdkProtocol.Cn209, NteCnSdkCompatibility.Resolve(NewLauncher, NewBridge).Protocol);
     }
 
     [Theory]

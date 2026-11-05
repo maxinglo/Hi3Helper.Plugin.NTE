@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Nte.Login;
 
 // Fixed-image protocol, isolated from the production plugin. The service's
 // complete result is forwarded unchanged; no local "allowed" result exists.
@@ -58,29 +59,11 @@ internal static class ProbePreLoginProtocol
         return key;
     }
 
-    internal static byte[] KeyFromRegistration(ReadOnlySpan<byte> frame, int clientId)
+    internal static byte[] KeyFromRegistration(NteSdkRegistration registration)
     {
-        if (clientId <= 0 || frame.Length != 1244 || BinaryPrimitives.ReadUInt32LittleEndian(frame) != 0x6B647331 ||
-            BinaryPrimitives.ReadInt32LittleEndian(frame[4..]) != 0 || BinaryPrimitives.ReadInt32LittleEndian(frame[8..]) != frame.Length)
-            throw new InvalidDataException("Unverified registration for pre-login.");
-        byte[] body = frame[12..].ToArray(), appKey = new byte[32];
-        try
-        {
-            for (int i = 0; i < body.Length; i++) body[i] ^= unchecked((byte)clientId);
-            if (Encoding.Unicode.GetString(body, 4, 256).Split('\0')[0] != "1289" ||
-                Encoding.Unicode.GetString(body, 0x204, 520).Split('\0')[0] != "oneSdkConfig.config" ||
-                Encoding.Unicode.GetString(body, 0x40C, 64).Split('\0')[0] != "2.0.8.0" ||
-                BinaryPrimitives.ReadUInt16LittleEndian(body.AsSpan(0x104 + 64)) != 0)
-                throw new InvalidDataException("Unverified pre-login registration metadata.");
-            for (int i = 0; i < appKey.Length; i++)
-            {
-                ushort character = BinaryPrimitives.ReadUInt16LittleEndian(body.AsSpan(0x104 + 2 * i));
-                if (character is < 32 or > 126) throw new InvalidDataException("Unverified application key encoding.");
-                appKey[i] = (byte)character;
-            }
-            return DeriveKey(appKey);
-        }
-        finally { CryptographicOperations.ZeroMemory(body); CryptographicOperations.ZeroMemory(appKey); }
+        byte[] appKey = registration.ReadCnApplicationKey();
+        try { return DeriveKey(appKey); }
+        finally { CryptographicOperations.ZeroMemory(appKey); }
     }
 
     internal static string Sign(SortedDictionary<string, string> fields, ReadOnlySpan<byte> key)
@@ -142,7 +125,7 @@ internal sealed class ProbePreLoginResponse : IDisposable
                     throw new InvalidDataException("Incomplete pre-login restrictions.");
                 if (!expectedUserId.IsEmpty)
                 {
-                    if (Number(result, "appId") != 1289 || Count(result, "userId") != 1 || result.GetProperty("userId").ValueKind != JsonValueKind.String)
+                    if (Number(result, "appId") != NteRegionDefinition.CN.ApplicationId || Count(result, "userId") != 1 || result.GetProperty("userId").ValueKind != JsonValueKind.String)
                         throw new InvalidDataException("Unverified pre-login identity binding.");
                     byte[] returnedId = Encoding.UTF8.GetBytes(result.GetProperty("userId").GetString()!);
                     try
@@ -257,9 +240,9 @@ internal sealed class ProbePreLoginClient : IDisposable
         // fields use this host's own persisted identifier, never vendor data.
         SortedDictionary<string, string> fields = new(StringComparer.Ordinal)
         {
-            ["appId"] = "1289", ["channelId"] = "9", ["platformId"] = "4", ["userId"] = Encoding.UTF8.GetString(uid),
+            ["appId"] = NteRegionDefinition.CnAppId, ["channelId"] = "9", ["platformId"] = "4", ["userId"] = Encoding.UTF8.GetString(uid),
             ["udid"] = currentDevice, ["ndid"] = currentDevice, ["deviceName"] = "WindowsPc",
-            ["version"] = "2", ["appVersion"] = installedVersion, ["sdkVersion"] = "5.159.0",
+            ["version"] = "2", ["appVersion"] = installedVersion, ["sdkVersion"] = NteCnSdkCompatibility.ServiceSdkVersion,
             ["timestamp"] = time.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture)
         };
         fields["sign"] = ProbePreLoginProtocol.Sign(fields, key); return fields;

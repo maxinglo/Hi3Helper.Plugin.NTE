@@ -8,6 +8,21 @@ internal static class NteHostStartupDiagnostics
     internal static string DefaultPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "Collapse", "NTE", "Diagnostics", "last-startup.json");
 
+    internal static void Phase(string phase, Exception? error = null)
+    {
+        if (phase.Length > 64 || phase.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '-')) return;
+        try
+        {
+            string path = Path.Combine(Path.GetDirectoryName(DefaultPath)!, "runtime.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, JsonSerializer.Serialize(new { utc = DateTimeOffset.UtcNow,
+                hostPid = Environment.ProcessId, hostVersion = typeof(NteHostStartupDiagnostics).Assembly.GetName().Version?.ToString(),
+                phase, exceptionType = error?.GetType().Name },
+                new JsonSerializerOptions { WriteIndented = true }));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
     // Exception messages, stack traces, arguments and SDK frames can contain credentials.
     // Persist only fixed failure identifiers and numeric native status.
     internal static void TryWrite(string path, Exception error, string key)

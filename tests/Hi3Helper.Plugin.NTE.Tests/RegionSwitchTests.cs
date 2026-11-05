@@ -296,6 +296,26 @@ public sealed class RegionSwitchTests : IDisposable
         Assert.Equal("{}", File.ReadAllText(NteSharedInstallation.JournalPath(root)));
     }
 
+    [Fact]
+    public async Task SharedProfilesPreserveTheInstalledBranchAfterAnOfficialMajorUpdate()
+    {
+        using Fixture fixture = new(this, branch: "PC_260");
+        using HttpClient http = new(fixture);
+        NteRegionSwitchService service = new(http, _ => { });
+        await service.SwitchAsync(root, NteConfigProvider.Taiwan, null, TestContext.Current.CancellationToken,
+            indexPath: Index);
+        NteSharedInstallationState state = NteSharedInstallation.Load(root)!;
+        Assert.Equal("PC_260", state.Profiles[NteConfigProvider.Global.AppId].Branch);
+        Assert.Equal("PC_260", state.Profiles[NteConfigProvider.Taiwan.AppId].Branch);
+        NteSharedProfile active = state.Profiles[NteConfigProvider.Taiwan.AppId];
+        NteSharedInstallation.RecordUpdate(root, NteConfigProvider.Taiwan, "PC_270", active.ReleaseXml, Bytes(active.ManifestXml));
+        Assert.Equal("PC_270", NteSharedInstallation.Load(root)!.Profiles[NteConfigProvider.Taiwan.AppId].Branch);
+        byte[] before = File.ReadAllBytes(NteSharedInstallation.StatePath(root));
+        Assert.Throws<InvalidDataException>(() => NteSharedInstallation.RecordUpdate(root, NteConfigProvider.Taiwan,
+            "../invalid", active.ReleaseXml, Bytes(active.ManifestXml)));
+        Assert.Equal(before, File.ReadAllBytes(NteSharedInstallation.StatePath(root)));
+    }
+
     private sealed class Fixture : HttpMessageHandler
     {
         private readonly Dictionary<string, byte[]> responses = new(StringComparer.OrdinalIgnoreCase);
@@ -303,7 +323,7 @@ public sealed class RegionSwitchTests : IDisposable
         public int LauncherRequests { get; private set; }
         public bool CorruptLauncher { get; set; }
 
-        internal Fixture(RegionSwitchTests test, bool forkMap = false)
+        internal Fixture(RegionSwitchTests test, bool forkMap = false, string branch = "PC_140")
         {
             foreach (var region in new[] { NteConfigProvider.Global, NteConfigProvider.Taiwan })
             {
@@ -324,7 +344,7 @@ public sealed class RegionSwitchTests : IDisposable
                 string release =
                     $"<config><AppVersion>0.0</AppVersion><ResVersion>{version}</ResVersion><ResSize>{files.Sum(pair => pair.Value.Length)}</ResSize><Extra><listHash>{Hash(plain)}</listHash><diffHash>{new string('b', 32)}</diffHash></Extra></config>";
                 string patcher = JsonSerializer.Serialize(new
-                    { appId = region.AppId, branchName = "PC_140", gameResUrl = region.ResourceUrls });
+                    { appId = region.AppId, branchName = branch, gameResUrl = region.ResourceUrls });
                 string main = region.LauncherDirectoryName + "Game.exe";
                 Dictionary<string, byte[]> launcher = new()
                 {
@@ -340,19 +360,19 @@ public sealed class RegionSwitchTests : IDisposable
                 responses[origin + "/launcher/1/AllFiles.xml"] = Bytes(allFiles);
                 foreach (var pair in launcher)
                     responses[origin + "/launcher/1/" + pair.Key + ".zip"] = Zip(pair.Key.Split('/')[^1], pair.Value);
-                responses[region.ResourceUrls[0] + "/PC_140/Version/Windows/config.xml"] = Bytes(release);
-                responses[region.ResourceUrls[0] + "/PC_140/Version/Windows/version/" + version + "/ResList.bin.zip"] =
+                responses[region.ResourceUrls[0] + "/" + branch + "/Version/Windows/config.xml"] = Bytes(release);
+                responses[region.ResourceUrls[0] + "/" + branch + "/Version/Windows/version/" + version + "/ResList.bin.zip"] =
                     Zip("ResList.bin", NteOfficialPatcherState.CreateLocalManifest(plain, region.AppId));
                 foreach (var pair in files)
                     responses[
-                        NteConfigProvider.BuildResourceUrl(region.ResourceUrls[0], "PC_140", Hash(pair.Value),
+                        NteConfigProvider.BuildResourceUrl(region.ResourceUrls[0], branch, Hash(pair.Value),
                             pair.Value.Length)] = pair.Value;
                 if (!tw)
                 {
                     foreach (var pair in files) test.Put(pair.Key, pair.Value);
                     foreach (var pair in launcher) test.Put(region.LauncherDirectoryName + "/" + pair.Key, pair.Value);
                     test.Put(region.SdkDirectory + "/config.xml",
-                        Bytes(release.Replace("<config>", "<config><LocalBranch>PC_140</LocalBranch>")));
+                        Bytes(release.Replace("<config>", "<config><LocalBranch>" + branch + "</LocalBranch>")));
                     test.Put(region.SdkDirectory + "/ResList.xml",
                         NteOfficialPatcherState.CreateLocalManifest(plain, region.AppId));
                     test.Put(".collapse_nte_config",

@@ -11,7 +11,7 @@ namespace Nte.LoginHost;
 // the SDK's NULL convention; no vendor registry/device/account store is read.
 internal static class WindowsGlobalDeviceInfo
 {
-    internal static NteGlobalDeviceInfo Capture(string deviceId, string gameRoot)
+    internal static NteGlobalDeviceInfo Capture(string deviceId, string gameRoot, NteOverseasRegion region)
     {
         Dictionary<string, string> values = new(StringComparer.Ordinal)
         {
@@ -48,7 +48,7 @@ internal static class WindowsGlobalDeviceInfo
         {
         }
 
-        return new(deviceId, values, DateTimeOffset.UtcNow);
+        return new(deviceId, values, DateTimeOffset.UtcNow, region.Sdk);
     }
 
     private static void ReadCpu(Dictionary<string, string> values)

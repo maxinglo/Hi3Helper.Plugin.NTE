@@ -39,8 +39,8 @@ internal sealed partial class NteGlobalAuthentication : IDisposable
             { Timeout = TimeSpan.FromSeconds(30) };
         ClientData = Uri.EscapeDataString(JsonSerializer.Serialize(new
         {
-            appId = Region.ApplicationId, packageName = configuration.PackageName, appVersion = version, sdkVersion = "4.1.0",
-            sdkServerVersion = "20260917",
+            appId = Region.ApplicationId, packageName = configuration.PackageName, appVersion = version, sdkVersion = Region.Sdk.AuthenticationVersion,
+            sdkServerVersion = Region.Sdk.AuthenticationServerVersion,
             osType = 4, udid = DeviceId, ndid = DeviceId, deviceName = "PC",
             phoneSystemVersion = Environment.OSVersion.VersionString,
             channelId = 0, mediaId = "", afId = "", deviceLanguage = CultureInfo.CurrentUICulture.Name,

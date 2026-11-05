@@ -18,8 +18,7 @@ internal sealed record NtePreloadRelease(string BranchName, GameVersion Version)
             return null;
         string branch = root?["PreReleaseBranch"]?.InnerText.Trim() ?? "";
         string version = root?["PreReleaseVersion"]?.InnerText.Trim() ?? "";
-        if (branch.Length == 0 || branch is "." or ".." ||
-            branch.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not ('_' or '-' or '.')) ||
+        if (!NtePatcherConfig.IsValidBranch(branch) ||
             !GameVersion.TryParse(version, out GameVersion parsed) || parsed <= currentRelease)
             return null;
         return new(branch, parsed);
@@ -136,7 +135,7 @@ internal static class NtePreloadCache
 {
     internal static string PathFor(string gameRoot, string appId, string md5, long size)
     {
-        if (appId is not ("1289" or "3000001" or "2000013") || !NtePatchList.IsMd5(md5) || size < 0)
+        if (!Nte.Login.NteRegionDefinition.IsSupportedAppId(appId) || !NtePatchList.IsMd5(md5) || size < 0)
             throw new InvalidDataException("Invalid preload cache identity.");
         // Content identity also permits reuse if the released version differs from the preview version.
         return NteGameInstaller.ResolveResourcePath(gameRoot,

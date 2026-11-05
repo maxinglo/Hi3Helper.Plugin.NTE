@@ -464,6 +464,7 @@ internal sealed partial class LoginWindow : Window
         completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
         requested = true;
         preview = false;
+        Nte.Login.NteHostStartupDiagnostics.Phase("loading-saved-account-displays");
         IReadOnlyList<Nte.LoginHost.Accounts.LocalAccount> savedAccounts = accounts.List();
         await LoadMainlandDisplaysAsync(token);
         localMode = savedAccounts.Count > 0;
@@ -473,6 +474,7 @@ internal sealed partial class LoginWindow : Window
         Guid? resumeAccount = null;
         try
         {
+            Nte.Login.NteHostStartupDiagnostics.Phase("loading-remembered-selection");
             await rememberedChange;
             Guid? last = await remembered.ReadAsync(token);
             selectedAccount = Nte.LoginHost.Accounts.RememberedLogin.Resolve(last, remembered.HasState, savedAccounts);
@@ -497,10 +499,13 @@ internal sealed partial class LoginWindow : Window
         }
 
         ShowForm();
+        Nte.Login.NteHostStartupDiagnostics.Phase("presenting-login-panel");
         Track();
         try
         {
+            Nte.Login.NteHostStartupDiagnostics.Phase("login-panel-initializing");
             await InitializeLoginAsync();
+            Nte.Login.NteHostStartupDiagnostics.Phase("login-panel-ready");
             if (resumeLast && initialized && requested && attempt == resumeGeneration && localMode && !helpOpen &&
                 selectedAccount?.Id == resumeAccount)
             {
@@ -728,6 +733,7 @@ internal sealed partial class LoginWindow : Window
 
     private void Track()
     {
+        if (failureCompletion != null) return;
         ApplyClockTheme();
         if (welcome?.Active == true && game != null && !game.HasExited)
             gameWindow = WindowNative.FindGameWindow(game.Id);
@@ -1035,6 +1041,7 @@ internal sealed partial class LoginWindow : Window
         Height = SceneHeight;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Show();
+        Activate();
         return failureCompletion.Task;
     }
 

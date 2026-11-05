@@ -3,6 +3,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using Nte.Login;
 
 namespace Hi3Helper.Plugin.NTE.Management.Game;
 
@@ -24,9 +25,9 @@ internal static class NteResListDecryptor
     /// </summary>
     /// <param name="data">原始加密文件字节</param>
     /// <returns>解密后的 XML 字节</returns>
-    public static byte[] Decrypt(ReadOnlySpan<byte> data, string appId = "1289")
+    public static byte[] Decrypt(ReadOnlySpan<byte> data, string appId = NteRegionDefinition.CnAppId)
     {
-        if (appId is not ("1289" or "3000001" or "2000013")) throw new InvalidDataException("Unsupported patcher application identifier.");
+        if (!NteRegionDefinition.IsSupportedAppId(appId)) throw new InvalidDataException("Unsupported patcher application identifier.");
         if (data.Length < HeaderLength) throw new InvalidDataException("Truncated resource manifest.");
         // 检查魔术头
         ReadOnlySpan<byte> magic = data[..MagicLength];
@@ -63,7 +64,7 @@ internal static class NteResListDecryptor
     /// <summary>
     /// 从流中读取并解密 ResList.bin。
     /// </summary>
-    public static byte[] Decrypt(Stream stream, string appId = "1289")
+    public static byte[] Decrypt(Stream stream, string appId = NteRegionDefinition.CnAppId)
     {
         using MemoryStream ms = new();
         stream.CopyTo(ms);

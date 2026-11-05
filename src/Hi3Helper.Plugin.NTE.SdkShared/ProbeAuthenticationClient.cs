@@ -37,9 +37,9 @@ internal sealed class ProbeAuthenticationClient : IDisposable
     internal static readonly Uri ChannelValidationEndpoint = new("https://user.laohu.com/openApi/sdkValidate");
     internal const string ChannelUserAgent = "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/534.30 (KHTML, like Gecko) Chrome/31.0.1650.57 Safari/534.30 AsiaArcClient/1.0";
 
-    internal ProbePreLoginClient CreatePreLoginClient(ReadOnlySpan<byte> registration, int clientId)
+    internal ProbePreLoginClient CreatePreLoginClient(Nte.Login.NteSdkRegistration registration)
     {
-        byte[] key = ProbePreLoginProtocol.KeyFromRegistration(registration, clientId);
+        byte[] key = ProbePreLoginProtocol.KeyFromRegistration(registration);
         try { return new(key, deviceId, installedVersion, observe, deviceProvider: () => deviceId); }
         finally { CryptographicOperations.ZeroMemory(key); }
     }
@@ -289,7 +289,7 @@ internal sealed class ProbeAuthenticationClient : IDisposable
         // then inserts that string into the outer QVariantMap.
         return new(StringComparer.Ordinal)
         {
-            ["appId"] = "1289", ["channelId"] = channelId,
+            ["appId"] = Nte.Login.NteRegionDefinition.CnAppId, ["channelId"] = channelId,
             ["channelUid"] = uid, ["channelToken"] = token, ["extraJson"] = extra,
             ["platformId"] = Platform.ToString(CultureInfo.InvariantCulture), ["version"] = "2", ["device"] = JsonSerializer.Serialize(device)
         };
@@ -412,7 +412,7 @@ internal sealed class ProbeAuthenticationClient : IDisposable
             // The fixed client's CURL transport sets this public header at
             // RVA 0xC187C2 (CURLOPT_USERAGENT). Validate the same wire context.
             if (endpoint == ChannelValidationEndpoint) request.Headers.UserAgent.ParseAdd(ChannelUserAgent);
-            if (oneLogin) request.Headers.Add("appId", "1289");
+            if (oneLogin) request.Headers.Add("appId", Nte.Login.NteRegionDefinition.CnAppId);
             using HttpResponseMessage response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
             status = (int)response.StatusCode;
             if (response.Content.Headers.ContentLength > 1024 * 1024) throw new InvalidDataException("Authentication response size bound.");

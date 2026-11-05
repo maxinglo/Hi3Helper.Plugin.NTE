@@ -12,7 +12,8 @@ public sealed class GlobalDeviceInfoTests
     public void AllSdkFieldsUseTheSameSessionAndKeepMissingMeasurementsExplicit()
     {
         NteGlobalDeviceInfo device = new(Device, new Dictionary<string, string>
-        { ["cpu"] = "Fixture CPU", ["res"] = "1920x1080" }, DateTimeOffset.FromUnixTimeMilliseconds(1234567890000));
+        { ["cpu"] = "Fixture CPU", ["res"] = "1920x1080" }, DateTimeOffset.FromUnixTimeMilliseconds(1234567890000),
+            NteOverseasRegion.Global.Sdk);
         using JsonDocument document = JsonDocument.Parse(device.Json);
         JsonElement root = document.RootElement;
         Assert.Equal(67, root.EnumerateObject().Count());
@@ -31,5 +32,15 @@ public sealed class GlobalDeviceInfoTests
     [InlineData("sdk", "unverified")]
     [InlineData("cpu", "embedded\0value")]
     public void UnrelatedFieldsAndIdentityOverridesCannotEnterDeviceInfo(string name, string value) =>
-        Assert.Throws<ArgumentException>(() => new NteGlobalDeviceInfo(Device, new Dictionary<string, string> { [name] = value }, DateTimeOffset.UnixEpoch));
+        Assert.Throws<ArgumentException>(() => new NteGlobalDeviceInfo(Device, new Dictionary<string, string> { [name] = value }, DateTimeOffset.UnixEpoch,
+            NteOverseasRegion.Global.Sdk));
+
+    [Fact]
+    public void DeviceStatisticsFollowTheSelectedSdkProfile()
+    {
+        NteOverseasSdkProfile sdk = NteOverseasRegion.Taiwan.Sdk with { DeviceStatisticsVersion = "fixture-next-sdk" };
+        NteGlobalDeviceInfo device = new(Device, new Dictionary<string, string>(), DateTimeOffset.UnixEpoch, sdk);
+        using JsonDocument json = JsonDocument.Parse(device.Json);
+        Assert.Equal("fixture-next-sdk", json.RootElement.GetProperty("sdk").GetString());
+    }
 }

@@ -18,6 +18,7 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
     private ProbeAntifatigueQueries? queries;
     private ProbeCallbackTransport? callback;
     private Task loginTask = Task.CompletedTask;
+    private readonly TaskCompletionSource loginFailure = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private ProbeEnvironment? context;
     private NteCnSdkCompatibility? compatibility;
     private bool disposed;
@@ -25,7 +26,7 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
 
     internal async Task<bool> RunAsync()
     {
-        string executable = Path.Combine(root, "Client/WindowsNoEditor/HT/Binaries/Win64/HTGame.exe");
+        string executable = Path.Combine(root, NteRegionDefinition.GameExecutableRelativePath);
         if (!File.Exists(executable)) throw new NteCnLaunchException("CnFilesMissing");
         foreach (string name in new[] { "HTGame", "NTEGame", "NTEBrowser", "NTEUpdate", "NTELauncher" })
         {
@@ -35,8 +36,9 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
         }
         var validated = await NteCnSdkCompatibility.LoadAsync(root);
         compatibility = validated.Profile;
+        NteHostStartupDiagnostics.Phase("compatibility-accepted");
         string sdkPath = validated.BridgePath;
-        using Mutex instance = new(false, @"Local\Collapse.NTE.LoginHost.1289", out bool created);
+        using Mutex instance = new(false, @"Local\Collapse.NTE.LoginHost." + NteRegionDefinition.CnAppId, out bool created);
         if (!created) throw new NteCnLaunchException("CnLoginHostRunning");
         context = new(root, true, useOwnExecutable: true, hostExecutable: Environment.ProcessPath!);
         context.GameWindowChanged += window.NotifySdkGeometryChanged;
@@ -53,12 +55,12 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
         foreach (string absent in new[] { "ArcGameAppId", "GameVersion", "_PATCHER_RES_VERSION_" })
             start.Environment.Remove(absent);
         start.Environment["_PATCHER_RES_PATH_"] = root;
-        start.Environment["_PATCHER_SDK_PATH_"] = Path.Combine(root, "NTELauncher/UserData/Patcher/PatcherSDK");
+        start.Environment["_PATCHER_SDK_PATH_"] = Path.Combine(root, NteRegionDefinition.CN.LauncherDirectory, NteRegionDefinition.PatcherSdkRelativePath);
         // Only use paths from a matching installed configuration; fall back to
         // the previous two-path launch when it is absent or unrecognized.
         PatcherLaunchEnvironment.TryApply(start.Environment, root, context.ApplicationId);
         foreach (string flag in new[] { "wmgplaunch", "ArcGameMobileSdkType", "ArcGameMsgSkipFlag" }) start.Environment[flag] = "1";
-        start.Environment["GamePlatformPath"] = Path.Combine(root, "NTELauncher");
+        start.Environment["GamePlatformPath"] = Path.Combine(root, NteRegionDefinition.CN.LauncherDirectory);
         // Native SDK logging is isolated and removed after client exit. Raw
         // lines and account payloads never reach host diagnostics.
         string logRoot = Path.Combine(Path.GetTempPath(), "Collapse.NTE.LoginHost", Guid.NewGuid().ToString("N"));
@@ -81,7 +83,7 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
             throw;
         }
         using Process game = createdGame;
-        Task output = Task.CompletedTask, errors = Task.CompletedTask;
+        Task output = Task.CompletedTask, errors = Task.CompletedTask, connection = Task.CompletedTask;
         Task exit = WatchExitAsync(game);
         return await GameStartedLifetime.RunAsync(exit, async () =>
         {
@@ -92,9 +94,12 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
             try { game.PriorityBoostEnabled = options.PriorityBoost; game.PriorityClass = options.Priority; }
             catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { /* Best effort. */ }
             window.Attach(game.Id);
-            await ServeAsync(pipe, game.Id);
-        }, async _ =>
+            NteHostStartupDiagnostics.Phase("waiting-sdk-environment");
+            connection = ServeAsync(pipe, game.Id);
+            await connection;
+        }, async error =>
         {
+            NteHostStartupDiagnostics.Phase("communication-or-login-failed", error);
             // Stop any pending login attempt before presenting the visible
             // failure. Dismissing it does not terminate the game or this host.
             window.CancelForGameExit();
@@ -106,9 +111,11 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
             lifetime.Cancel();
             try { await loginTask; }
             catch (Exception) { /* A failed login task must not skip log cleanup. */ }
+            try { await connection; }
+            catch (Exception) { /* The connection failure was already presented; observe its final cancellation. */ }
             try { await Task.WhenAll(output, errors); }
             finally { ProbeSdkLog.CollectAndRemove(logRoot); }
-        });
+        }, backgroundFailure: loginFailure.Task);
     }
 
     private async Task ServeAsync(NamedPipeServerStream pipe, int clientId)
@@ -140,6 +147,7 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
                         uint operation = BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(4));
                         if (operation == 1000 && count == 796 && BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(12)) == clientId)
                         {
+                            NteHostStartupDiagnostics.Phase("sdk-environment-received");
                             application = System.Text.Encoding.Unicode.GetString(buffer, 18, 64).Split('\0')[0];
                             byte[] response = context!.CreateAcknowledgement(buffer.AsSpan(0, count));
                             await pipe.WriteAsync(response, lifetime.Token);
@@ -147,16 +155,18 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
                         }
                         if (operation == 0 && count == 1244 && authentication == null)
                         {
-                            callback = ProbeCallbackTransport.FromRegistration(buffer.AsSpan(0, count), clientId, context!.WindowHandle,
-                                expectedBridgeVersion: compatibility!.ProtocolVersion);
-                            _ = ProbeBootConfig.Inspect(buffer.AsSpan(0, count), clientId, application, root,
+                            NteHostStartupDiagnostics.Phase("sdk-registration-received");
+                            using NteSdkRegistration registration = compatibility!.Protocol.ReadRegistration(buffer.AsSpan(0, count), clientId);
+                            callback = ProbeCallbackTransport.FromRegistration(registration, context!.WindowHandle);
+                            _ = ProbeBootConfig.Inspect(registration, application, root,
                                 inspectWithApplicationKey: (configuration, key) =>
                                 {
                                     authentication = new(configuration, _ => { }, installedVersion: context.InstalledVersion, applicationKeyTail: key.Span);
                                     return new { captured = true };
                                 });
                             if (authentication == null) throw new InvalidDataException("Authentication context unavailable.");
-                            preLogin = authentication.CreatePreLoginClient(buffer.AsSpan(0, count), clientId);
+                            NteHostStartupDiagnostics.Phase("authentication-context-ready");
+                            preLogin = authentication.CreatePreLoginClient(registration);
                             admission = new(preLogin, _ => { });
                             queries = new(admission, clientId, (response, request, token) => Task.Run(() => callback.Send(response, request, token), token), _ => { });
                             loginTask = RunLoginsAsync();
@@ -182,12 +192,15 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
         {
             while (!lifetime.IsCancellationRequested)
             {
+                NteHostStartupDiagnostics.Phase("waiting-login-request");
                 await context!.WaitForNextLoginRequestAsync(lifetime.Token);
+                NteHostStartupDiagnostics.Phase("login-request-received");
                 await admission!.ResetAsync(lifetime.Token);
                 bool consumed = false;
                 try
                 {
                     if (!await window.EnsureNoticeAsync(false, lifetime.Token)) continue;
+                    NteHostStartupDiagnostics.Phase("opening-login-panel");
                     await window.RequestAsync(authentication!, async (game, channel, token) =>
                     {
                         await admission.AuthorizeAndDeliverAsync(game, async () =>
@@ -202,6 +215,11 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
             }
         }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        catch (Exception error)
+        {
+            NteHostStartupDiagnostics.Phase("login-task-failed", error);
+            loginFailure.TrySetException(error);
+        }
     }
 
     private async Task WatchExitAsync(Process game)

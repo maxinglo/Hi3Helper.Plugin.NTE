@@ -3,6 +3,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Xunit;
+using Nte.Login;
 
 namespace Hi3Helper.Plugin.NTE.Tests;
 
@@ -20,16 +21,60 @@ public sealed class SdkPreLoginTests
         Assert.Throws<InvalidDataException>(() => ProbePreLoginProtocol.DeriveKey("short"u8));
     }
 
-    [Fact]
-    public void RegistrationDerivesFullApplicationKeyWithoutReusingItsOneLoginTail()
+    [Theory]
+    [InlineData("2.0.8.0")]
+    [InlineData("2.0.9.0")]
+    public void RegistrationDerivesFullApplicationKeyWithoutReusingItsOneLoginTail(string sdkVersion)
     {
-        byte[] frame = Registration(3456);
-        byte[] key = ProbePreLoginProtocol.KeyFromRegistration(frame, 3456);
+        byte[] frame = Registration(3456, sdkVersion);
+        byte[] key = RegistrationKey(frame, 3456, Protocol(sdkVersion));
         Assert.Equal("12789abfghpqrstu", Encoding.ASCII.GetString(key));
         Assert.NotEqual("ghijklmnopqrstuv", Encoding.ASCII.GetString(key));
-        Assert.Throws<InvalidDataException>(() => ProbePreLoginProtocol.KeyFromRegistration(frame, 3457));
+        Assert.Throws<InvalidDataException>(() => RegistrationKey(frame, 3457, Protocol(sdkVersion)));
         frame[8] = 0;
-        Assert.Throws<InvalidDataException>(() => ProbePreLoginProtocol.KeyFromRegistration(frame, 3456));
+        Assert.Throws<InvalidDataException>(() => RegistrationKey(frame, 3456, Protocol(sdkVersion)));
+    }
+
+    [Theory]
+    [InlineData("2.0.8.0", "2.0.9.0")]
+    [InlineData("2.0.9.0", "2.0.8.0")]
+    [InlineData("2.0.10.0", "2.0.9.0")]
+    public void PreLoginRegistrationMustMatchTheSelectedVerifiedBridge(string actual, string expected)
+        => Assert.Throws<InvalidDataException>(() => RegistrationKey(Registration(3456, actual), 3456, Protocol(expected)));
+
+    private static NteSdkProtocol Protocol(string version) => version switch
+    {
+        "2.0.8.0" => NteSdkProtocol.Cn208,
+        "2.0.9.0" => NteSdkProtocol.Cn209,
+        _ => throw new ArgumentOutOfRangeException(nameof(version))
+    };
+
+    private static byte[] RegistrationKey(byte[] frame, int clientId, NteSdkProtocol protocol)
+    {
+        using NteSdkRegistration registration = protocol.ReadRegistration(frame, clientId);
+        return ProbePreLoginProtocol.KeyFromRegistration(registration);
+    }
+
+    [Theory]
+    [InlineData(0x204, 0)] // Missing static configuration name.
+    [InlineData(0x104, 31)] // Non-ASCII application key.
+    [InlineData(0x104 + 64, 65)] // Application key is longer than 32 characters.
+    public void InvalidRegistrationMetadataCannotProducePreLoginKey(int offset, ushort value)
+    {
+        byte[] frame = Registration(3456, "2.0.9.0");
+        BinaryPrimitives.WriteUInt16LittleEndian(frame.AsSpan(12 + offset), value);
+        frame[12 + offset] ^= unchecked((byte)3456);
+        frame[13 + offset] ^= unchecked((byte)3456);
+        Assert.Throws<InvalidDataException>(() => RegistrationKey(frame, 3456, NteSdkProtocol.Cn209));
+    }
+
+    [Fact]
+    public void RegistrationKeyMaterialCannotBeReadAfterInitializationDisposesIt()
+    {
+        using NteSdkRegistration registration = NteSdkProtocol.Cn209.ReadRegistration(Registration(3456, "2.0.9.0"), 3456);
+        registration.Dispose();
+        Assert.Throws<ObjectDisposedException>(() => registration.ReadCnApplicationKey());
+        Assert.Throws<ObjectDisposedException>(() => { _ = registration.CallbackWindow; });
     }
 
     [Fact]
@@ -128,6 +173,12 @@ public sealed class SdkPreLoginTests
         Assert.Equal(handler.Fields["udid"], handler.Fields["ndid"]);
         Assert.Equal("1.4.17", handler.Fields["appVersion"]);
         Assert.Equal("2", handler.Fields["version"]);
+        using JsonDocument configuration = JsonDocument.Parse("""
+            {"init":{"channel":{"channelAppId":"12345","channelAppKey":"0123456789abcdef9876543210fedcba"}},
+             "meta":{"version":"1.0.0","packageName":"fixture","channelId":9}}
+            """);
+        Assert.Equal(ProbeAnonymousInit.BuildParameters(configuration.RootElement, DateTimeOffset.UtcNow, new string('a', 32))["sdkVersion"],
+            handler.Fields["sdkVersion"]);
         Assert.Equal(13, handler.Fields["timestamp"].Length);
         Assert.DoesNotContain(handler.Fields.Keys, key => key.Contains("token", StringComparison.OrdinalIgnoreCase));
         string signature = handler.Fields["sign"]; handler.Fields.Remove("sign");
@@ -180,7 +231,7 @@ public sealed class SdkPreLoginTests
         for (int i = 12; i < frame.Length; i++) frame[i] ^= unchecked((byte)clientId);
         return frame;
     }
-    private static byte[] Registration(int clientId)
+    private static byte[] Registration(int clientId, string version = "2.0.8.0")
     {
         byte[] frame = new byte[1244];
         BinaryPrimitives.WriteUInt32LittleEndian(frame, 0x6B647331);
@@ -188,7 +239,7 @@ public sealed class SdkPreLoginTests
         Encoding.Unicode.GetBytes("1289\0").CopyTo(frame, 16);
         Encoding.Unicode.GetBytes("0123456789abcdefghijklmnopqrstuv\0").CopyTo(frame, 12 + 0x104);
         Encoding.Unicode.GetBytes("oneSdkConfig.config\0").CopyTo(frame, 12 + 0x204);
-        Encoding.Unicode.GetBytes("2.0.8.0\0").CopyTo(frame, 12 + 0x40C);
+        Encoding.Unicode.GetBytes(version + '\0').CopyTo(frame, 12 + 0x40C);
         for (int i = 12; i < frame.Length; i++) frame[i] ^= unchecked((byte)clientId);
         return frame;
     }

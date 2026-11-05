@@ -15,7 +15,9 @@ namespace Hi3Helper.Plugin.NTE.Management.Game;
 /// <summary>Resolve the active game branch from the same launcher manifest as the official client.</summary>
 internal sealed record NtePatcherConfig(string BranchName, string AppId, string[] ResourceUrls)
 {
-    internal const string VersionIniUrl = "https://yhcdn1.wmupd.com/hd/publish_ob/launcher/Version.ini";
+    internal static string VersionIniUrl => NteConfigProvider.LauncherVersionIniUrl;
+    internal static bool IsValidBranch(string branch) => branch.Length != 0 && branch is not ("." or "..") &&
+        branch.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-' or '.');
     private string Referer => NteConfigProvider.GetRegion(AppId).ZoneHomePageUrl;
 
     internal static async Task<NtePatcherConfig> DiscoverAsync(HttpClient httpClient, CancellationToken token, NteRegionConfig? region = null)
@@ -36,13 +38,13 @@ internal sealed record NtePatcherConfig(string BranchName, string AppId, string[
             new Uri(url).Host.Equals(client.LastSuccessfulHost, StringComparison.OrdinalIgnoreCase)).ToArray() };
     }
 
-    internal static NtePatcherConfig Parse(string json, string expectedAppId = "1289")
+    internal static NtePatcherConfig Parse(string json, string expectedAppId = Nte.Login.NteRegionDefinition.CnAppId)
     {
         using JsonDocument document = JsonDocument.Parse(json);
         JsonElement root = document.RootElement;
         string branch = root.GetProperty("branchName").GetString() ?? "";
         string appId = root.GetProperty("appId").GetString() ?? "";
-        if (branch.Length == 0 || branch is "." or ".." || branch.IndexOfAny(['/', '\\', '?', '#', ':']) >= 0 || appId != expectedAppId)
+        if (!IsValidBranch(branch) || appId != expectedAppId)
             throw new InvalidDataException("Invalid patcher branch or application id.");
         System.Collections.Generic.List<string> urls = [];
         foreach (JsonElement item in root.GetProperty("gameResUrl").EnumerateArray())

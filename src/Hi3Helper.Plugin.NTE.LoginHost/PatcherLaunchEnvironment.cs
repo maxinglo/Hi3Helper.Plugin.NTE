@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Nte.Login;
 
 namespace Nte.LoginHost;
 
@@ -9,17 +10,16 @@ namespace Nte.LoginHost;
 internal static class PatcherLaunchEnvironment
 {
     internal static bool TryApply(IDictionary<string, string?> environment, string gameRoot, string applicationId,
-        string launcherDirectoryName = "NTELauncher")
+        string launcherDirectoryName = NteRegionDefinition.CnLauncherDirectory)
     {
         foreach (string name in new[] { "_PATCHER_CONFIG_PATH_", "_PATCHER_USERDATA_PATH_", "_PATCHER_LOG_PATH_" })
             environment.Remove(name);
 
-        if (launcherDirectoryName is not ("NTELauncher" or "NTEGlobal" or "NTETW") ||
-            applicationId.Length is < 1 or > 10 ||
-            !applicationId.All(char.IsAsciiDigit) ||
-            !uint.TryParse(applicationId, NumberStyles.None, CultureInfo.InvariantCulture, out uint expectedId) ||
-            expectedId == 0)
-            return false;
+        NteRegionDefinition definition;
+        try { definition = NteRegionDefinition.FromLauncherDirectory(launcherDirectoryName); }
+        catch (ArgumentException) { return false; }
+        if (applicationId != definition.AppId) return false;
+        uint expectedId = checked((uint)definition.ApplicationId);
 
         string launcher = Path.Combine(Path.GetFullPath(gameRoot), launcherDirectoryName);
         string config = Path.Combine(launcher, "ResFilesM", applicationId, "PatcherConfig");

@@ -89,7 +89,7 @@ internal static class ProbeAnonymousInit
             ["deviceModel"] = "WindowsPc",
             ["deviceSys"] = "WindowsPc",
             ["deviceType"] = Environment.OSVersion.VersionString + " 64bit",
-            ["sdkVersion"] = "5.159.0",
+            ["sdkVersion"] = Nte.Login.NteCnSdkCompatibility.ServiceSdkVersion,
             ["t"] = time.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture)
         };
         byte[] input = Encoding.UTF8.GetBytes(string.Concat(values.Values) + appKey);

@@ -137,17 +137,14 @@ internal sealed class NteLauncherResourceClient(HttpClient httpClient, string re
     private static IEnumerable<Uri> GetCandidates(Uri url)
     {
         yield return url;
-        string? otherHost = url.Host.ToLowerInvariant() switch
+        foreach (var region in Hi3Helper.Plugin.NTE.Management.Config.NteConfigProvider.AllRegions)
         {
-            "yhcdn1.wmupd.com" => "yhcdn2.wmupd.com",
-            "yhcdn2.wmupd.com" => "yhcdn1.wmupd.com",
-            "ntecdn1.perfectworld.com" => "ntecdn2.perfectworld.com",
-            "ntecdn2.perfectworld.com" => "ntecdn1.perfectworld.com",
-            "patchnte1.iwplay.com.tw" => "patchnte2.iwplay.com.tw",
-            "patchnte2.iwplay.com.tw" => "patchnte1.iwplay.com.tw",
-            _ => null
-        };
-        if (otherHost != null)
-            yield return new UriBuilder(url) { Host = otherHost }.Uri;
+            Uri[] endpoints = region.ResourceUrls.Select(root => new Uri(root)).ToArray();
+            if (!endpoints.Any(endpoint => endpoint.Host.Equals(url.Host, StringComparison.OrdinalIgnoreCase))) continue;
+            foreach (string host in endpoints.Select(endpoint => endpoint.Host).Distinct(StringComparer.OrdinalIgnoreCase))
+                if (!host.Equals(url.Host, StringComparison.OrdinalIgnoreCase))
+                    yield return new UriBuilder(url) { Host = host }.Uri;
+            yield break;
+        }
     }
 }

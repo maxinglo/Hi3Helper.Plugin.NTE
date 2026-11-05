@@ -12,7 +12,6 @@ namespace Nte.Login;
 // function is loaded. Static application material never enters diagnostics.
 internal sealed class NteOverseasApplicationConfiguration : IDisposable
 {
-    internal const string VerifiedImageSha256 = "0153111179C82EE2AA984B2DDB33648C692824A97A80AD104D522C742CF4E49B";
     internal NteOverseasRegion Region { get; }
     internal byte[] ApplicationKey { get; }
     internal string PackageName { get; }
@@ -31,14 +30,14 @@ internal sealed class NteOverseasApplicationConfiguration : IDisposable
     {
         NteOverseasRegion region = NteOverseasRegion.From(hostRegion);
         string platform = Path.Combine(root, region.LauncherDirectory);
-        byte[] image = File.ReadAllBytes(Path.Combine(platform, region.LauncherDirectory + "Game.exe"));
+        byte[] image = File.ReadAllBytes(Path.Combine(platform, region.Installation.LauncherExecutable));
         byte[]? key = null, appKey = null, resource = null;
         try
         {
             if (Convert.ToHexString(SHA256.HashData(image)) != region.ImageSha256)
                 throw new NteGlobalLaunchException("GlobalSdkUnsupported");
             using PEReader pe = new(new MemoryStream(image, false));
-            const int keyRva = 0xF9AE90;
+            int keyRva = region.Sdk.ConfigurationKeyRva;
             var section = pe.PEHeaders.SectionHeaders.Single(s => keyRva >= s.VirtualAddress && keyRva + 24 <= s.VirtualAddress + s.SizeOfRawData);
             key = Convert.FromBase64String(Encoding.ASCII.GetString(image, section.PointerToRawData + keyRva - section.VirtualAddress, 24));
             resource = ProbeBootConfig.ReadStaticResource(Path.Combine(platform, "ResData", region.AppId + ".dat"), "/" + region.AppId + "/globalsdkconfig.json");

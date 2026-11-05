@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Xunit;
+using Nte.Login;
 
 namespace Hi3Helper.Plugin.NTE.Tests;
 
@@ -11,8 +12,10 @@ public sealed class SdkProbeSanitizationTests
     private const string AppKey = "0123456789abcdef9876543210fedcba";
     private const int ClientId = 4242;
 
-    [Fact]
-    public void StaticConfigurationDecodesWithoutRevealingPrivateValues()
+    [Theory]
+    [InlineData("2.0.8.0")]
+    [InlineData("2.0.9.0")]
+    public void StaticConfigurationAndPreLoginShareRegistrationWithoutRevealingPrivateValues(string version)
     {
         using Fixture fixture = new();
         using Aes aes = Aes.Create();
@@ -24,9 +27,15 @@ public sealed class SdkProbeSanitizationTests
              "meta":{"platform":4,"version":"1.0.0"},"account":{"platform":"private-platform","version":"private-version"}}
             """u8.ToArray();
         fixture.Write(MakeRcc(Encoding.ASCII.GetBytes(Convert.ToBase64String(aes.EncryptEcb(plaintext, PaddingMode.PKCS7)))));
-        string output = JsonSerializer.Serialize(ProbeBootConfig.Inspect(Frame(AppKey), ClientId, "1289", fixture.Root));
+        NteSdkProtocol protocol = version == "2.0.8.0" ? NteSdkProtocol.Cn208 : NteSdkProtocol.Cn209;
+        using NteSdkRegistration registration = protocol.ReadRegistration(Frame(AppKey, version: version), ClientId);
+        string output = JsonSerializer.Serialize(ProbeBootConfig.Inspect(registration, "1289", fixture.Root));
         using JsonDocument report = JsonDocument.Parse(output);
         Assert.True(report.RootElement.GetProperty("decoded").GetBoolean());
+        Assert.Same(protocol, registration.Protocol);
+        byte[] preLoginKey = ProbePreLoginProtocol.KeyFromRegistration(registration);
+        try { Assert.Equal(16, preLoginKey.Length); }
+        finally { CryptographicOperations.ZeroMemory(preLoginKey); }
         Assert.Contains("1289", output);
         Assert.Contains("init.appId", output);
         Assert.Contains("https://sapi.laohu.com/", output);
@@ -41,7 +50,8 @@ public sealed class SdkProbeSanitizationTests
     {
         using Fixture fixture = new();
         fixture.Write(MakeRcc("invalid-private-configuration"u8.ToArray()));
-        string output = JsonSerializer.Serialize(ProbeBootConfig.Inspect(Frame(AppKey), ClientId, "1289", fixture.Root));
+        using NteSdkRegistration registration = NteSdkProtocol.Cn208.ReadRegistration(Frame(AppKey), ClientId);
+        string output = JsonSerializer.Serialize(ProbeBootConfig.Inspect(registration, "1289", fixture.Root));
         using JsonDocument report = JsonDocument.Parse(output);
         Assert.False(report.RootElement.GetProperty("decoded").GetBoolean());
         Assert.DoesNotContain("invalid-private-configuration", output);

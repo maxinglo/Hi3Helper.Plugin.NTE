@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO.MemoryMappedFiles;
 using System.Text;
 using System.Text.RegularExpressions;
+using Nte.Login;
 
 internal sealed class ProbeEnvironment : IDisposable
 {
@@ -43,13 +44,13 @@ internal sealed class ProbeEnvironment : IDisposable
     }
 
     public ProbeEnvironment(string gameRoot, bool supplyHostContext, bool supplyStartupContext = false, bool useOwnExecutable = false,
-        string? hostExecutable = null, string launcherDirectoryName = "NTELauncher", string? applicationId = null)
+        string? hostExecutable = null, string launcherDirectoryName = NteRegionDefinition.CnLauncherDirectory, string? applicationId = null)
     {
-        window = new(applicationId is "3000001" or "2000013" ? 100u : 1u);
+        NteRegionDefinition definition = NteRegionDefinition.FromLauncherDirectory(launcherDirectoryName);
+        if (applicationId != null && applicationId != definition.AppId)
+            throw new ArgumentException("Application and launcher directory belong to different regions.", nameof(applicationId));
         hostContext = supplyHostContext;
         startupContext = supplyStartupContext;
-        if (launcherDirectoryName is not ("NTELauncher" or "NTEGlobal" or "NTETW"))
-            throw new ArgumentException("Unsupported SDK platform directory.", nameof(launcherDirectoryName));
         launcher = Path.Combine(gameRoot, launcherDirectoryName);
         // These are SDK platform path references, not executables the probe
         // starts. The isolated candidate tests whether the SDK can use this
@@ -60,10 +61,11 @@ internal sealed class ProbeEnvironment : IDisposable
             : [Path.Combine(launcher, "NTELauncher.exe"), Path.Combine(launcher, "NTEGame.exe"), Path.Combine(launcher, "NTEUpdate.exe")];
         string configuration = File.ReadAllText(Path.Combine(launcher, "Config/Config.ini"));
         appId = applicationId ?? Regex.Match(configuration, @"(?m)^OneAppId=(\d+)\s*$").Groups[1].Value;
-        string patcher = File.ReadAllText(Path.Combine(launcher, "UserData/Patcher/PatcherSDK/config.xml"));
+        string patcher = File.ReadAllText(Path.Combine(launcher, NteRegionDefinition.PatcherSdkRelativePath, "config.xml"));
         version = Regex.Match(patcher, @"<ResVersion>(\d+(?:\.\d+)+)</ResVersion>").Groups[1].Value;
-        if (!uint.TryParse(appId, out _) || version.Length == 0)
+        if (appId != definition.AppId || version.Length == 0)
             throw new InvalidDataException("Official public application metadata is missing.");
+        window = new(definition.LoginNotification);
         // The probe owns these objects exclusively. The baseline table is empty;
         // host-context mode supplies public application metadata below. Neither
         // mode supplies account data, an SDK result or an authentication token.

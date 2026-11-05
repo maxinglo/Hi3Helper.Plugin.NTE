@@ -6,11 +6,9 @@ namespace Nte.Login;
 
 internal sealed record NteRegionSwitchOptions(string GameRoot, NteHostRegion Target, string Language = "zh-CN")
 {
-    internal string TargetAppId => Target switch
-    {
-        NteHostRegion.Global => "3000001", NteHostRegion.Taiwan => "2000013",
-        _ => throw new ArgumentException("Only Taiwan and Global can share a game installation.")
-    };
+    internal string TargetAppId => NteRegionDefinition.From(Target) is { IsOverseas: true } definition
+        ? definition.AppId
+        : throw new ArgumentException("Only Taiwan and Global can share a game installation.");
     internal string[] ToArguments()
     {
         Validate();

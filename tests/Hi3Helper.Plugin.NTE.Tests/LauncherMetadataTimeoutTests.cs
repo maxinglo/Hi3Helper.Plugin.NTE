@@ -1,11 +1,34 @@
 using System.Net;
 using Hi3Helper.Plugin.NTE.Management.Api.Media;
 using Xunit;
+using Hi3Helper.Plugin.NTE.Management.Config;
 
 namespace Hi3Helper.Plugin.NTE.Tests;
 
 public sealed class LauncherMetadataTimeoutTests
 {
+    [Theory]
+    [InlineData("1289")]
+    [InlineData("3000001")]
+    [InlineData("2000013")]
+    public async Task LauncherMirrorsComeFromTheSameRegionEndpointsAsGameDownloads(string appId)
+    {
+        var region = NteConfigProvider.GetRegion(appId);
+        Uri primary = new(new Uri(region.ResourceUrls[0]), "/hd/fixture/Version.ini");
+        string alternateHost = new Uri(region.ResourceUrls[1]).Host;
+        List<string> hosts = [];
+        using HttpClient http = new(new Handler((request, _) =>
+        {
+            hosts.Add(request.RequestUri!.Host);
+            Assert.Equal(primary.AbsolutePath, request.RequestUri.AbsolutePath);
+            return Task.FromResult(new HttpResponseMessage(hosts.Count == 1 ? HttpStatusCode.ServiceUnavailable : HttpStatusCode.OK)
+                { Content = new StringContent("fixture") });
+        }));
+        Assert.Equal("fixture", await new NteLauncherResourceClient(http, region.ZoneHomePageUrl)
+            .ReadTextAsync(primary.AbsoluteUri, TestContext.Current.CancellationToken));
+        Assert.Equal(new[] { primary.Host, alternateHost }, hosts);
+    }
+
     private const string Primary = "https://yhcdn1.wmupd.com/hd/test/Version.ini";
     private const string Secondary = "https://yhcdn2.wmupd.com/hd/test/Version.ini";
     private const string Referer = "https://yh.wanmei.com/";

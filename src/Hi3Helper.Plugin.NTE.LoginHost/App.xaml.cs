@@ -74,7 +74,7 @@ public partial class App : Application
         if (!System.IO.File.Exists(state)) return false;
         if (new System.IO.FileInfo(state).Length > 16 * 1024 * 1024) throw new System.IO.InvalidDataException("Invalid shared installation state.");
         using var document = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllBytes(state));
-        return document.RootElement.GetProperty("ActiveAppId").GetString() != (options.Region == NteHostRegion.Taiwan ? "2000013" : "3000001");
+        return document.RootElement.GetProperty("ActiveAppId").GetString() != NteRegionDefinition.From(options.Region).AppId;
     }
 
     private async Task RunAsync(string[] arguments)

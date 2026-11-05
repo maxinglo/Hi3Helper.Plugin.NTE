@@ -19,11 +19,11 @@ internal sealed record NteOverseasLaunchPlan(string GameRoot, string GameExecuta
         string config = Path.Combine(platform, "Config", "Config.ini");
         foreach (string file in new[]
                  {
-                     config, Path.Combine(platform, region.LauncherDirectory + "Game.exe"),
+                     config, Path.Combine(platform, region.Installation.LauncherExecutable),
                      Path.Combine(platform, "WPGameClientSDK_64.dll"),
                      Path.Combine(platform, "ResData", region.AppId + ".dat"),
-                     Path.Combine(root, "Client/WindowsNoEditor/HT/Binaries/Win64/HTGame.exe"),
-                     Path.Combine(root, "Client/WindowsNoEditor/HT/Binaries/Win64/WPGlobalSDK_64.dll")
+                     Path.Combine(root, NteRegionDefinition.GameExecutableRelativePath),
+                     Path.Combine(root, Path.GetDirectoryName(NteRegionDefinition.GameExecutableRelativePath)!, "WPGlobalSDK_64.dll")
                  })
             if (!File.Exists(file))
                 throw new NteGlobalLaunchException("GlobalFilesMissing");
@@ -38,7 +38,7 @@ internal sealed record NteOverseasLaunchPlan(string GameRoot, string GameExecuta
         }
 
         return new(root,
-            Path.GetFullPath(Path.Combine(root, "Client/WindowsNoEditor/HT/Binaries/Win64/HTGame.exe")),
+            Path.GetFullPath(Path.Combine(root, NteRegionDefinition.GameExecutableRelativePath)),
             CreateGameArguments(options), options.Region);
     }
 

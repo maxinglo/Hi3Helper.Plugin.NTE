@@ -12,19 +12,13 @@ internal sealed record NteOfficialLaunchPlan(string Executable, string GameExecu
     internal static NteOfficialLaunchPlan Create(string gameRoot, NteHostRegion region)
     {
         string root = Path.GetFullPath(gameRoot);
-        (string directory, string file) = region switch
-        {
-            NteHostRegion.Global => ("NTEGlobal", "NTEGlobalGame.exe"),
-            NteHostRegion.Taiwan => ("NTETW", "NTETWGame.exe"),
-            NteHostRegion.CN => ("NTELauncher", "NTEGame.exe"),
-            _ => throw new ArgumentException("Unknown official launch region.", nameof(region))
-        };
-        string executable = Path.Combine(root, directory, file);
+        NteRegionDefinition definition = NteRegionDefinition.From(region);
+        string executable = Path.Combine(root, definition.LauncherDirectory, definition.LauncherExecutable);
         if (!File.Exists(executable))
             throw new FileNotFoundException(
                 "The official launcher must be installed inside the game installation directory.", executable);
         return new(executable,
-            Path.Combine(root, "Client", "WindowsNoEditor", "HT", "Binaries", "Win64", "HTGame.exe"));
+            Path.Combine(root, NteRegionDefinition.GameExecutableRelativePath));
     }
 
     internal ProcessStartInfo CreateStartInfo(string? additionalArguments, bool requestElevation = false)

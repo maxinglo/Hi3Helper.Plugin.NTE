@@ -17,7 +17,8 @@ internal sealed class NteGlobalDeviceInfo
     ];
     internal string Json { get; }
 
-    internal NteGlobalDeviceInfo(string deviceId, IReadOnlyDictionary<string, string> measurements, DateTimeOffset now)
+    internal NteGlobalDeviceInfo(string deviceId, IReadOnlyDictionary<string, string> measurements, DateTimeOffset now,
+        NteOverseasSdkProfile sdk)
     {
         if (!Guid.TryParseExact(deviceId, "N", out _)) throw new ArgumentException("Invalid session device identifier.", nameof(deviceId));
         foreach ((string key, string value) in measurements)
@@ -34,7 +35,7 @@ internal sealed class NteGlobalDeviceInfo
                 string value = key switch
                 {
                     "udid" or "did" or "ndid" => deviceId,
-                    "sdk" => "4.186.0",
+                    "sdk" => sdk.DeviceStatisticsVersion,
                     "os" => "4",
                     "jb" => "0", // The vendor's fixed Windows producer value.
                     _ => measurements.TryGetValue(key, out string? measured) ? measured : "NULL"

@@ -11,6 +11,7 @@
     <Configurations>Debug;Release;DebugNoReflection;ReleaseNoReflection</Configurations>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../src/Hi3Helper.Plugin.NTE.SdkShared/NteSdkProtocol.cs" Link="Login/NteSdkProtocol.cs"/>
     <Compile Include="../../src/Hi3Helper.Plugin.NTE.SdkShared/NteCnSdkCompatibility.cs" Link="Login/NteCnSdkCompatibility.cs"/>
     <Compile Include="../../src/Hi3Helper.Plugin.NTE.SdkShared/NteHostStartupDiagnostics.cs" Link="Login/NteHostStartupDiagnostics.cs"/>
     <Compile Include="../../src/Hi3Helper.Plugin.NTE.LoginHost/ViewModels/*.cs" Link="ViewModels/%(Filename)%(Extension)"/>

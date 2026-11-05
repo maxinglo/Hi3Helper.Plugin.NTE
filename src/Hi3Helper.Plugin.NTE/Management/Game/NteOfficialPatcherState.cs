@@ -13,7 +13,6 @@ namespace Hi3Helper.Plugin.NTE.Management.Game;
 /// <summary>Persist the official SDK state only after the selected game resources have been verified.</summary>
 internal static class NteOfficialPatcherState
 {
-    private const string SdkDirectory = "NTELauncher/UserData/Patcher/PatcherSDK";
     private static readonly byte[] RemoteKey = "20991231@patcher"u8.ToArray();
     private static readonly byte[] RemoteIv = "2099123123590000"u8.ToArray();
 

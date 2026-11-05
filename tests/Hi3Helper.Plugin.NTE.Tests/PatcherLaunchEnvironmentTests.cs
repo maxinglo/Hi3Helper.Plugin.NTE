@@ -6,6 +6,30 @@ namespace Hi3Helper.Plugin.NTE.Tests;
 public sealed class PatcherLaunchEnvironmentTests
 {
     [Theory]
+    [InlineData("NTELauncher", "3000001")]
+    [InlineData("NTELauncher", "2000013")]
+    [InlineData("NTEGlobal", "1289")]
+    [InlineData("NTEGlobal", "2000013")]
+    [InlineData("NTETW", "1289")]
+    [InlineData("NTETW", "3000001")]
+    public void ACompleteConfigurationCannotPairAnApplicationWithAnotherRegionsDirectory(string directory, string appId)
+    {
+        string root = Path.Combine(Path.GetTempPath(), "NtePatcher-pair-" + Guid.NewGuid().ToString("N"));
+        string config = Path.Combine(root, directory, "ResFilesM", appId, "PatcherConfig");
+        try
+        {
+            Directory.CreateDirectory(config);
+            Directory.CreateDirectory(Path.Combine(root, directory, "UserData"));
+            File.WriteAllText(Path.Combine(config, "PatcherConfig.json"), "{\"appId\":\"" + appId + "\"}");
+            File.WriteAllText(Path.Combine(config, "PatcherPath.json"), "{}");
+            Dictionary<string, string?> environment = new();
+            Assert.False(PatcherLaunchEnvironment.TryApply(environment, root, appId, directory));
+            Assert.Empty(environment);
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    [Theory]
     [InlineData("NTELauncher", "1289")]
     [InlineData("NTEGlobal", "3000001")]
     [InlineData("NTETW", "2000013")]

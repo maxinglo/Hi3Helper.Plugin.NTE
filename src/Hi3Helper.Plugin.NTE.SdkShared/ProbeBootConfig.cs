@@ -4,42 +4,31 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Nte.Login;
 
 // Reads only the vendor's static resource and this client's initialization
 // packet. The app key and decoded configuration stay in this process; the
 // report contains field names, types, and narrowly allowed public metadata.
 internal static class ProbeBootConfig
 {
-    public static object Inspect(ReadOnlySpan<byte> frame, int clientId, string? application, string root,
+    public static object Inspect(NteSdkRegistration registration, string? application, string root,
         Func<JsonElement, object>? inspectConfiguration = null,
         Func<JsonElement, ReadOnlyMemory<byte>, object>? inspectWithApplicationKey = null)
     {
-        byte[] body = frame.Length >= 12 ? frame[12..].ToArray() : [];
-        byte[] key = new byte[16];
+        byte[] key = [];
+        byte[] applicationKey = [];
         byte[]? plaintext = null;
         try
         {
-            if (frame.Length != 1244 || BitConverter.ToUInt32(frame) != 0x6B647331 ||
-                BitConverter.ToUInt32(frame[8..]) != 1244 || BitConverter.ToUInt32(frame[4..]) != 0 ||
-                application == null || !Regex.IsMatch(application, @"\A[0-9]{1,8}\z"))
+            if (application == null || application != registration.Protocol.Application)
                 throw new InvalidDataException("Not a validated client registration.");
-            for (int i = 0; i < body.Length; i++) body[i] ^= (byte)clientId;
-            string app = WideField(body, 4, 128);
-            string config = WideField(body, 0x204, 260);
-            if (app != application || config != "oneSdkConfig.config")
-                throw new InvalidDataException("Unsupported static application configuration.");
-            if (WideField(body, 0x104, 128).Length != 32)
-                throw new InvalidDataException("Unsupported public application key length.");
-            for (int i = 0; i < key.Length; i++)
-            {
-                ushort character = BinaryPrimitives.ReadUInt16LittleEndian(body.AsSpan(0x104 + (16 + i) * 2));
-                if (character < 32 || character > 126) throw new InvalidDataException("Non-ASCII application key.");
-                key[i] = (byte)character;
-            }
+            applicationKey = registration.ReadCnApplicationKey();
+            key = applicationKey.AsSpan(16, 16).ToArray();
+            string config = NteSdkRegistration.CnConfigurationName;
             // Fixed-image static path: AES wrapper RVA 0x47C010 takes the
             // application's slice starting at character 16, decodes Base64, then decrypts
             // each 16-byte block with the AES wrapper at RVA 0x47BEB0.
-            string resource = Path.Combine(root, "NTELauncher", "ResData", application + ".dat");
+            string resource = Path.Combine(root, NteRegionDefinition.CN.LauncherDirectory, "ResData", application + ".dat");
             byte[] encoded = ReadStaticResource(resource, "/" + application + "/main/" + config);
             byte[] ciphertext = Convert.FromBase64String(Encoding.ASCII.GetString(encoded));
             using Aes aes = Aes.Create();
@@ -61,7 +50,7 @@ internal static class ProbeBootConfig
         }
         finally
         {
-            CryptographicOperations.ZeroMemory(body);
+            CryptographicOperations.ZeroMemory(applicationKey);
             CryptographicOperations.ZeroMemory(key);
             if (plaintext != null) CryptographicOperations.ZeroMemory(plaintext);
         }
@@ -103,13 +92,6 @@ internal static class ProbeBootConfig
                 Visit(value, name, depth + 1);
             }
         }
-    }
-
-    private static string WideField(byte[] data, int offset, int capacity)
-    {
-        string text = Encoding.Unicode.GetString(data, offset, capacity * 2);
-        int end = text.IndexOf('\0');
-        return end < 0 ? text : text[..end];
     }
 
     internal static byte[] ReadStaticResource(string file, string suffix)

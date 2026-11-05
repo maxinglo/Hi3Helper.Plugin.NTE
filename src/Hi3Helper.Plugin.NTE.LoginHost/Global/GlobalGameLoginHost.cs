@@ -164,8 +164,8 @@ internal sealed class OverseasGameLoginHost(NteHostLaunchOptions options, LoginW
                         {
                             // Retain the registered window/version/peer checks,
                             // then use the observed Global duplex reply path.
-                            _ = ProbeCallbackTransport.FromRegistration(frame.AsSpan(0, count), clientId,
-                                context!.WindowHandle, "global");
+                            using NteSdkRegistration registration = region.Protocol.ReadRegistration(frame.AsSpan(0, count), clientId);
+                            _ = ProbeCallbackTransport.FromRegistration(registration, context!.WindowHandle);
                             NteGlobalPipeTransport callback = new(pipe, region);
                             nint gameWindow = await WaitForGameWindowAsync(clientId, lifetime.Token);
                             // Show first-use disclosure before supplying device
@@ -176,7 +176,7 @@ internal sealed class OverseasGameLoginHost(NteHostLaunchOptions options, LoginW
                             await callback.SendLanguageAsync(region.HostRegion == NteHostRegion.Taiwan ? "zh-TW" : Localization.LoginText.Culture.Name, lifetime.Token);
                             await callback.SendClientContextAsync(lifetime.Token);
                             NteGlobalDeviceInfo device = await Task.Run(
-                                () => WindowsGlobalDeviceInfo.Capture(authentication!.DeviceId, options.GameRoot),
+                                () => WindowsGlobalDeviceInfo.Capture(authentication!.DeviceId, options.GameRoot, region),
                                 lifetime.Token);
                             await callback.SendDeviceInfoAsync(device, lifetime.Token);
                             registered = true;

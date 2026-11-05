@@ -350,7 +350,7 @@ internal partial class NteGameInstaller
         GameManager.SetCurrentGameVersion(in apiVer);
         GameManager.SaveConfig();
         if (_selectedManifest != null && mgr.ReleaseConfigXml != null)
-            NteSharedInstallation.RecordUpdate(gamePath, mgr.Region, mgr.ReleaseConfigXml, _selectedManifest);
+            NteSharedInstallation.RecordUpdate(gamePath, mgr.Region, branchName, mgr.ReleaseConfigXml, _selectedManifest);
 
         progressStateDelegate?.Invoke(InstallProgressState.Completed);
         progress.StateCount = 2;

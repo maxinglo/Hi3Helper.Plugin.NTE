@@ -11,7 +11,7 @@ internal sealed record NteHostLaunchOptions(string GameRoot, string? AdditionalA
     bool PriorityBoost = false, ProcessPriorityClass Priority = ProcessPriorityClass.Normal,
     NteHostRegion Region = NteHostRegion.CN, string Language = "zh-CN")
 {
-    internal const string RequiredGameArguments = "/Game/LoginAndCreate/Map/Updater/Updater_P -SAVEWINPOS=1";
+    internal const string RequiredGameArguments = NteRegionDefinition.RequiredGameArguments;
     internal string GameArguments => string.IsNullOrWhiteSpace(AdditionalArguments) ? RequiredGameArguments : RequiredGameArguments + " " + AdditionalArguments;
 
     internal string[] ToArguments()

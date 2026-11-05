@@ -18,6 +18,16 @@ internal sealed class NteSharedProfile
     public string Branch { get; set; } = "";
     public string ManifestXml { get; set; } = "";
     public string ReleaseXml { get; set; } = "";
+
+    internal static NteSharedProfile Create(string releaseXml, byte[] manifest, string branch)
+    {
+        if (!NtePatcherConfig.IsValidBranch(branch)) throw new InvalidDataException("Missing or invalid installed resource branch.");
+        return new()
+        {
+            Version = NteGameManager.ParseReleaseVersion(releaseXml).ToString(), Branch = branch,
+            ManifestXml = Encoding.UTF8.GetString(manifest), ReleaseXml = releaseXml
+        };
+    }
 }
 
 internal sealed class NteVerifiedResource
@@ -66,7 +76,7 @@ internal static class NteSharedInstallation
         return state;
     }
 
-    internal static bool IsOverseas(string appId) => appId is "2000013" or "3000001";
+    internal static bool IsOverseas(string appId) => appId is Nte.Login.NteRegionDefinition.TaiwanAppId or Nte.Login.NteRegionDefinition.GlobalAppId;
     internal static bool Contains(string root, NteRegionConfig region) => region.IsOverseas && Load(root)?.Profiles.ContainsKey(region.AppId) == true;
     internal static bool NeedsActivation(string root, NteRegionConfig region) => region.IsOverseas &&
         (HasPendingSwitch(root) || Load(root) is { } state && state.Profiles.ContainsKey(region.AppId) && state.ActiveAppId != region.AppId);
@@ -200,13 +210,13 @@ internal static class NteSharedInstallation
         Register(root, state, indexPath);
     }
 
-    internal static void RecordUpdate(string root, NteRegionConfig region, string releaseXml, byte[] manifest)
+    internal static void RecordUpdate(string root, NteRegionConfig region, string branch, string releaseXml, byte[] manifest)
     {
         NteSharedInstallationState? state = Load(root);
         if (state == null) return;
-        if (state.ActiveAppId != region.AppId || HasPendingSwitch(root)) throw new IOException("The shared installation is not active for this update.");
-        state.Profiles[region.AppId] = new() { Version = NteGameManager.ParseReleaseVersion(releaseXml).ToString(), Branch = region.DefaultBranch,
-            ManifestXml = Encoding.UTF8.GetString(manifest), ReleaseXml = releaseXml };
+        if (state.ActiveAppId != region.AppId || HasPendingSwitch(root))
+            throw new IOException("The shared installation is not active for this update.");
+        state.Profiles[region.AppId] = NteSharedProfile.Create(releaseXml, manifest, branch);
         state.VerifiedFiles.Clear();
         Save(root, state);
     }

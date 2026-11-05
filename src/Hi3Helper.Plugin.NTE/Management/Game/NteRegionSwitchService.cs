@@ -208,11 +208,7 @@ internal sealed class NteRegionSwitchService(HttpClient http, Action<string>? en
                 .ConfigureAwait(false);
 
             context.State.ActiveAppId = target.AppId;
-            context.State.Profiles[target.AppId] = new()
-            {
-                Version = context.Plan.TargetVersion, Branch = context.Manager.BranchName,
-                ManifestXml = Encoding.UTF8.GetString(context.Selected), ReleaseXml = release
-            };
+            context.State.Profiles[target.AppId] = NteSharedProfile.Create(release, context.Selected, context.Manager.BranchName);
             context.State.VerifiedFiles.Clear();
             foreach (Item item in context.Items)
                 context.State.VerifiedFiles[item.Path] =
@@ -377,11 +373,8 @@ internal sealed class NteRegionSwitchService(HttpClient http, Action<string>? en
             region.AppId);
         string xml = await File.ReadAllTextAsync(config, token).ConfigureAwait(false);
         _ = NteRegionSwitchManifest.Read(bytes);
-        return new()
-        {
-            Version = NteGameManager.ParseReleaseVersion(xml).ToString(), Branch = region.DefaultBranch,
-            ManifestXml = Encoding.UTF8.GetString(bytes), ReleaseXml = xml
-        };
+        string branch = NteOfficialPatcherState.ParseXml(xml).DocumentElement?["LocalBranch"]?.InnerText.Trim() ?? "";
+        return NteSharedProfile.Create(xml, bytes, branch);
     }
 
     private static string CreateSeedConfiguration(string releaseXml, string branch)

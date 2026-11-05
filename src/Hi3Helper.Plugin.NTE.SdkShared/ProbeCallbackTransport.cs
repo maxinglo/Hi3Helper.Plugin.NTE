@@ -1,7 +1,7 @@
-using System.Buffers.Binary;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using Nte.Login;
 
 // Uses the documented Windows COPYDATA transport, never remote execution or
 // an injected hook. Registration must originate from the owned pipe client.
@@ -16,27 +16,8 @@ internal sealed class ProbeCallbackTransport
         ValidateWindows();
     }
 
-    internal static ProbeCallbackTransport FromRegistration(ReadOnlySpan<byte> frame, int clientId, nint source,
-        string expectedApplication = "1289", string expectedBridgeVersion = "2.0.8.0")
-    {
-        if (clientId <= 0 || frame.Length != 1244 || BinaryPrimitives.ReadUInt32LittleEndian(frame) != 0x6B647331 ||
-            BinaryPrimitives.ReadUInt32LittleEndian(frame[4..]) != 0 || BinaryPrimitives.ReadInt32LittleEndian(frame[8..]) != frame.Length)
-            throw new InvalidDataException("Expected the owned client's registration frame.");
-        byte[] body = frame[12..].ToArray();
-        try
-        {
-            for (int i = 0; i < body.Length; i++) body[i] ^= unchecked((byte)clientId);
-            // HWND is a four-byte protocol field even in this x64 bridge.
-            nint window = (nint)BinaryPrimitives.ReadUInt32LittleEndian(body);
-            string app = System.Text.Encoding.Unicode.GetString(body, 4, 256).Split('\0')[0];
-            string version = System.Text.Encoding.Unicode.GetString(body, 0x40C, 64).Split('\0')[0];
-            if (expectedApplication is not ("1289" or "global") || expectedBridgeVersion is not ("2.0.8.0" or "2.0.9.0") ||
-                app != expectedApplication || version != expectedBridgeVersion)
-                throw new InvalidDataException("Unverified application or bridge version.");
-            return new ProbeCallbackTransport(window, source, clientId);
-        }
-        finally { CryptographicOperations.ZeroMemory(body); }
-    }
+    internal static ProbeCallbackTransport FromRegistration(NteSdkRegistration registration, nint source)
+        => new(registration.CallbackWindow, source, registration.ClientId);
 
     internal void Send(ProbeLoginSequence sequence, CancellationToken token)
     {

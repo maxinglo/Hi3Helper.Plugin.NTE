@@ -22,6 +22,27 @@ public sealed class GameStartedLifetimeTests
     }
 
     [Fact]
+    public async Task LoginTaskFailureIsPresentedWhileTheSdkConnectionIsStillWaiting()
+    {
+        TaskCompletionSource exit = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource connection = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource loginFailure = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource reported = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        bool cleaned = false;
+        Task<bool> host = GameStartedLifetime.RunAsync(exit.Task, () => connection.Task,
+            ex => { Assert.IsType<InvalidDataException>(ex); reported.SetResult(); return Task.CompletedTask; },
+            () => false, () => { cleaned = true; connection.TrySetCanceled(); return Task.CompletedTask; }, loginFailure.Task);
+        loginFailure.SetException(new InvalidDataException("synthetic UI setup failure"));
+        await reported.Task.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+        Assert.False(connection.Task.IsCompleted);
+        Assert.False(host.IsCompleted);
+        Assert.False(cleaned);
+        exit.SetResult();
+        Assert.False(await host.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken));
+        Assert.True(cleaned);
+    }
+
+    [Fact]
     public async Task FailureToDisplayWarningStillKeepsHostUntilGameExit()
     {
         TaskCompletionSource exit = new(TaskCreationOptions.RunContinuationsAsynchronously); bool cleaned = false;
