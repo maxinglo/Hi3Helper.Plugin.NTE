@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using Hi3Helper.Plugin.NTE.Management.Api.Media;
 using System.Net;
 using System.Net.Http;
 using System.Runtime.InteropServices.Marshalling;
@@ -36,6 +37,7 @@ internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? do
     private NtePatchList _releasePatches = new();
     private NtePreloadPlan? _preloadPlan;
     private readonly NteFileVerificationCache _verificationCache = new();
+    internal TimeSpan MetadataRequestTimeout { get; set; } = NteLauncherResourceClient.MetadataTimeout;
     internal Action<long, long> ReportPerFileProgress { get; set; } = SharedStaticV1Ext.InvokePerFileProgress;
 
     internal async Task<NteResListParser> GetIntegrityManifestAsync(CancellationToken token)
@@ -245,6 +247,9 @@ internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? do
         InstallProgressStateDelegate? progressStateDelegate,
         CancellationToken token)
     {
+        progressStateDelegate?.Invoke(InstallProgressState.Preparing);
+        InstallProgress preparing = new();
+        progressDelegate?.Invoke(in preparing);
         if (await InitAsync(token).ConfigureAwait(false) != 0)
             throw new InvalidOperationException("Cannot refresh the official game release before updating.");
 
@@ -323,6 +328,10 @@ internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? do
         string[] resourceRoots = ((NteGameManager)GameManager).GameResBaseUrls;
         for (int i = 0; i < resourceRoots.Length; i++)
         {
+            token.ThrowIfCancellationRequested();
+            using CancellationTokenSource deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+            deadline.CancelAfter(MetadataRequestTimeout);
+            CancellationToken attempt = deadline.Token;
             string url =
                 $"{resourceRoots[i].TrimEnd('/')}/{branchName}/Version/Windows/version/{gameVersion}/ResList.bin.zip";
 
@@ -332,15 +341,19 @@ internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? do
                     "[NteCNInstaller::DownloadAndDecryptResListAsync] Downloading ResList from: {Url}", url);
 
                 using HttpResponseMessage response = await _downloadHttpClient
-                    .GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token)
+                    .GetAsync(url, HttpCompletionOption.ResponseHeadersRead, attempt)
                     .ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
 
-                await using Stream zipStream = await response.Content.ReadAsStreamAsync(token)
+                await using Stream zipStream = await response.Content.ReadAsStreamAsync(attempt)
                     .ConfigureAwait(false);
 
-                // 解压 zip（包含 ResList.bin 和 lastdiff.bin）
-                using ZipArchive archive = new(zipStream, ZipArchiveMode.Read, leaveOpen: false);
+                // ZipArchive synchronously reads non-seekable inputs. Buffer this small metadata archive
+                // asynchronously so a stalled response body observes the endpoint deadline and user cancellation.
+                using MemoryStream zipBuffer = new();
+                await zipStream.CopyToAsync(zipBuffer, attempt).ConfigureAwait(false);
+                zipBuffer.Position = 0;
+                using ZipArchive archive = new(zipBuffer, ZipArchiveMode.Read, leaveOpen: false);
 
                 ZipArchiveEntry? resListEntry = null;
                 foreach (ZipArchiveEntry entry in archive.Entries)
@@ -357,7 +370,7 @@ internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? do
 
                 // 读取加密数据
                 await using Stream entryStream = resListEntry.Open();
-                byte[] encryptedData = await ReadAllBytesAsync(entryStream, token).ConfigureAwait(false);
+                byte[] encryptedData = await ReadAllBytesAsync(entryStream, attempt).ConfigureAwait(false);
 
                 // 解密
                 byte[] decryptedXml =
@@ -372,11 +385,16 @@ internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? do
                 {
                     if (!entry.FullName.Equals("lastdiff.bin", StringComparison.OrdinalIgnoreCase)) continue;
                     await using Stream diffStream = entry.Open();
-                    byte[] bytes = await ReadAllBytesAsync(diffStream, token).ConfigureAwait(false);
+                    byte[] bytes = await ReadAllBytesAsync(diffStream, attempt).ConfigureAwait(false);
                     patches = NteResListDecryptor.Decrypt(bytes.AsSpan(), ((NteGameManager)GameManager).AppId);
                     break;
                 }
                 return (decryptedXml, patches);
+            }
+            catch (OperationCanceledException ex) when (!token.IsCancellationRequested)
+            {
+                lastException = new TimeoutException($"Official resource manifest request timed out: {url}", ex);
+                SharedStatic.InstanceLogger.LogWarning("[NteCNInstaller::DownloadAndDecryptResListAsync] CDN {Index} timed out; trying the next endpoint", i);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

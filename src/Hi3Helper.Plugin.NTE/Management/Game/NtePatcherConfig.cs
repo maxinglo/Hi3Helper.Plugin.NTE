@@ -6,6 +6,9 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Linq;
+using Hi3Helper.Plugin.Core;
+using Microsoft.Extensions.Logging;
 
 namespace Hi3Helper.Plugin.NTE.Management.Game;
 
@@ -18,14 +21,19 @@ internal sealed record NtePatcherConfig(string BranchName, string AppId, string[
     internal static async Task<NtePatcherConfig> DiscoverAsync(HttpClient httpClient, CancellationToken token, NteRegionConfig? region = null)
     {
         region ??= NteConfigProvider.CN;
-        NteLauncherResourceClient client = new(httpClient, region.ZoneHomePageUrl);
+        NteLauncherResourceClient client = new(httpClient, region.ZoneHomePageUrl, NteLauncherResourceClient.MetadataTimeout);
+        SharedStatic.InstanceLogger.LogInformation("[NTE Metadata] Reading the official launcher version for {Region}", region.ProfileName);
         string versionIni = await client.ReadTextAsync(region.LauncherVersionIniUrl, token).ConfigureAwait(false);
         string manifestUrl = NteLauncherManifest.ParseFileListUrl(versionIni, region.LauncherVersionIniUrl);
+        SharedStatic.InstanceLogger.LogInformation("[NTE Metadata] Reading the official launcher file list");
         NteLauncherManifest manifest = NteLauncherManifest.Parse(
             await client.ReadTextAsync(manifestUrl, token).ConfigureAwait(false), manifestUrl);
         if (!manifest.TryFindPathBySuffix("/" + region.AppId + "/PatcherConfig/PatcherConfig.json", out string path))
             throw new InvalidDataException("Official launcher manifest has no patcher configuration for " + region.ProfileName + ".");
-        return Parse(await client.ReadTextAsync(manifest.GetArchiveUrl(path), token).ConfigureAwait(false), region.AppId);
+        SharedStatic.InstanceLogger.LogInformation("[NTE Metadata] Reading the active patcher branch");
+        NtePatcherConfig result = Parse(await client.ReadTextAsync(manifest.GetArchiveUrl(path), token).ConfigureAwait(false), region.AppId);
+        return result with { ResourceUrls = result.ResourceUrls.OrderByDescending(url =>
+            new Uri(url).Host.Equals(client.LastSuccessfulHost, StringComparison.OrdinalIgnoreCase)).ToArray() };
     }
 
     internal static NtePatcherConfig Parse(string json, string expectedAppId = "1289")
@@ -50,19 +58,9 @@ internal sealed record NtePatcherConfig(string BranchName, string AppId, string[
 
     internal async Task<string> ReadReleaseConfigAsync(HttpClient httpClient, CancellationToken token)
     {
-        NteLauncherResourceClient client = new(httpClient, Referer);
-        Exception? lastError = null;
-        foreach (string root in ResourceUrls)
-        {
-            try
-            {
-                return await client.ReadTextAsync($"{root}/{BranchName}/Version/Windows/config.xml", token).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is HttpRequestException or IOException)
-            {
-                lastError = ex;
-            }
-        }
-        throw lastError ?? new InvalidDataException("Cannot read the active game release.");
+        NteLauncherResourceClient client = new(httpClient, Referer, NteLauncherResourceClient.MetadataTimeout);
+        SharedStatic.InstanceLogger.LogInformation("[NTE Metadata] Reading the game release for branch {Branch}", BranchName);
+        return await client.ReadTextAsync(ResourceUrls.Select(root => $"{root}/{BranchName}/Version/Windows/config.xml"), token)
+            .ConfigureAwait(false);
     }
 }

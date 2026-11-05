@@ -69,6 +69,23 @@ public sealed class PreloadTests : IDisposable
     }
 
     [Fact]
+    public async Task Update_PreparesBeforeInitializationAndFallsBackWhenTheManifestBodyStalls()
+    {
+        fixture.Released = true;
+        fixture.StallManifest = true;
+        installer.MetadataRequestTimeout = TimeSpan.FromMilliseconds(50);
+        List<InstallProgressState> states = [];
+        fixture.BeforeMetadata = () => Assert.Equal(InstallProgressState.Preparing, states[0]);
+        Guid id = Guid.NewGuid();
+        installer.StartUpdateAsync(null, states.Add, in id, out nint result);
+        await result.AsTask().WaitAsync(TimeSpan.FromSeconds(15), Token);
+        Assert.Equal(1, fixture.ManifestCancellations);
+        Assert.Contains("resources2.test", fixture.ManifestHosts);
+        Assert.Equal(Fixture.New, File.ReadAllBytes(Path.Combine(root, "game.dat")));
+        Assert.Equal(InstallProgressState.Completed, states[^1]);
+    }
+
+    [Fact]
     public async Task PublicPreloadApi_UsesDeltaRangeAndBlockDownloadsWithoutChangingTheInstalledGame()
     {
         var before = SnapshotInstalled();
@@ -368,7 +385,10 @@ public sealed class PreloadTests : IDisposable
         internal readonly byte[] Patch = HdiffFixtures.Create(Old, New, [(0, 0, 1024)]);
         internal readonly byte[] HotfixPatch = HdiffFixtures.Create(New, Final, [(0, 0, 1024)]);
         internal readonly byte[] DirectFinalPatch = HdiffFixtures.Create(Old, Final, [(0, 0, 1024)]);
-        internal bool Released, StallPatch, OmitDiff, AdvanceRelease;
+        internal bool Released, StallPatch, OmitDiff, AdvanceRelease, StallManifest;
+        internal int ManifestCancellations;
+        internal List<string> ManifestHosts { get; } = [];
+        internal Action? BeforeMetadata;
         private byte[] Target => Released && AdvanceRelease ? Final : New;
         private string TargetVersion => Released && AdvanceRelease ? "1.5.3" : "1.5.0";
         internal Action? BeforeFullDownload;
@@ -393,9 +413,13 @@ public sealed class PreloadTests : IDisposable
             HttpContent content;
             HttpStatusCode status = HttpStatusCode.OK;
             bool next = path.Contains("/PC_150/", StringComparison.Ordinal);
-            if (path.EndsWith("Version.ini", StringComparison.Ordinal)) content = new StringContent("FileListURL=https://launcher.test/1/AllFiles.xml");
+            if (path.EndsWith("Version.ini", StringComparison.Ordinal))
+            {
+                BeforeMetadata?.Invoke();
+                content = new StringContent("FileListURL=https://launcher.test/1/AllFiles.xml");
+            }
             else if (path.EndsWith("AllFiles.xml", StringComparison.Ordinal)) content = new StringContent("<All_Files><File Path=\"/ResFilesM/1289/PatcherConfig/PatcherConfig.json\"/></All_Files>");
-            else if (path.EndsWith("PatcherConfig.json.zip", StringComparison.Ordinal)) content = Zip(("PatcherConfig.json", Encoding.UTF8.GetBytes("{\"branchName\":\"" + (Released ? "PC_150" : "PC_140") + "\",\"appId\":\"1289\",\"gameResUrl\":[\"https://resources.test/clientRes\"]}")));
+            else if (path.EndsWith("PatcherConfig.json.zip", StringComparison.Ordinal)) content = Zip(("PatcherConfig.json", Encoding.UTF8.GetBytes("{\"branchName\":\"" + (Released ? "PC_150" : "PC_140") + "\",\"appId\":\"1289\",\"gameResUrl\":[\"https://resources.test/clientRes\"" + (StallManifest ? ",\"https://resources2.test/clientRes\"" : "") + "]}")));
             else if (path.EndsWith("config.xml", StringComparison.Ordinal))
             {
                 string xml = next ? ReleaseConfig(Mismatch == "version" ? "1.5.1" : TargetVersion, NewManifest, Diff) : CurrentConfiguration;
@@ -403,9 +427,15 @@ public sealed class PreloadTests : IDisposable
                 if (next && Mismatch == "diff") xml = xml.Replace(Hash(Encoding.UTF8.GetBytes(Diff)), new string('0', 32), StringComparison.Ordinal);
                 content = new StringContent(xml);
             }
-            else if (path.EndsWith("ResList.bin.zip", StringComparison.Ordinal)) content = next
-                ? OmitDiff ? Zip(("ResList.bin", Encoding.UTF8.GetBytes(NewManifest))) : Zip(("ResList.bin", Encoding.UTF8.GetBytes(NewManifest)), ("lastdiff.bin", Encoding.UTF8.GetBytes(Diff)))
-                : Zip(("ResList.bin", Encoding.UTF8.GetBytes(OldManifest)));
+            else if (path.EndsWith("ResList.bin.zip", StringComparison.Ordinal))
+            {
+                ManifestHosts.Add(request.RequestUri.Host);
+                content = StallManifest && request.RequestUri.Host == "resources.test"
+                    ? new StreamContent(new StallStream([0], new(), () => Interlocked.Increment(ref ManifestCancellations)))
+                    : next ? OmitDiff ? Zip(("ResList.bin", Encoding.UTF8.GetBytes(NewManifest)))
+                        : Zip(("ResList.bin", Encoding.UTF8.GetBytes(NewManifest)), ("lastdiff.bin", Encoding.UTF8.GetBytes(Diff)))
+                    : Zip(("ResList.bin", Encoding.UTF8.GetBytes(OldManifest)));
+            }
             else
             {
                 var range = request.Headers.Range?.Ranges.Single();
@@ -438,14 +468,15 @@ public sealed class PreloadTests : IDisposable
         }
     }
 
-    private sealed class StallStream(byte[] data, TaskCompletionSource firstByte) : Stream
+    private sealed class StallStream(byte[] data, TaskCompletionSource firstByte, Action? cancelled = null) : Stream
     {
         private bool read;
         public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
         {
             if (!read) { read = true; buffer.Span[0] = data[0]; return 1; }
             firstByte.TrySetResult();
-            await Task.Delay(Timeout.Infinite, cancellationToken);
+            try { await Task.Delay(Timeout.Infinite, cancellationToken); }
+            catch (OperationCanceledException) { cancelled?.Invoke(); throw; }
             return 0;
         }
         public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
