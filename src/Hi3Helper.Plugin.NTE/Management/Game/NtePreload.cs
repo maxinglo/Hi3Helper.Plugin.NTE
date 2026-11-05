@@ -29,6 +29,9 @@ internal sealed record NtePreloadRelease(string BranchName, GameVersion Version)
 internal sealed record NtePatchEntry(string OldMd5, long OldSize, string NewMd5, long NewSize,
     NteResListEntry Resource);
 
+internal sealed record NtePatchRoute(string SourceMd5, long SourceSize, bool SourceCached,
+    IReadOnlyList<NtePatchEntry> Steps, long NetworkBytes);
+
 /// <summary>Only a diff list authenticated by the release configuration can select patch downloads.</summary>
 internal sealed class NtePatchList
 {
@@ -73,6 +76,39 @@ internal sealed class NtePatchList
             ? entries.FirstOrDefault(p => p.OldSize == previous.TotalSize &&
                 p.OldMd5.Equals(previous.ExpectedMd5, StringComparison.OrdinalIgnoreCase) && p.Resource.Filesize < target.TotalSize)
             : null;
+
+    internal NtePatchRoute? FindRoute(NteGameInstaller.DownloadTask target, NteGameInstaller.DownloadTask? previous,
+        Func<string, long, bool> cachedContent, Func<NteResListEntry, long> remainingBytes,
+        Func<string, long, bool>? installedContent = null)
+    {
+        // The release list can contain both old -> preview and preview -> released patches.
+        // Search backwards from the target, charging only bytes not already in the cache.
+        PriorityQueue<(string Md5, long Size, List<NtePatchEntry> Reverse), (long Bytes, int Steps)> queue = new();
+        HashSet<string> visited = new(StringComparer.OrdinalIgnoreCase);
+        queue.Enqueue((target.ExpectedMd5, target.TotalSize, []), (0, 0));
+        while (queue.TryDequeue(out var node, out var priority))
+        {
+            string key = Identity(node.Md5, node.Size);
+            if (!visited.Add(key)) continue;
+            bool source = installedContent != null ? installedContent(node.Md5, node.Size) :
+                previous != null && previous.TotalSize == node.Size &&
+                previous.ExpectedMd5.Equals(node.Md5, StringComparison.OrdinalIgnoreCase);
+            bool cached = cachedContent(node.Md5, node.Size);
+            if (source || cached)
+            {
+                node.Reverse.Reverse();
+                return new(node.Md5, node.Size, !source && cached, node.Reverse, priority.Bytes);
+            }
+            if (!_entries.TryGetValue(key, out var entries)) continue;
+            foreach (NtePatchEntry entry in entries)
+            {
+                long bytes = checked(priority.Bytes + remainingBytes(entry.Resource));
+                List<NtePatchEntry> route = [.. node.Reverse, entry];
+                queue.Enqueue((entry.OldMd5, entry.OldSize, route), (bytes, route.Count));
+            }
+        }
+        return null;
+    }
 
     internal static void ValidateHash(byte[] bytes, string? expected)
     {

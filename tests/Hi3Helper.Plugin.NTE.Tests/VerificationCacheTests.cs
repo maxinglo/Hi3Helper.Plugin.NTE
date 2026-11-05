@@ -46,6 +46,17 @@ public sealed class VerificationCacheTests : IDisposable
     }
 
     [Fact]
+    public void WrongTargetHash_PreservesTheActualSourceHashForDeltaSelection()
+    {
+        string path = Path.Combine(_root, "source.pak");
+        File.WriteAllText(path, "old");
+        NteFileVerificationCache cache = new();
+        Assert.False(cache.Verify(path, 3, Convert.ToHexString(MD5.HashData("new"u8)), TestContext.Current.CancellationToken));
+        Assert.True(cache.Verify(path, 3, Convert.ToHexString(MD5.HashData("old"u8)), TestContext.Current.CancellationToken));
+        Assert.Equal(1, cache.HashReads);
+    }
+
+    [Fact]
     public void CancellationDuringHash_DoesNotCachePartialResult()
     {
         string path = Path.Combine(_root, "game.pak");

@@ -40,7 +40,7 @@ internal sealed class NteDownloadScheduler
     {
         this.freeSpace = freeSpace;
         total = jobs.Count;
-        pending = jobs.Where(job => job.Space.NetworkBytes > 0).ToList();
+        pending = jobs.ToList();
         SortPending();
         long required = NteDownloadSpace.RequiredFreeBytes(jobs.Select(j => j.Space), ReserveBytes);
         long available = freeSpace();
@@ -63,7 +63,7 @@ internal sealed class NteDownloadScheduler
                 foreach (NteDownloadJob job in verification.GetConsumingEnumerable(cancel.Token))
                 {
                     try { verify(job, cancel.Token); }
-                    catch (InvalidDataException ex)
+                    catch (Exception ex) when (ex is InvalidDataException or NtePatchFallbackException)
                     {
                         if (!TryRetry(job, ex, retry)) throw;
                         continue;
@@ -75,19 +75,17 @@ internal sealed class NteDownloadScheduler
             catch { cancel.Cancel(); throw; }
         }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
-        foreach (NteDownloadJob job in jobs.Where(job => job.Space.NetworkBytes == 0))
-        {
-            lock (sync) active.Add(job);
-            verification.Add(job);
-        }
-
         async Task NetworkWorker()
         {
             try
             {
                 while (await TakeAsync(cancel.Token).ConfigureAwait(false) is { } job)
                 {
-                    try { await transfer(job, cancel.Token).ConfigureAwait(false); }
+                    try
+                    {
+                        if (job.Space.NetworkBytes > 0)
+                            await transfer(job, cancel.Token).ConfigureAwait(false);
+                    }
                     catch (Exception ex) when (IsTransient(ex))
                     {
                         if (!TryRetry(job, ex, retry)) throw;
@@ -126,7 +124,7 @@ internal sealed class NteDownloadScheduler
                 // suffix of active temporary files, not their complete target size again.
                 long available = freeSpace();
                 foreach (NteDownloadJob job in active)
-                    available -= Math.Max(0, job.File.TotalSize - Volatile.Read(ref job.TemporaryBytes));
+                    available -= Math.Max(0, checked(job.File.TotalSize + job.Space.WorkBytes) - Volatile.Read(ref job.TemporaryBytes));
                 long now = Environment.TickCount64;
                 bool spaceReleasingPending = false;
                 for (int i = 0; i < pending.Count; i++)
@@ -167,6 +165,8 @@ internal sealed class NteDownloadScheduler
 
     private bool TryRetry(NteDownloadJob job, Exception error, Action<NteDownloadJob, Exception> retry)
     {
+        if (error is NtePatchFallbackException && job.File.UpdateOperation?.UseFullDownload() == true)
+            job.Attempt = -1;
         if (job.Attempt >= 2) return false;
         NteDownloadSpace current = NteDownloadSpace.Capture(job.File);
         lock (sync)

@@ -126,8 +126,8 @@ public sealed class PreloadTests : IDisposable
         int requests = fixture.Requests.Count;
         fixture.Released = true;
         Assert.Equal(0, await manager.InitAsyncInner(true, Token));
-        Assert.Equal(Fixture.New.Length + 13, await Size(false, GameInstallerKind.Update));
-        Assert.Equal(Fixture.New.Length + 13, await Size(true, GameInstallerKind.Update));
+        Assert.Equal(fixture.Patch.Length + 13, await Size(false, GameInstallerKind.Update));
+        Assert.Equal(fixture.Patch.Length + 13, await Size(true, GameInstallerKind.Update));
         Guid id = Guid.NewGuid();
         installer.StartUpdateAsync(null, null, in id, out nint result);
         await result.AsTask().WaitAsync(TimeSpan.FromSeconds(15), Token);
@@ -145,7 +145,7 @@ public sealed class PreloadTests : IDisposable
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task InvalidPatchOrChangedSource_FallsBackToTheVerifiedFullResource(bool corruptPatch)
+    public async Task InvalidCacheIsDownloadedAgain_WhileChangedSourceUsesTheFullResource(bool corruptPatch)
     {
         await installer.PreloadAsync(null, null, Token);
         if (corruptPatch)
@@ -160,7 +160,85 @@ public sealed class PreloadTests : IDisposable
         installer.StartUpdateAsync(null, null, in id, out nint result);
         await result.AsTask().WaitAsync(TimeSpan.FromSeconds(15), Token);
         Assert.Equal(Fixture.New, File.ReadAllBytes(Path.Combine(root, "game.dat")));
-        Assert.Contains(fixture.Requests, r => r.Path.Contains(Fixture.Hash(Fixture.New), StringComparison.OrdinalIgnoreCase));
+        if (corruptPatch)
+        {
+            Assert.Equal(2, fixture.Requests.Count(r => r.Path.Contains(Fixture.Hash(fixture.Patch), StringComparison.OrdinalIgnoreCase)));
+            Assert.DoesNotContain(fixture.Requests, r => r.Path.Contains(Fixture.Hash(Fixture.New), StringComparison.OrdinalIgnoreCase));
+        }
+        else Assert.Contains(fixture.Requests, r => r.Path.Contains(Fixture.Hash(Fixture.New), StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task NewerReleasedVersion_ReusesThePreviewPatchAndDownloadsOnlyTheHotfix()
+    {
+        await installer.PreloadAsync(null, null, Token);
+        var before = SnapshotInstalled();
+        int requests = fixture.Requests.Count;
+        fixture.AdvanceRelease = fixture.Released = true;
+        Assert.Equal(0, await manager.InitAsyncInner(true, Token));
+        long total = fixture.Patch.Length + fixture.HotfixPatch.Length + 13;
+        Assert.Equal(total, await Size(false, GameInstallerKind.Update));
+        Assert.Equal(fixture.Patch.Length + 13, await Size(true, GameInstallerKind.Update));
+        Assert.Equal(before, SnapshotInstalled());
+        List<InstallProgress> progress = [];
+        Guid id = Guid.NewGuid();
+        installer.StartUpdateAsync((in InstallProgress value) => progress.Add(value), null, in id, out nint result);
+        await result.AsTask().WaitAsync(TimeSpan.FromSeconds(15), Token);
+        Assert.Equal(Fixture.Final, File.ReadAllBytes(Path.Combine(root, "game.dat")));
+        manager.GetCurrentGameVersion(out GameVersion current);
+        Assert.Equal(new("1.5.3"), current);
+        Assert.Equal(total, progress[^1].TotalBytesToDownload);
+        Assert.Equal(total, progress[^1].DownloadedBytes);
+        Assert.Single(fixture.Requests.Skip(requests));
+        Assert.Contains(Fixture.Hash(fixture.HotfixPatch), fixture.Requests[^1].Path);
+    }
+
+    [Fact]
+    public async Task NormalUpdateWithoutPreload_DownloadsTheDirectDeltaInsteadOfTheFullFile()
+    {
+        fixture.AdvanceRelease = fixture.Released = true;
+        Assert.Equal(fixture.DirectFinalPatch.Length + 13, await Size(false, GameInstallerKind.Update));
+        Guid id = Guid.NewGuid();
+        installer.StartUpdateAsync(null, null, in id, out nint result);
+        await result.AsTask().WaitAsync(TimeSpan.FromSeconds(15), Token);
+        Assert.Equal(Fixture.Final, File.ReadAllBytes(Path.Combine(root, "game.dat")));
+        Assert.Contains(fixture.Requests, r => r.Path.Contains(Fixture.Hash(fixture.DirectFinalPatch), StringComparison.Ordinal));
+        Assert.DoesNotContain(fixture.Requests, r => r.Path.Contains(Fixture.Hash(Fixture.Final), StringComparison.Ordinal));
+        Assert.DoesNotContain(fixture.Requests, r => r.Path.Contains(Fixture.Hash(fixture.HotfixPatch), StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CancelledPatchChain_ResumesFromItsVerifiedIntermediateWithoutChangingTheGame()
+    {
+        await installer.PreloadAsync(null, null, Token);
+        fixture.AdvanceRelease = fixture.Released = true;
+        Assert.Equal(0, await manager.InitAsyncInner(true, Token));
+        _ = await Size(false, GameInstallerKind.Update);
+        using CancellationTokenSource cancel = CancellationTokenSource.CreateLinkedTokenSource(Token);
+        string intermediate = NtePreloadCache.PathFor(root, "1289", Fixture.Hash(Fixture.New), Fixture.New.Length);
+        NteGameInstaller.DownloadTask target = new()
+        {
+            OutputPath = Path.Combine(root, "game.dat"), TotalSize = Fixture.Final.Length,
+            ExpectedMd5 = Fixture.Hash(Fixture.Final),
+            ResEntry = new() { Filename = "game.dat", Filesize = Fixture.Final.Length, Md5 = Fixture.Hash(Fixture.Final) }
+        };
+        NteUpdateOperation operation = Assert.Single(installer.BuildUpdateTasks([target], root, "1289", Token)).UpdateOperation!;
+        await operation.DownloadAsync(installer, ["https://resources.test/clientRes"], "PC_150", Token, _ => { });
+        Assert.ThrowsAny<OperationCanceledException>(() => operation.Complete(cancel.Token, (_, _) => { }, _ =>
+        {
+            if (File.Exists(intermediate)) cancel.Cancel();
+        }));
+        Assert.Equal(Fixture.Old, File.ReadAllBytes(target.OutputPath));
+        Assert.Equal(Fixture.New, File.ReadAllBytes(intermediate));
+        manager.GetCurrentGameVersion(out GameVersion stillOld);
+        Assert.Equal(new("1.4.18"), stillOld);
+        int requests = fixture.Requests.Count;
+        NteUpdateOperation resumed = Assert.Single(installer.BuildUpdateTasks([target], root, "1289", Token)).UpdateOperation!;
+        Assert.Equal(1, resumed.PatchStages);
+        await resumed.DownloadAsync(installer, ["https://resources.test/clientRes"], "PC_150", Token, _ => { });
+        resumed.Complete(Token, (_, _) => { }, _ => { });
+        Assert.Equal(requests, fixture.Requests.Count);
+        Assert.Equal(Fixture.Final, File.ReadAllBytes(Path.Combine(root, "game.dat")));
     }
 
     [Fact]
@@ -286,15 +364,23 @@ public sealed class PreloadTests : IDisposable
     {
         internal static readonly byte[] Old = Encoding.UTF8.GetBytes(new string('a', 1024));
         internal static readonly byte[] New = Encoding.UTF8.GetBytes(new string('a', 512) + new string('b', 512));
+        internal static readonly byte[] Final = Encoding.UTF8.GetBytes(new string('a', 512) + new string('b', 480) + new string('c', 32));
         internal readonly byte[] Patch = HdiffFixtures.Create(Old, New, [(0, 0, 1024)]);
-        internal bool Released, StallPatch, OmitDiff;
+        internal readonly byte[] HotfixPatch = HdiffFixtures.Create(New, Final, [(0, 0, 1024)]);
+        internal readonly byte[] DirectFinalPatch = HdiffFixtures.Create(Old, Final, [(0, 0, 1024)]);
+        internal bool Released, StallPatch, OmitDiff, AdvanceRelease;
+        private byte[] Target => Released && AdvanceRelease ? Final : New;
+        private string TargetVersion => Released && AdvanceRelease ? "1.5.3" : "1.5.0";
         internal Action? BeforeFullDownload;
         internal string Availability = "start", Mismatch = "";
         internal readonly TaskCompletionSource FirstPatchByte = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal readonly List<(string Path, long? Start, long? End)> Requests = [];
         internal string OldManifest => $"<ResList version=\"1.4.18\">{Res("game.dat", Old)}{Res("unchanged.dat", "STABLE"u8.ToArray())}{Res(NteConfigProvider.CN.GameExecutableName, "E"u8.ToArray())}</ResList>";
-        private string NewManifest => $"<ResList version=\"1.5.0\">{Res("game.dat", New)}{Res("unchanged.dat", "STABLE"u8.ToArray())}{Res(NteConfigProvider.CN.GameExecutableName, "E"u8.ToArray())}<Res filename=\"blocked.dat\" filesize=\"7\" md5=\"{Hash("BLOCK!!"u8.ToArray())}\"><Block index=\"0\" start=\"0\" size=\"3\" md5=\"{Hash("BLO"u8.ToArray())}\"/><Block index=\"1\" start=\"3\" size=\"4\" md5=\"{Hash("CK!!"u8.ToArray())}\"/></Res><Package><Pak md5=\"{Hash("fixture-pak"u8.ToArray())}\" filesize=\"22\"><Entry name=\"entry.dat\" offset=\"16\" size=\"6\" md5=\"{Hash("PACKED"u8.ToArray())}\"/></Pak></Package></ResList>";
-        private string Diff => $"<PatchList><Patch oldfile=\"{Hash(Old)}.{Old.Length}\" newfile=\"{Hash(New)}.{New.Length}\" patch=\"{Hash(Patch)}.{Patch.Length}\"/></PatchList>";
+        private string NewManifest => $"<ResList version=\"{TargetVersion}\">{Res("game.dat", Target)}{Res("unchanged.dat", "STABLE"u8.ToArray())}{Res(NteConfigProvider.CN.GameExecutableName, "E"u8.ToArray())}<Res filename=\"blocked.dat\" filesize=\"7\" md5=\"{Hash("BLOCK!!"u8.ToArray())}\"><Block index=\"0\" start=\"0\" size=\"3\" md5=\"{Hash("BLO"u8.ToArray())}\"/><Block index=\"1\" start=\"3\" size=\"4\" md5=\"{Hash("CK!!"u8.ToArray())}\"/></Res><Package><Pak md5=\"{Hash("fixture-pak"u8.ToArray())}\" filesize=\"22\"><Entry name=\"entry.dat\" offset=\"16\" size=\"6\" md5=\"{Hash("PACKED"u8.ToArray())}\"/></Pak></Package></ResList>";
+        private string Diff => "<PatchList>" + Edge(Old, New, Patch) +
+            (Released && AdvanceRelease ? Edge(New, Final, HotfixPatch) + Edge(Old, Final, DirectFinalPatch) : "") + "</PatchList>";
+        private static string Edge(byte[] old, byte[] target, byte[] patch)
+            => $"<Patch oldfile=\"{Hash(old)}.{old.Length}\" newfile=\"{Hash(target)}.{target.Length}\" patch=\"{Hash(patch)}.{patch.Length}\"/>";
         internal string CurrentConfiguration => ReleaseConfig("1.4.18", OldManifest, "")
             .Replace("</config>", $"<LocalBranch>PC_140</LocalBranch><PreReleaseBranch>PC_150</PreReleaseBranch><PreReleaseVersion>1.5.0</PreReleaseVersion><PreReleaseStatus>{Availability}</PreReleaseStatus></config>", StringComparison.Ordinal);
         internal static string Hash(byte[] data) => Convert.ToHexStringLower(MD5.HashData(data));
@@ -312,7 +398,7 @@ public sealed class PreloadTests : IDisposable
             else if (path.EndsWith("PatcherConfig.json.zip", StringComparison.Ordinal)) content = Zip(("PatcherConfig.json", Encoding.UTF8.GetBytes("{\"branchName\":\"" + (Released ? "PC_150" : "PC_140") + "\",\"appId\":\"1289\",\"gameResUrl\":[\"https://resources.test/clientRes\"]}")));
             else if (path.EndsWith("config.xml", StringComparison.Ordinal))
             {
-                string xml = next ? ReleaseConfig(Mismatch == "version" ? "1.5.1" : "1.5.0", NewManifest, Diff) : CurrentConfiguration;
+                string xml = next ? ReleaseConfig(Mismatch == "version" ? "1.5.1" : TargetVersion, NewManifest, Diff) : CurrentConfiguration;
                 if (next && Mismatch == "manifest") xml = xml.Replace(Hash(Encoding.UTF8.GetBytes(NewManifest)), new string('0', 32), StringComparison.Ordinal);
                 if (next && Mismatch == "diff") xml = xml.Replace(Hash(Encoding.UTF8.GetBytes(Diff)), new string('0', 32), StringComparison.Ordinal);
                 content = new StringContent(xml);
@@ -324,9 +410,11 @@ public sealed class PreloadTests : IDisposable
             {
                 var range = request.Headers.Range?.Ranges.Single();
                 lock (Requests) Requests.Add((path, range?.From, range?.To));
-                if (path.Contains(Hash(New), StringComparison.Ordinal)) BeforeFullDownload?.Invoke();
+                if (path.Contains(Hash(Target), StringComparison.Ordinal)) BeforeFullDownload?.Invoke();
                 byte[] bytes = path.Contains(Hash(Patch), StringComparison.Ordinal) ? Patch :
-                    path.Contains(Hash(New), StringComparison.Ordinal) ? New :
+                    path.Contains(Hash(HotfixPatch), StringComparison.Ordinal) ? HotfixPatch :
+                    path.Contains(Hash(DirectFinalPatch), StringComparison.Ordinal) ? DirectFinalPatch :
+                    path.Contains(Hash(Target), StringComparison.Ordinal) ? Target :
                     path.Contains(Hash("BLOCK!!"u8.ToArray()), StringComparison.Ordinal) ? "BLOCK!!"u8.ToArray() :
                     path.Contains(Hash("fixture-pak"u8.ToArray()), StringComparison.Ordinal) ? Encoding.UTF8.GetBytes("................PACKED") :
                     throw new InvalidOperationException("Unexpected payload: " + path);

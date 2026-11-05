@@ -137,6 +137,26 @@ public sealed class DownloadSchedulerTests : IDisposable
     }
 
     [Fact]
+    public async Task CachedPatches_ReserveScratchAndRunInTheFeasibleDiskOrderWithoutNetwork()
+    {
+        NteDownloadJob large = Job("large", 1, 1), releasing = Job("releasing", 1, 1);
+        large.Space = large.Space with { WorkBytes = 25, CompletionReclaimedBytes = 0 };
+        releasing.Space = releasing.Space with { WorkBytes = 20, CompletionReclaimedBytes = 30 };
+        List<NteDownloadJob> jobs = [large, releasing];
+        long free = NteDownloadScheduler.ReserveBytes + 20;
+        List<string> order = [];
+        NteDownloadScheduler scheduler = new(jobs, () => Interlocked.Read(ref free));
+        await scheduler.RunAsync(jobs, 4, (_, _) => throw new InvalidOperationException("Cached patches must not download again."),
+            (job, _) =>
+            {
+                Assert.True(Interlocked.Add(ref free, -job.Space.WorkBytes) >= NteDownloadScheduler.ReserveBytes);
+                order.Add(Path.GetFileName(job.File.OutputPath));
+                Interlocked.Add(ref free, job.Space.ReclaimedBytes);
+            }, _ => { }, (_, _) => { }, TestContext.Current.CancellationToken);
+        Assert.Equal(new[] { "releasing", "large" }, order);
+    }
+
+    [Fact]
     public async Task LocalIoFailure_IsReturnedWithoutAnotherNetworkDownload()
     {
         NteDownloadJob job = Job("failed", 1);

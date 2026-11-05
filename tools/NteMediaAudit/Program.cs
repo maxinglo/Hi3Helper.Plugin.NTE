@@ -7,7 +7,7 @@ using Hi3Helper.Plugin.Core.Management;
 using Hi3Helper.Plugin.Core.Utility;
 using Microsoft.Extensions.Logging;
 
-if (args.Length is < 2 or > 4) throw new ArgumentException("Usage: NteMediaAudit <native-plugin-dll> <report-path> [preset-index] [--download-info|--preload-info|--region-paths]");
+if (args.Length is < 2 or > 5) throw new ArgumentException("Usage: NteMediaAudit <native-plugin-dll> <report-path> [preset-index] [--download-info|--preload-info|--region-paths|--update-info <game-directory>]");
 IPlugin plugin = Bootstrap.Load(Path.GetFullPath(args[0]));
 if (args.Length == 4 && args[3] == "--region-paths")
 {
@@ -22,6 +22,43 @@ if (args.Length == 4 && args[3] == "--region-paths")
 }
 int presetIndex = args.Length >= 3 ? int.Parse(args[2]) : 0;
 plugin.GetPresetConfig(presetIndex, out var preset);
+if (args.Length == 5 && args[3] == "--update-info")
+{
+    string path = Path.GetFullPath(args[1]);
+    string game = Path.GetFullPath(args[4]);
+    if (!Directory.Exists(game)) throw new DirectoryNotFoundException(game);
+    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+    string before = InstallationFingerprint(game);
+    preset.comGet_GameManager(out IGameManager? manager);
+    preset.comGet_GameInstaller(out IGameInstaller? installer);
+    if (manager == null || installer == null) throw new InvalidOperationException("Missing native update interfaces.");
+    try
+    {
+        manager.SetGamePath(game);
+        manager.LoadConfig();
+        manager.GetCurrentGameVersion(out GameVersion installed);
+        Guid token = Guid.NewGuid();
+        installer.GetGameSizeAsync(GameInstallerKind.Update, in token, out nint sizeResult);
+        long size = await sizeResult.AsTask<long>().WaitAsync(TimeSpan.FromMinutes(10));
+        installer.GetGameDownloadedSizeAsync(GameInstallerKind.Update, in token, out nint downloadedResult);
+        long downloaded = await downloadedResult.AsTask<long>().WaitAsync(TimeSpan.FromMinutes(10));
+        manager.GetCurrentGameVersion(out GameVersion after);
+        manager.GetApiGameVersion(out GameVersion release);
+        bool unchanged = before == InstallationFingerprint(game);
+        bool passed = size >= downloaded && downloaded >= 0 && release > installed && installed == after && unchanged;
+        string json = JsonSerializer.Serialize(new { passed, nativePluginLoaded = true, presetIndex,
+            installedVersion = installed.ToString(), releasedVersion = release.ToString(),
+            plannedPayloadBytes = size, cachedOrResumableBytes = downloaded, remainingNetworkBytes = size - downloaded,
+            installationFingerprintUnchanged = unchanged, gameDownloadStarted = false,
+            installedGameModified = false, gameAcceptanceEvidence = "not-observed" }, new JsonSerializerOptions { WriteIndented = true });
+        await File.WriteAllTextAsync(path, json);
+        Console.WriteLine(json);
+        if (!passed) Environment.ExitCode = 1;
+    }
+    finally { installer.Free(); manager.Free(); }
+    return;
+}
+if (args.Length == 5) throw new ArgumentException("Unknown audit option.");
 if (args.Length == 4 && args[3] == "--preload-info")
 {
     string path = Path.GetFullPath(args[1]);
@@ -162,6 +199,14 @@ static object[] Paths(PluginDisposableMemoryExtension.MarshalToMemorySelectorDel
         }
     }
     return [.. paths];
+}
+
+static string InstallationFingerprint(string root)
+{
+    var files = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)
+        .Select(path => { FileInfo file = new(path); return new { path = Path.GetRelativePath(root, path), file.Length,
+            written = file.LastWriteTimeUtc.Ticks, created = file.CreationTimeUtc.Ticks }; });
+    return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(files)));
 }
 
 internal static unsafe class Bootstrap

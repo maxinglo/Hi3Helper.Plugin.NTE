@@ -1,0 +1,431 @@
+{
+  "files": [
+    {
+      "path": "Client/WindowsNoEditor/HT/Binaries/Win64/HTGame.exe",
+      "old": {
+        "md5": "33817656b8b530fa7394ef4c2d4713a5",
+        "size": 273224800
+      },
+      "target": {
+        "md5": "189e15dcf00f6255c911de108130d55b",
+        "size": 282438240
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/pakchunk0-Windows_0_P.pak",
+      "old": {
+        "md5": "7a8b303f432d859d811782b639e89e3e",
+        "size": 9522866773
+      },
+      "target": {
+        "md5": "7b9d47d82307eaebf5a081ffea381e81",
+        "size": 10495930642
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/pakchunk0-Windows_0_P.ucas",
+      "old": {
+        "md5": "175a2d96e98377ab56efeac5c263c6f0",
+        "size": 851535584
+      },
+      "target": {
+        "md5": "e8ca16dbf8263ef93dcbff4a95d5bab2",
+        "size": 1011380816
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/pakchunk1-Windows_0_P.ucas",
+      "old": {
+        "md5": "5d887601e2cc543704bf136df37f6ae8",
+        "size": 1406719776
+      },
+      "target": {
+        "md5": "331f8e0d33887ece57553230fbe03601",
+        "size": 1411957728
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/pakchunk2-Windows_0_P.ucas",
+      "old": {
+        "md5": "252c46777c333c92ac07fd401d4ef571",
+        "size": 3210999344
+      },
+      "target": {
+        "md5": "c7fbeb2ee11d9d366c6c89f735a687f4",
+        "size": 3624077552
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/pakchunk3-Windows_0_P.pak",
+      "old": {
+        "md5": "29a196b76d2c3dee4980820f54619ccc",
+        "size": 1360397538
+      },
+      "target": {
+        "md5": "1d46d7824b920ad9c6b6b0e756a4440e",
+        "size": 1521692834
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/pakchunk3-Windows_0_P.ucas",
+      "old": {
+        "md5": "684b96bbdb83d629b67754dc04ae3eba",
+        "size": 14460492448
+      },
+      "target": {
+        "md5": "1096b2b1f4be6c19e9753d7f4bf508f9",
+        "size": 13599446336
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/pakchunk4-Windows_0_P.ucas",
+      "old": {
+        "md5": "5884fad5999b5a9b764209668c64b698",
+        "size": 13095961680
+      },
+      "target": {
+        "md5": "856ea5217b317cab87c14f9156899dfb",
+        "size": 14410834656
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/pakchunk5-Windows_0_P.ucas",
+      "old": {
+        "md5": "d04c3cce5f4f7cdb1bc0f43f94065bb9",
+        "size": 4001173952
+      },
+      "target": {
+        "md5": "ef572e75fb9c48e2df37ead637f11016",
+        "size": 3996658016
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/pakchunk5-Windows_0_P.sig",
+      "old": {
+        "md5": "12102cb72083efc3e6e38979755dabbc",
+        "size": 532
+      },
+      "target": {
+        "md5": "13101c381a17297c99a748e0e8bbceae",
+        "size": 532
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/pakchunk2-Windows_0_P.sig",
+      "old": {
+        "md5": "655c2f834b0fd31b9475567703953cf6",
+        "size": 532
+      },
+      "target": {
+        "md5": "aa69de2e6f2a23f2c9c21f89be3c2e5e",
+        "size": 532
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/pakchunk4-Windows_0_P.sig",
+      "old": {
+        "md5": "53c0b47d047d30bb1c930853a4ae3343",
+        "size": 544
+      },
+      "target": {
+        "md5": "4f448b719871964c8b5674b57951edba",
+        "size": 544
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/pakchunk1-Windows_0_P.sig",
+      "old": {
+        "md5": "668017ebf055d27f1060e0ebf23cd438",
+        "size": 1924
+      },
+      "target": {
+        "md5": "cab7b1c6d31e1aa2a5321fdde2877d4b",
+        "size": 2584
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/pakchunk2-Windows_0_P.pak",
+      "old": {
+        "md5": "39b0caf7943d328daeebe46da7e638f7",
+        "size": 22449
+      },
+      "target": {
+        "md5": "f2487fb072ba400ec1df586b82b37283",
+        "size": 23378
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/pakchunk5-Windows_0_P.pak",
+      "old": {
+        "md5": "4725f887735b2d3d2f99cbc26982a7ea",
+        "size": 34337
+      },
+      "target": {
+        "md5": "89ce1434e387201e2f718c14ff565e6f",
+        "size": 34064
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Binaries/Win64/AntiCheatExpert/ACE-Base.dat",
+      "old": {
+        "md5": "8c55d2461a20bef0d49fe16152464436",
+        "size": 74868
+      },
+      "target": {
+        "md5": "6312c31b937b44e8cccf5f9aa9c05d79",
+        "size": 74692
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/pakchunk3-Windows_0_P.sig",
+      "old": {
+        "md5": "8a7e84b640319e390f8de82c5e89c5f1",
+        "size": 83564
+      },
+      "target": {
+        "md5": "b753703a7ad28975f3e9bbaae0946b6f",
+        "size": 93408
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/pakchunk4-Windows_0_P.pak",
+      "old": {
+        "md5": "2a0d53c82060268e203e5420eb1eb189",
+        "size": 214722
+      },
+      "target": {
+        "md5": "3d5f458bbf4153a33b9d673e9df241c5",
+        "size": 227225
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/pakchunk0-Windows_0_P.sig",
+      "old": {
+        "md5": "eb9b4a4b3f5d4d199330f13400c06c56",
+        "size": 581760
+      },
+      "target": {
+        "md5": "f1268f4b4c710c34984534f6ac3f310b",
+        "size": 641152
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Binaries/Win64/AntiCheatExpert/ACE-Setup64.exe",
+      "old": {
+        "md5": "e66cfe10ab6e09a584f84b04d6140935",
+        "size": 981848
+      },
+      "target": {
+        "md5": "49ff663476331d5312f1ded1a3da87db",
+        "size": 992496
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/pakchunk1-Windows_0_P.utoc",
+      "old": {
+        "md5": "a5ee9fd728c7d37e2f76f6b57a5efb60",
+        "size": 1819828
+      },
+      "target": {
+        "md5": "73688180ede2ebc05288c58303051f6c",
+        "size": 1841286
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/pakchunk0-Windows_0_P.utoc",
+      "old": {
+        "md5": "e09aa3518e96db15e30d4f90193bf45e",
+        "size": 2275222
+      },
+      "target": {
+        "md5": "847735e465a69895e833770205775b80",
+        "size": 2676454
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/pakchunk5-Windows_0_P.utoc",
+      "old": {
+        "md5": "e3e5e1d553fb9f64d14f87291abfc37c",
+        "size": 3287668
+      },
+      "target": {
+        "md5": "1c615964d2720176158865ddf887a43f",
+        "size": 3285414
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/pakchunk2-Windows_0_P.utoc",
+      "old": {
+        "md5": "99cfddd248571907aafd63ebbdda2896",
+        "size": 6164454
+      },
+      "target": {
+        "md5": "64f68dd7905180db44c0c98e3b18e255",
+        "size": 7122836
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/pakchunk3-Windows_0_P.utoc",
+      "old": {
+        "md5": "85c0ebe03c02bb808c8132efd329f8d7",
+        "size": 17292166
+      },
+      "target": {
+        "md5": "6256334d21a34d728343b76f0298d887",
+        "size": 18035558
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Binaries/Win64/HTGameBase.dll",
+      "old": {
+        "md5": "dafcc52795dfd4efdd08b8956ecd7c3e",
+        "size": 28455832
+      },
+      "target": {
+        "md5": "3bdf656d3d34d72e35e4d6b9c2f06c30",
+        "size": 28455392
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/pakchunk4-Windows_0_P.utoc",
+      "old": {
+        "md5": "8a7b402486e1f2c885399f0c2645e3ac",
+        "size": 26181620
+      },
+      "target": {
+        "md5": "8c0e386730d3d685a3931f333a908165",
+        "size": 29518694
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/pakchunk1-Windows_0_P.pak",
+      "old": {
+        "md5": "8f28639e3f8b5d7d7748a07d212cc2a6",
+        "size": 22866884
+      },
+      "target": {
+        "md5": "386a150fb91072c63b9c1441cea2b791",
+        "size": 33666421
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Binaries/Win64/AntiCheatExpert/ACE-Base64.dll",
+      "old": {
+        "md5": "678516b3fbd93a906493ae62d11bff67",
+        "size": 36178232
+      },
+      "target": {
+        "md5": "f716ae4fd675f1da95e5b2ba27eba47c",
+        "size": 36178232
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/global.utoc",
+      "old": {
+        "md5": "0f400c01b8430c91689ae542224a366e",
+        "size": 1990
+      },
+      "target": {
+        "md5": "c8001716843a33e2e615dc7706e30b15",
+        "size": 2054
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Content/PatchPaks/global.ucas",
+      "old": {
+        "md5": "7deb088f89b16cda94591a5880fcc438",
+        "size": 6174112
+      },
+      "target": {
+        "md5": "9ef226b89e606575525cfa17ad3723bb",
+        "size": 6651440
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Binaries/Win64/WPOneSDK_64.dll",
+      "old": {
+        "md5": "db3270f321e533c65bf41e7a6c9aebb8",
+        "size": 141408
+      },
+      "target": {
+        "md5": "8352d5b1c4aa13cc02ec5c100a4b3266",
+        "size": 141408
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Binaries/Win64/WPActivitySDK_64.dll",
+      "old": {
+        "md5": "0479db9aee381c7ff5ea13ac78546666",
+        "size": 156768
+      },
+      "target": {
+        "md5": "d4dbba501f9f90f6700ba59f1b16faed",
+        "size": 156768
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Binaries/Win64/WPChatSDK_64.dll",
+      "old": {
+        "md5": "c7a65df10c3593e3386265c5fda0a552",
+        "size": 175200
+      },
+      "target": {
+        "md5": "948a5f90f1c39b63ac1e2250a708bd7c",
+        "size": 175200
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Binaries/Win64/WPLauncherSDK_64.dll",
+      "old": {
+        "md5": "15992f1ea824022ccf6dac27224435f7",
+        "size": 239200
+      },
+      "target": {
+        "md5": "b232ba3b8f3a84ff43ba2827d7ff4cef",
+        "size": 239200
+      }
+    },
+    {
+      "path": "Client/WindowsNoEditor/HT/Binaries/Win64/PatcherSDK_x64.dll",
+      "old": {
+        "md5": "7f7cecadd109145d25fa548710a510a6",
+        "size": 7370336
+      },
+      "target": {
+        "md5": "e1dee0743e4648d0326a62336742f008",
+        "size": 7370336
+      }
+    }
+  ],
+  "cachedResources": [
+    "0296439470c5c12d00c1d7bdbf6d94e1.641128",
+    "0aceadb4cf28d5a855b71aa8d43bdd3b.2408016977",
+    "0f7acba7253055a2a7adfc47e6c3aa8e.34351",
+    "0f98f193a8a3c87c905f945f63c6eb36.7108532",
+    "1b0ca7cd276cf212abac14b3a7907851.992568",
+    "241fad6225f3d6b798fda546a226e327.91336",
+    "27cd21583d282f5ab8f685f687cc073d.23482",
+    "292e3c32a4b3f98febd07a67a68b5d17.532",
+    "4383e12cc61d8aa62dfb424e6297f087.2472628",
+    "4c536b9ff576507834420e89e79aee32.1840518",
+    "628df35cfd374c181435488e09089b76.127806642",
+    "66e596e3cdb3a54372a664d2e6a89918.67175836",
+    "6c8d7bbdfbe447b9b1e5b78d1f7592b8.446547455",
+    "7606a3acc78e1240cd3fb17613de7924.7201839470",
+    "8226775937c4bdb8cef89c06abd4bcb8.18010262",
+    "88e15047436b7e57cca95fc849072ac6.28455904",
+    "9c332114d0bf4536aa20065cf48164a9.36178160",
+    "9fd44f7409fa13936fa441799fd15532.230167",
+    "a3dd88630146f49912f9dcb01ee4834d.29531734",
+    "a5316509ce31d40f6c66975fbd98946a.995170442",
+    "c79af6c79c2603e94484d88aecc38e77.544",
+    "d005ec020cd055180934a8aa0a090d6d.3285988",
+    "d064840eca1e37b1f760686e0bd1db52.33666457",
+    "da087ddade14edbf28eafb71922d6483.127851596",
+    "dc3d976afef06b3cd3fbe9f1a4d9d675.2584",
+    "ea47ea251da247a74c80eef9e5bddc15.33756839",
+    "ed962fc4a4dab32f623a57fd4b0a83bb.137708102",
+    "f0e017923fb7be2778b11631c26f8e09.74532",
+    "fa1ed1214da7159d295d95247d81f751.532"
+  ]
+}

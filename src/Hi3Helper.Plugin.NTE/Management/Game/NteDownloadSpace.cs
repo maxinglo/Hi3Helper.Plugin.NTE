@@ -7,14 +7,16 @@ using System.Linq;
 namespace Hi3Helper.Plugin.NTE.Management.Game;
 
 /// <summary>Already allocated bytes and remaining network/disk work are different quantities.</summary>
-internal sealed record NteDownloadSpace(long TargetBytes, long TemporaryBytes, long ExistingBytes, long ResumableBytes)
+internal sealed record NteDownloadSpace(long TargetBytes, long TemporaryBytes, long ExistingBytes, long ResumableBytes,
+    long WorkBytes = 0, long? CompletionReclaimedBytes = null)
 {
     internal long NetworkBytes => TargetBytes - ResumableBytes;
-    internal long AdditionalBytes => Math.Max(0, TargetBytes - TemporaryBytes);
-    internal long ReclaimedBytes => ExistingBytes + Math.Max(0, TemporaryBytes - TargetBytes);
+    internal long AdditionalBytes => Math.Max(0, checked(TargetBytes + WorkBytes) - TemporaryBytes);
+    internal long ReclaimedBytes => CompletionReclaimedBytes ?? ExistingBytes + Math.Max(0, TemporaryBytes - TargetBytes);
 
     internal static NteDownloadSpace Capture(NteGameInstaller.DownloadTask task)
     {
+        if (task.UpdateOperation is { } update) return update.CaptureSpace();
         long temporary = Length(task.OutputPath + ".tmp");
         long resumable = 0;
         string identity = task.OutputPath + ".tmp.identity";

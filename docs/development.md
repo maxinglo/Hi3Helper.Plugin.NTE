@@ -31,3 +31,13 @@ dotnet tests/Hi3Helper.Plugin.NTE.Tests/bin/x64/Release/net10.0/Hi3Helper.Plugin
 ```powershell
 dotnet tools/NteMediaAudit/bin/x64/Release/net10.0/NteMediaAudit.dll <NTE.dll> <新报告路径> 0 --preload-info
 ```
+
+0.13.1 增加正式版高于预下载版本的补丁链回归、普通更新差分、已缓存任务的合成空间调度和共享资源释放验证。`Fixtures/ReleaseTransition` 固定保存公开 1.5.3 差分身份，复现官方 11.10 GiB 直接更新与九条可复用预下载补丁链。
+
+对真实安装执行只读原生查询，不启动更新：
+
+```powershell
+dotnet tools/NteMediaAudit/bin/x64/Release/net10.0/NteMediaAudit.dll <NTE.dll> <报告路径> 0 --update-info <游戏目录>
+```
+
+`LocalUpdateAuditTests` 为显式测试，需要 `NTE_UPDATE_GAME_ROOT` 和 `NTE_UPDATE_METADATA_DIRECTORY`。它使用已保存且经过哈希验证的官方配置和清单检查实际缓存，默认不联网下载资源。设置 `NTE_UPDATE_PATCH_SAMPLE=1` 后才会在证据目录下载后续差分并合成一条真实两段补丁链；真实游戏目录保持只读。

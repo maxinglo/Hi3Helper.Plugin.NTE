@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Runtime.InteropServices.Marshalling;
@@ -178,12 +179,9 @@ internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? do
             if (string.IsNullOrEmpty(gamePath))
                 return _cachedResList.GetTotalExtractedSize();
 
-            return await Task.Factory.StartNew(() => CalculateTotalBytes(BuildDownloadTasks(
-                    _cachedResList,
-                    gamePath,
-                    onlyMissing: true,
-                    verifyIntegrity: false,
-                    token, _installedResList)), token, TaskCreationOptions.LongRunning, TaskScheduler.Default)
+            return await Task.Factory.StartNew(() => CalculateTotalBytes(BuildUpdateTasks(
+                    BuildDownloadTasks(_cachedResList, gamePath, false, false, token), gamePath,
+                    ((NteGameManager)GameManager).AppId, token)), token, TaskCreationOptions.LongRunning, TaskScheduler.Default)
                 .ConfigureAwait(false);
         }
 
@@ -211,10 +209,14 @@ internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? do
 
         return await Task.Factory.StartNew(() =>
         {
+            if (gameInstallerKind == GameInstallerKind.Update)
+            {
+                var plan = BuildUpdateTasks(BuildDownloadTasks(_cachedResList, gamePath, false, false, token),
+                    gamePath, ((NteGameManager)GameManager).AppId, token);
+                return plan.Sum(task => NteDownloadSpace.Capture(task).ResumableBytes);
+            }
             List<DownloadTask> tasks =
                 BuildDownloadTasks(_cachedResList, gamePath, onlyMissing, false, token, _installedResList);
-            if (gameInstallerKind == GameInstallerKind.Update)
-                return GetAvailableUpdateBytes(tasks, gamePath, ((NteGameManager)GameManager).AppId, token);
             return CalculateDownloadedBytes(tasks,
                 includeCompletedFiles: gameInstallerKind == GameInstallerKind.Install);
         }, token, TaskCreationOptions.LongRunning, TaskScheduler.Default).ConfigureAwait(false);
@@ -236,7 +238,7 @@ internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? do
     }
 
     /// <summary>
-    /// 开始更新（当前实现：重新下载有变化的文件）。
+    /// 开始更新，按剩余下载量选择完整资源或官方差分链。
     /// </summary>
     protected override async Task StartUpdateAsyncInner(
         InstallProgressDelegate? progressDelegate,

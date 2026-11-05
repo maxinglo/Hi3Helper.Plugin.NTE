@@ -9,7 +9,7 @@ namespace Hi3Helper.Plugin.NTE.Management.Game;
 /// <summary>Reuse hashes within one installer session; full integrity checks always read the file again.</summary>
 internal sealed class NteFileVerificationCache
 {
-    private sealed record Entry(long Size, long Written, long Created, string Expected, bool Valid);
+    private sealed record Entry(long Size, long Written, long Created, string Actual);
     private readonly ConcurrentDictionary<string, Entry> _entries = new(StringComparer.OrdinalIgnoreCase);
     private int _hashReads;
     internal int HashReads => Volatile.Read(ref _hashReads);
@@ -18,15 +18,19 @@ internal sealed class NteFileVerificationCache
     {
         FileInfo info = new(path);
         if (info.Exists && info.Length == size)
-            _entries[path] = new(size, info.LastWriteTimeUtc.Ticks, info.CreationTimeUtc.Ticks, expected, true);
+            _entries[path] = new(size, info.LastWriteTimeUtc.Ticks, info.CreationTimeUtc.Ticks, expected);
     }
 
     internal bool IsVerified(string path, long size, string expected)
+        => KnownValidity(path, size, expected) == true;
+
+    internal bool? KnownValidity(string path, long size, string expected)
     {
         FileInfo info = new(path);
-        return info.Exists && info.Length == size && _entries.TryGetValue(path, out Entry? entry) && entry.Valid &&
-            entry.Size == size && entry.Written == info.LastWriteTimeUtc.Ticks && entry.Created == info.CreationTimeUtc.Ticks &&
-            entry.Expected.Equals(expected, StringComparison.OrdinalIgnoreCase);
+        if (!info.Exists || info.Length != size) return false;
+        return _entries.TryGetValue(path, out Entry? entry) && entry.Size == size &&
+            entry.Written == info.LastWriteTimeUtc.Ticks && entry.Created == info.CreationTimeUtc.Ticks
+            ? entry.Actual.Equals(expected, StringComparison.OrdinalIgnoreCase) : null;
     }
 
     internal bool Verify(string path, long size, string expected, CancellationToken token, Action<long>? progress = null)
@@ -37,10 +41,10 @@ internal sealed class NteFileVerificationCache
         long written = info.LastWriteTimeUtc.Ticks;
         long created = info.CreationTimeUtc.Ticks;
         if (_entries.TryGetValue(path, out Entry? cached) && cached.Size == size && cached.Written == written &&
-            cached.Created == created && cached.Expected.Equals(expected, StringComparison.OrdinalIgnoreCase))
+            cached.Created == created)
         {
             progress?.Invoke(size);
-            return cached.Valid;
+            return cached.Actual.Equals(expected, StringComparison.OrdinalIgnoreCase);
         }
         using FileStream input = new(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 1024, FileOptions.SequentialScan);
         using IncrementalHash hash = IncrementalHash.CreateHash(HashAlgorithmName.MD5);
@@ -66,7 +70,7 @@ internal sealed class NteFileVerificationCache
         if (!info.Exists || info.Length != size || info.LastWriteTimeUtc.Ticks != written || info.CreationTimeUtc.Ticks != created)
             return false;
         bool valid = actual.Equals(expected, StringComparison.OrdinalIgnoreCase);
-        _entries[path] = new(size, written, created, expected, valid);
+        _entries[path] = new(size, written, created, actual);
         return valid;
     }
 }

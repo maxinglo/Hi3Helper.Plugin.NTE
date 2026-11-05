@@ -118,36 +118,47 @@ internal partial class NteGameInstaller
         return missing;
     }
 
-    private long GetAvailableUpdateBytes(List<DownloadTask> tasks, string gameRoot, string appId, CancellationToken token)
-    {
-        var previous = _installedResList == null ? new Dictionary<string, DownloadTask>(StringComparer.OrdinalIgnoreCase) :
-            BuildDownloadTasks(_installedResList, gameRoot, false, false, token).ToDictionary(t => t.OutputPath, StringComparer.OrdinalIgnoreCase);
-        long total = 0;
-        foreach (DownloadTask task in tasks)
-        {
-            token.ThrowIfCancellationRequested();
-            long available = CalculateDownloadedBytes([task], includeCompletedFiles: false);
-            if (NtePatchList.IsMd5(task.ExpectedMd5))
-            {
-                DownloadTask cached = CacheTask(task, NtePreloadCache.PathFor(gameRoot, appId, task.ExpectedMd5, task.TotalSize));
-                if (IsFileAlreadyValid(cached, true, token, _verificationCache)) available = task.TotalSize;
-                else available = Math.Max(available, NteDownloadSpace.Capture(cached).ResumableBytes);
-                previous.TryGetValue(task.OutputPath, out DownloadTask? old);
-                NtePatchEntry? patch = _releasePatches.Find(task, old);
-                if (patch != null && File.Exists(task.OutputPath) && new FileInfo(task.OutputPath).Length == patch.OldSize &&
-                    _verificationCache.Verify(NtePreloadCache.PathFor(gameRoot, appId, patch.Resource.Md5, patch.Resource.Filesize),
-                        patch.Resource.Filesize, patch.Resource.Md5, token)) available = task.TotalSize;
-            }
-            total += available;
-        }
-        return total;
-    }
-
     private static DownloadTask CacheTask(DownloadTask target, string path) => new()
     {
         Kind = target.Kind, OutputPath = path, TotalSize = target.TotalSize, ExpectedMd5 = target.ExpectedMd5,
         ResEntry = target.ResEntry, PakInfo = target.PakInfo, PakEntry = target.PakEntry
     };
+
+    internal List<DownloadTask> BuildUpdateTasks(List<DownloadTask> targets, string gameRoot, string appId, CancellationToken token)
+    {
+        NteUpdateContext context = new(gameRoot, appId, _verificationCache);
+        Dictionary<string, DownloadTask> previous = _installedResList == null ? [] :
+            BuildDownloadTasks(_installedResList, gameRoot, false, false, token).ToDictionary(t => t.OutputPath, StringComparer.OrdinalIgnoreCase);
+        List<DownloadTask> result = [];
+        List<NteUpdateOperation> operations = [];
+        foreach (DownloadTask target in targets)
+        {
+            token.ThrowIfCancellationRequested();
+            previous.TryGetValue(target.OutputPath, out DownloadTask? old);
+            FileInfo installed = new(target.OutputPath);
+            bool unchanged = old != null && old.TotalSize == target.TotalSize &&
+                old.ExpectedMd5.Equals(target.ExpectedMd5, StringComparison.OrdinalIgnoreCase);
+            if (installed.Exists && installed.Length == target.TotalSize &&
+                (unchanged || IsFileAlreadyValid(target, true, token, _verificationCache))) continue;
+            if (!NtePatchList.IsMd5(target.ExpectedMd5)) { result.Add(target); continue; }
+            if (old != null && (!installed.Exists || installed.Length != old.TotalSize ||
+                    _verificationCache.KnownValidity(target.OutputPath, old.TotalSize, old.ExpectedMd5) == false)) old = null;
+            NteDownloadSpace actual = NteDownloadSpace.Capture(target);
+            var cachedPartial = NteDownloadSpace.Capture(NteUpdateContext.CacheTask(
+                context.PathFor(target.ExpectedMd5, target.TotalSize), target.ExpectedMd5, target.TotalSize));
+            long fullRemaining = target.TotalSize - Math.Max(actual.ResumableBytes, cachedPartial.ResumableBytes);
+            NtePatchRoute? route = _releasePatches.FindRoute(target, old,
+                (md5, size) => context.Cached(md5, size, token), resource => context.Remaining(resource, token),
+                (md5, size) => installed.Exists && installed.Length == size &&
+                    _verificationCache.Verify(target.OutputPath, size, md5, token));
+            if (route != null && route.NetworkBytes >= fullRemaining && route.Steps.Count != 0) route = null;
+            NteUpdateOperation operation = new(target, context, route);
+            operations.Add(operation);
+            result.Add(operation.AsTask());
+        }
+        context.Register(operations);
+        return result;
+    }
 
     private void RestorePreloadedFiles(List<DownloadTask> targets, string gameRoot, string appId, CancellationToken token,
         InstallProgressDelegate? report, Action<long, long> fileProgress)

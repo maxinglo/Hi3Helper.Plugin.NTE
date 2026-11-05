@@ -11,3 +11,4 @@
 *.exe binary
 *.dll binary
 *.zip binary
+/tests/Hi3Helper.Plugin.NTE.Tests/Fixtures/ReleaseTransition/cn-1.5.3-lastdiff.xml -text
