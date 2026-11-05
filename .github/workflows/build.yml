@@ -20,7 +20,6 @@ env:
 
 jobs:
   publish:
-    needs: test
     runs-on: windows-latest
     timeout-minutes: 35
     strategy:
