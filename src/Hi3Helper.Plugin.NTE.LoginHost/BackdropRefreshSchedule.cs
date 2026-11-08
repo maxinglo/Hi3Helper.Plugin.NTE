@@ -4,7 +4,7 @@ namespace Nte.LoginHost;
 // background/minimized interval so returning never causes a capture burst.
 internal sealed class BackdropRefreshSchedule
 {
-    private static readonly int[] Seconds = [5, 15, 60];
+    private static readonly int[] Seconds = [1, 2, 5, 15, 60];
     private TimeSpan? started;
     private int next;
 
