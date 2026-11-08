@@ -22,7 +22,7 @@
     <Company>Maxing</Company>
     <Authors>$(Company)</Authors>
     <Copyright>Copyright 2022-2026 $(Company)</Copyright>
-    <Version>0.13.6</Version>
+    <Version>0.13.7</Version>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <NoWarn>$(NoWarn);CA2256</NoWarn>
     <Configurations>Debug;Release;DebugNoReflection;ReleaseNoReflection</Configurations>

@@ -181,8 +181,6 @@ internal static class NteOfficialPatcherState
         NteRegionConfig region = NteConfigProvider.GetRegion(appId);
         string directory = Path.Combine(gameRoot, region.SdkDirectory);
         string configPath = Path.Combine(directory, "config.xml");
-        if (!File.Exists(configPath) && !region.IsTaiwan)
-            return; // Independent CN/Global login does not require official state.
         EnsureOfficialLauncherClosed(gameRoot, region);
         XmlDocument release = ParseXml(releaseXml);
         string expected = release.SelectSingleNode("config/Extra/listHash")?.InnerText ??
@@ -195,7 +193,7 @@ internal static class NteOfficialPatcherState
             targetVersion)
             throw new InvalidDataException("Cannot commit official state for a different game version.");
         string manifestPath = Path.Combine(directory, "ResList.xml");
-        if (region.IsTaiwan && (!File.Exists(configPath) || !File.Exists(manifestPath)))
+        if (!File.Exists(configPath) || !File.Exists(manifestPath))
         {
             string current;
             if (File.Exists(configPath)) current = File.ReadAllText(configPath);
@@ -247,7 +245,6 @@ internal static class NteOfficialPatcherState
     internal static void EnsureOfficialLauncherClosed(string gameRoot, NteRegionConfig? region = null)
     {
         region ??= NteConfigProvider.CN;
-        if (!File.Exists(Path.Combine(gameRoot, region.SdkDirectory, "config.xml"))) return;
         string[] names = region.IsTaiwan ? ["NTETWGame", "NTETWUpdate", "NTETWLauncher"] :
             region.IsGlobal ? ["NTEGlobalGame", "NTEGlobalUpdate", "NTEGlobalLauncher"] :
             ["NTEGame", "NTEUpdate", "NTELauncher"];

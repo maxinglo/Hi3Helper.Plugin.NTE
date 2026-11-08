@@ -27,28 +27,34 @@ internal sealed class ProbeEnvironment : IDisposable
     internal Task WaitForLoginRequestAsync(CancellationToken token) => window.WaitForLoginRequestAsync(token);
     internal Task WaitForNextLoginRequestAsync(CancellationToken token) => window.WaitForNextLoginRequestAsync(token);
     internal void CompleteLoginRequest() => window.CompleteLoginRequest();
+
     internal event Action<Nte.Login.NteGlobalSdkQuery>? GlobalQueryRequested
     {
         add => window.GlobalQueryRequested += value;
         remove => window.GlobalQueryRequested -= value;
     }
+
     internal event Action? GameWindowChanged
     {
         add => window.GameWindowChanged += value;
         remove => window.GameWindowChanged -= value;
     }
+
     internal event Action? LogoutRequested
     {
         add => window.LogoutRequested += value;
         remove => window.LogoutRequested -= value;
     }
 
-    public ProbeEnvironment(string gameRoot, bool supplyHostContext, bool supplyStartupContext = false, bool useOwnExecutable = false,
-        string? hostExecutable = null, string launcherDirectoryName = NteRegionDefinition.CnLauncherDirectory, string? applicationId = null)
+    public ProbeEnvironment(string gameRoot, bool supplyHostContext, bool supplyStartupContext = false,
+        bool useOwnExecutable = false,
+        string? hostExecutable = null, string launcherDirectoryName = NteRegionDefinition.CnLauncherDirectory,
+        string? applicationId = null)
     {
         NteRegionDefinition definition = NteRegionDefinition.FromLauncherDirectory(launcherDirectoryName);
         if (applicationId != null && applicationId != definition.AppId)
-            throw new ArgumentException("Application and launcher directory belong to different regions.", nameof(applicationId));
+            throw new ArgumentException("Application and launcher directory belong to different regions.",
+                nameof(applicationId));
         hostContext = supplyHostContext;
         startupContext = supplyStartupContext;
         launcher = Path.Combine(gameRoot, launcherDirectoryName);
@@ -58,13 +64,19 @@ internal sealed class ProbeEnvironment : IDisposable
         string ownExecutable = hostExecutable ?? Path.Combine(AppContext.BaseDirectory, "NteSdkProbe.exe");
         platformExecutables = useOwnExecutable
             ? [ownExecutable, ownExecutable, ownExecutable]
-            : [Path.Combine(launcher, "NTELauncher.exe"), Path.Combine(launcher, "NTEGame.exe"), Path.Combine(launcher, "NTEUpdate.exe")];
+            :
+            [
+                Path.Combine(launcher, "NTELauncher.exe"), Path.Combine(launcher, "NTEGame.exe"),
+                Path.Combine(launcher, "NTEUpdate.exe")
+            ];
         string configuration = File.ReadAllText(Path.Combine(launcher, "Config/Config.ini"));
         appId = applicationId ?? Regex.Match(configuration, @"(?m)^OneAppId=(\d+)\s*$").Groups[1].Value;
-        string patcher = File.ReadAllText(Path.Combine(launcher, NteRegionDefinition.PatcherSdkRelativePath, "config.xml"));
-        version = Regex.Match(patcher, @"<ResVersion>(\d+(?:\.\d+)+)</ResVersion>").Groups[1].Value;
-        if (appId != definition.AppId || version.Length == 0)
+        string patcherPath = Path.Combine(launcher, NteRegionDefinition.PatcherSdkRelativePath, "config.xml");
+        string patcher = File.Exists(patcherPath) ? File.ReadAllText(patcherPath) : "";
+        if (appId != definition.AppId)
             throw new InvalidDataException("Official public application metadata is missing.");
+        version = NteInstalledVersion.Resolve(gameRoot, definition,
+            Regex.Match(patcher, @"<ResVersion>(\d+(?:\.\d+)+)</ResVersion>").Groups[1].Value);
         window = new(definition.LoginNotification);
         // The probe owns these objects exclusively. The baseline table is empty;
         // host-context mode supplies public application metadata below. Neither
@@ -74,12 +86,18 @@ internal sealed class ProbeEnvironment : IDisposable
         if (hostContext)
         {
             foreach (string path in platformExecutables)
-                if (!File.Exists(path)) throw new FileNotFoundException("Existing SDK platform path is missing.", path);
+                if (!File.Exists(path))
+                    throw new FileNotFoundException("Existing SDK platform path is missing.", path);
             // A readiness signal for this host is separate from an SDK init or
             // login result. Never reuse another process's event.
             string readyName = @"Global\CoreClient_StartEvent" + (startupContext ? "" : "_" + appId);
             readyEvent = new EventWaitHandle(true, EventResetMode.ManualReset, readyName, out bool created);
-            if (!created) { readyEvent.Dispose(); throw new IOException("A platform readiness event already exists."); }
+            if (!created)
+            {
+                readyEvent.Dispose();
+                throw new IOException("A platform readiness event already exists.");
+            }
+
             string contextName = Guid.NewGuid().ToString("N");
             contextEvent = new EventWaitHandle(false, EventResetMode.ManualReset, contextName, out created);
             if (!created) throw new IOException("A context event already exists.");
@@ -107,8 +125,10 @@ internal sealed class ProbeEnvironment : IDisposable
         if (!Regex.IsMatch(abbreviation, @"\A[A-Za-z0-9_.-]{1,31}\z"))
             throw new InvalidDataException("Unsupported application abbreviation in the initialization request.");
         Dictionary<string, string> values = GetEnvironmentValues(abbreviation);
-        byte[] payload = Encoding.ASCII.GetBytes(string.Join("|;|", values.Select(pair => pair.Key + "|=|" + pair.Value)));
-        if (payload.Length >= 4096) throw new InvalidDataException("Environment synchronization exceeds its protocol buffer.");
+        byte[] payload =
+            Encoding.ASCII.GetBytes(string.Join("|;|", values.Select(pair => pair.Key + "|=|" + pair.Value)));
+        if (payload.Length >= 4096)
+            throw new InvalidDataException("Environment synchronization exceeds its protocol buffer.");
         byte[] reply = new byte[0x1624];
         BinaryPrimitives.WriteUInt32LittleEndian(reply, 0x6B647331);
         BinaryPrimitives.WriteUInt32LittleEndian(reply.AsSpan(4), 1001);
@@ -120,6 +140,7 @@ internal sealed class ProbeEnvironment : IDisposable
             WriteWide(reply, 0x1214, platformExecutables[1]);
             WriteWide(reply, 0x141C, platformExecutables[2]);
         }
+
         return reply;
     }
 
@@ -147,6 +168,7 @@ internal sealed class ProbeEnvironment : IDisposable
             values["ArcGameMsgSkipFlag"] = "1";
             values["ArcDataIndex"] = appId; // record index zero XOR application ID
         }
+
         return values;
     }
 
@@ -165,5 +187,12 @@ internal sealed class ProbeEnvironment : IDisposable
         view.WriteArray(offset, bytes, 0, bytes.Length);
     }
 
-    public void Dispose() { contextEvent?.Dispose(); readyEvent?.Dispose(); mutex.Dispose(); map.Dispose(); window.Dispose(); }
+    public void Dispose()
+    {
+        contextEvent?.Dispose();
+        readyEvent?.Dispose();
+        mutex.Dispose();
+        map.Dispose();
+        window.Dispose();
+    }
 }
