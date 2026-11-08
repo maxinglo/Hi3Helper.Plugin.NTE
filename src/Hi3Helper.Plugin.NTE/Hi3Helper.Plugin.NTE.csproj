@@ -19,7 +19,7 @@
     <Product>Collapse</Product>
     <Description>This library is a plugin for adding support for Neverness to Everness (NTE) into Collapse Launcher</Description>
     <AssemblyTitle>Neverness to Everness Plugin</AssemblyTitle>
-    <Company>Collapse Launcher Team</Company>
+    <Company>Maxing</Company>
     <Authors>$(Company)</Authors>
     <Copyright>Copyright 2022-2026 $(Company)</Copyright>
     <Version>0.13.6</Version>
