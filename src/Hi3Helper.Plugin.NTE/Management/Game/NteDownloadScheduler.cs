@@ -15,7 +15,12 @@ namespace Hi3Helper.Plugin.NTE.Management.Game;
 internal sealed class NteDownloadJob
 {
     internal NteDownloadJob(NteGameInstaller.DownloadTask file)
-    { File = file; Space = NteDownloadSpace.Capture(file); TemporaryBytes = Space.TemporaryBytes; }
+    {
+        File = file;
+        Space = NteDownloadSpace.Capture(file);
+        TemporaryBytes = Space.TemporaryBytes;
+    }
+
     internal NteGameInstaller.DownloadTask File { get; }
     internal NteDownloadSpace Space { get; set; }
     internal int Attempt { get; set; }
@@ -45,7 +50,8 @@ internal sealed class NteDownloadScheduler
         long required = NteDownloadSpace.RequiredFreeBytes(jobs.Select(j => j.Space), ReserveBytes);
         long available = freeSpace();
         if (available < required)
-            throw new IOException($"Insufficient remaining disk space. Required {required} additional bytes including reserve; available {available} bytes.");
+            throw new IOException(
+                $"Insufficient remaining disk space. Required {required} additional bytes including reserve; available {available} bytes.");
     }
 
     internal async Task RunAsync(IReadOnlyList<NteDownloadJob> jobs, int networkWorkers,
@@ -55,24 +61,39 @@ internal sealed class NteDownloadScheduler
         CancellationToken token)
     {
         using CancellationTokenSource cancel = CancellationTokenSource.CreateLinkedTokenSource(token);
-        using BlockingCollection<NteDownloadJob> verification = new(); // Metadata only; file handles/buffers are closed before enqueueing.
+        using BlockingCollection<NteDownloadJob>
+            verification = new(); // Metadata only; file handles/buffers are closed before enqueueing.
         Task localWorker = Task.Factory.StartNew(() =>
         {
             try
             {
                 foreach (NteDownloadJob job in verification.GetConsumingEnumerable(cancel.Token))
                 {
-                    try { verify(job, cancel.Token); }
+                    try
+                    {
+                        verify(job, cancel.Token);
+                    }
                     catch (Exception ex) when (ex is InvalidDataException or NtePatchFallbackException)
                     {
                         if (!TryRetry(job, ex, retry)) throw;
                         continue;
                     }
-                    lock (sync) { active.Remove(job); completed++; Pulse(); }
+
+                    lock (sync)
+                    {
+                        active.Remove(job);
+                        completed++;
+                        Pulse();
+                    }
+
                     verified(job);
                 }
             }
-            catch { cancel.Cancel(); throw; }
+            catch
+            {
+                cancel.Cancel();
+                throw;
+            }
         }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
         async Task NetworkWorker()
@@ -91,21 +112,42 @@ internal sealed class NteDownloadScheduler
                         if (!TryRetry(job, ex, retry)) throw;
                         continue;
                     }
+
                     verification.Add(job, cancel.Token);
                 }
             }
-            catch { cancel.Cancel(); throw; }
+            catch
+            {
+                cancel.Cancel();
+                throw;
+            }
         }
 
         Exception? error = null;
-        try { await Task.WhenAll(Enumerable.Range(0, Math.Max(1, networkWorkers)).Select(_ => NetworkWorker())).ConfigureAwait(false); }
-        catch (Exception ex) { error = ex; cancel.Cancel(); }
-        finally { verification.CompleteAdding(); }
-        try { await localWorker.ConfigureAwait(false); }
+        try
+        {
+            await Task.WhenAll(Enumerable.Range(0, Math.Max(1, networkWorkers)).Select(_ => NetworkWorker()))
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            error = ex;
+            cancel.Cancel();
+        }
+        finally
+        {
+            verification.CompleteAdding();
+        }
+
+        try
+        {
+            await localWorker.ConfigureAwait(false);
+        }
         catch (Exception ex)
         {
             if (error == null || error is OperationCanceledException && !token.IsCancellationRequested) error = ex;
         }
+
         if (error != null) ExceptionDispatchInfo.Capture(error).Throw();
         token.ThrowIfCancellationRequested();
     }
@@ -124,7 +166,8 @@ internal sealed class NteDownloadScheduler
                 // suffix of active temporary files, not their complete target size again.
                 long available = freeSpace();
                 foreach (NteDownloadJob job in active)
-                    available -= Math.Max(0, checked(job.File.TotalSize + job.Space.WorkBytes) - Volatile.Read(ref job.TemporaryBytes));
+                    available -= Math.Max(0,
+                        checked(job.File.TotalSize + job.Space.WorkBytes) - Volatile.Read(ref job.TemporaryBytes));
                 long now = Environment.TickCount64;
                 bool spaceReleasingPending = false;
                 for (int i = 0; i < pending.Count; i++)
@@ -139,18 +182,24 @@ internal sealed class NteDownloadScheduler
                         if (!releasesSpace) break;
                         continue;
                     }
+
                     if (job.Space.AdditionalBytes > 0 && available - ReserveBytes < job.Space.AdditionalBytes)
                     {
                         if (!releasesSpace) break;
                         continue;
                     }
-                    pending.RemoveAt(i); active.Add(job);
+
+                    pending.RemoveAt(i);
+                    active.Add(job);
                     return job;
                 }
+
                 if (active.Count == 0 && pending.Count > 0 && delay < 0)
-                    throw new IOException($"Insufficient remaining disk space for the next file. Available {available} bytes.");
+                    throw new IOException(
+                        $"Insufficient remaining disk space for the next file. Available {available} bytes.");
                 signal = changed.Task;
             }
+
             if (delay >= 0)
             {
                 using CancellationTokenSource wake = CancellationTokenSource.CreateLinkedTokenSource(token);
@@ -176,6 +225,7 @@ internal sealed class NteDownloadScheduler
             job.Attempt++;
             job.ReadyAt = Environment.TickCount64 + (error is InvalidDataException ? 0 : 500L << (job.Attempt - 1));
         }
+
         retry(job, error);
         lock (sync)
         {
@@ -184,27 +234,42 @@ internal sealed class NteDownloadScheduler
             SortPending();
             Pulse();
         }
+
         return true;
     }
 
     private static bool IsTransient(Exception error) => error switch
     {
         OperationCanceledException => false,
-        HttpRequestException http => http.StatusCode == null || http.StatusCode is HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests || (int)http.StatusCode >= 500,
+        HttpRequestException http => http.StatusCode == null ||
+                                     http.StatusCode is HttpStatusCode.RequestTimeout
+                                         or HttpStatusCode.TooManyRequests || (int)http.StatusCode >= 500,
         HttpIOException => true,
+        NtePatchFallbackException => true,
         InvalidDataException => true,
         IOException io => io.InnerException is SocketException or HttpRequestException or HttpIOException,
         _ => false
     };
 
-    private void Pulse() { TaskCompletionSource previous = changed; changed = NewSignal(); previous.TrySetResult(); }
+    private void Pulse()
+    {
+        TaskCompletionSource previous = changed;
+        changed = NewSignal();
+        previous.TrySetResult();
+    }
+
     private void SortPending()
     {
         NteDownloadJob[] sorted = pending
             .OrderByDescending(job => job.Space.ReclaimedBytes >= job.Space.AdditionalBytes)
-            .ThenBy(job => job.Space.ReclaimedBytes >= job.Space.AdditionalBytes ? job.Space.AdditionalBytes : -job.Space.ReclaimedBytes)
+            .ThenBy(job =>
+                job.Space.ReclaimedBytes >= job.Space.AdditionalBytes
+                    ? job.Space.AdditionalBytes
+                    : -job.Space.ReclaimedBytes)
             .ThenByDescending(job => job.Space.NetworkBytes).ToArray();
-        pending.Clear(); pending.AddRange(sorted);
+        pending.Clear();
+        pending.AddRange(sorted);
     }
+
     private static TaskCompletionSource NewSignal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
 }

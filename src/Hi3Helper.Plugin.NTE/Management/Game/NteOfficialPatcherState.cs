@@ -7,6 +7,8 @@ using System.Text;
 using System.Threading;
 using System.Xml;
 using Hi3Helper.Plugin.NTE.Management.Config;
+using Hi3Helper.Plugin.Core;
+using Microsoft.Extensions.Logging;
 
 namespace Hi3Helper.Plugin.NTE.Management.Game;
 
@@ -35,14 +37,32 @@ internal static class NteOfficialPatcherState
         if (root.Name != "ResList") throw new InvalidDataException("Invalid remote resource manifest.");
         foreach (XmlNode node in root.SelectNodes("BaseVersion")!) root.RemoveChild(node);
         region ??= NteConfigProvider.CN;
-        string? localPath = gameRoot == null ? null : Path.Combine(gameRoot, region.SdkDirectory, "ResList.xml");
-        if (localPath != null && File.Exists(localPath))
+        if (gameRoot != null)
         {
-            XmlDocument installed =
-                ParseXml(Encoding.UTF8.GetString(
-                    NteResListDecryptor.Decrypt(File.ReadAllBytes(localPath), region.AppId)));
-            foreach (XmlNode node in installed.DocumentElement!.SelectNodes("BaseVersion")!)
-                root.AppendChild(remote.ImportNode(node, true));
+            foreach (string localPath in new[]
+                     {
+                         Path.Combine(gameRoot, region.SdkDirectory, "ResList.xml"),
+                         NteInstalledManifest.PathFor(gameRoot, region)
+                     })
+            {
+                if (!File.Exists(localPath)) continue;
+                try
+                {
+                    XmlDocument installed = ParseXml(Encoding.UTF8.GetString(
+                        NteResListDecryptor.Decrypt(File.ReadAllBytes(localPath), region.AppId)));
+                    if (installed.DocumentElement?.Name != "ResList")
+                        throw new InvalidDataException("Invalid installed manifest.");
+                    foreach (XmlNode node in installed.DocumentElement.SelectNodes("BaseVersion")!)
+                        root.AppendChild(remote.ImportNode(node, true));
+                    break;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or XmlException
+                                               or CryptographicException)
+                {
+                    SharedStatic.InstanceLogger.LogWarning(ex,
+                        "[NTE Update] Cannot read optional resources from installed manifest; trying the next metadata record.");
+                }
+            }
         }
 
         return Encoding.UTF8.GetBytes(remote.OuterXml);
@@ -115,7 +135,8 @@ internal static class NteOfficialPatcherState
             // advertised by the installed official configuration may be promoted here.
             if (root["LocalBranch"] == null || root["PreReleaseBranch"]?.InnerText != branch ||
                 !Core.Management.GameVersion.TryParse(root["PreReleaseVersion"]?.InnerText, out var preview) ||
-                !Core.Management.GameVersion.TryParse(target["ResVersion"]?.InnerText, out var released) || released < preview)
+                !Core.Management.GameVersion.TryParse(target["ResVersion"]?.InnerText, out var released) ||
+                released < preview)
                 throw new InvalidDataException("Official game branch changed during the update.");
             root["LocalBranch"]!.InnerText = branch;
         }
@@ -135,6 +156,7 @@ internal static class NteOfficialPatcherState
             if (target[field] is { } advertised) Set(field, advertised.InnerText);
             else if (root[field] is { } obsolete) root.RemoveChild(obsolete);
         }
+
         XmlDocument manifest = ParseXml(Encoding.UTF8.GetString(selectedManifest));
         Set("ResCount",
             (manifest.DocumentElement!.SelectNodes("Res")!.Count +

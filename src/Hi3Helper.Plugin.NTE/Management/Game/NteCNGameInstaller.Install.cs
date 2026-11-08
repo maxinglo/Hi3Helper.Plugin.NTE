@@ -71,6 +71,7 @@ internal partial class NteGameInstaller
             NteOfficialPatcherState.EnsureOfficialLauncherClosed(gamePath, mgr.Region);
             if (NteSharedInstallation.Load(gamePath) != null) NteSharedInstallation.EnsureGamesClosed(gamePath);
         }
+
         string[] cdnBaseUrls = mgr.GameResBaseUrls;
         string branchName = preload?.BranchName ?? mgr.BranchName;
         // Build the complete target list separately from the unfinished work.
@@ -100,24 +101,28 @@ internal partial class NteGameInstaller
         }
 
         if (preload == null && (installerKind != GameInstallerKind.Update || repairPaths != null))
-            await Task.Factory.StartNew(() => RestorePreloadedFiles(allTasks, gamePath, mgr.AppId, token, Preparing, PreparingFile), token,
+            await Task.Factory.StartNew(
+                () => RestorePreloadedFiles(allTasks, gamePath, mgr.AppId, token, Preparing, PreparingFile), token,
                 TaskCreationOptions.LongRunning, TaskScheduler.Default).ConfigureAwait(false);
 
-        List<DownloadTask> downloadTasks = preload != null
-            ? await Task.Factory.StartNew(() => FindMissingPreloadTasks(allTasks, token, Preparing, PreparingFile), token,
+        bool ordinaryUpdate = preload == null && installerKind == GameInstallerKind.Update && repairPaths == null;
+        SharedStatic.InstanceLogger.LogInformation(
+            "[NTE Update] Preparing {Files} manifest entries; ordinary update planning reads metadata only.",
+            allTasks.Count);
+        List<DownloadTask> downloadTasks = ordinaryUpdate
+            ? await Task.Factory.StartNew(() => BuildUpdateTasks(allTasks, gamePath, mgr.AppId, token), token,
                 TaskCreationOptions.LongRunning, TaskScheduler.Default).ConfigureAwait(false)
-            : repairPaths != null
-            ? allTasks
-            : await Task.Factory.StartNew(() =>
-                    BuildDownloadTasks(resListParser, gamePath, true, true, token, _installedResList,
-                        Preparing, _verificationCache, PreparingFile), token,
-                TaskCreationOptions.LongRunning, TaskScheduler.Default).ConfigureAwait(false);
-        if (preload == null && installerKind == GameInstallerKind.Update && repairPaths == null)
-        {
-            downloadTasks = await Task.Factory.StartNew(() => BuildUpdateTasks(downloadTasks, gamePath, mgr.AppId, token), token,
-                TaskCreationOptions.LongRunning, TaskScheduler.Default).ConfigureAwait(false);
-            allTasks = downloadTasks;
-        }
+            : preload != null
+                ? await Task.Factory.StartNew(() => FindMissingPreloadTasks(allTasks, token, Preparing, PreparingFile),
+                    token,
+                    TaskCreationOptions.LongRunning, TaskScheduler.Default).ConfigureAwait(false)
+                : repairPaths != null
+                    ? allTasks
+                    : await Task.Factory.StartNew(() =>
+                            BuildDownloadTasks(resListParser, gamePath, true, true, token, _installedResList,
+                                Preparing, _verificationCache, PreparingFile), token,
+                        TaskCreationOptions.LongRunning, TaskScheduler.Default).ConfigureAwait(false);
+        if (ordinaryUpdate) allTasks = downloadTasks;
         downloadTasks.Sort((left, right) => right.TotalSize.CompareTo(left.TotalSize));
         List<NteDownloadJob> jobs = downloadTasks.Select(task => new NteDownloadJob(task)).ToList();
         long totalBytes = CalculateTotalBytes(allTasks);
@@ -136,8 +141,10 @@ internal partial class NteGameInstaller
         if (jobs.Any(j => j.File.UpdateOperation != null))
             SharedStatic.InstanceLogger.LogInformation(
                 "[NTE Update Plan] patch stages={Stages}, delta files={DeltaFiles}, cached/resumable bytes={Cached}, remaining network bytes={Remaining}, patch scratch bytes={Scratch}",
-                jobs.Sum(j => j.File.UpdateOperation?.PatchStages ?? 0), jobs.Count(j => j.File.UpdateOperation?.IsDelta == true),
-                jobs.Sum(j => j.Space.ResumableBytes), jobs.Sum(j => j.Space.NetworkBytes), jobs.Max(j => j.Space.WorkBytes));
+                jobs.Sum(j => j.File.UpdateOperation?.PatchStages ?? 0),
+                jobs.Count(j => j.File.UpdateOperation?.IsDelta == true),
+                jobs.Sum(j => j.Space.ResumableBytes), jobs.Sum(j => j.Space.NetworkBytes),
+                jobs.Max(j => j.Space.WorkBytes));
 
         progressStateDelegate?.Invoke(InstallProgressState.Download);
         InstallProgress progress = new()
@@ -161,7 +168,9 @@ internal partial class NteGameInstaller
             lock (progressLock)
             {
                 InstallProgressState next = downloadedBytes >= totalBytes
-                    ? jobs.Any(j => j.File.UpdateOperation?.IsDelta == true) ? InstallProgressState.Updating : InstallProgressState.Verify
+                    ? jobs.Any(j => j.File.UpdateOperation?.IsDelta == true)
+                        ? InstallProgressState.Updating
+                        : InstallProgressState.Verify
                     : InstallProgressState.Download;
                 long now = Environment.TickCount64;
                 if (!force && next == currentState && now - lastPublished < 100) return;
@@ -221,8 +230,9 @@ internal partial class NteGameInstaller
                     {
                         attemptBytes += bytesRead;
                         NteDownloadSpace? current = bytesRead < 0 ? NteDownloadSpace.Capture(downloadTask) : null;
-                        long temporary = current?.TemporaryBytes ?? Math.Clamp(attemptBytes, 0, downloadTask.TotalSize) +
-                            (downloadTask.UpdateOperation?.ScratchBytes ?? 0);
+                        long temporary = current?.TemporaryBytes ??
+                                         Math.Clamp(attemptBytes, 0, downloadTask.TotalSize) +
+                                         (downloadTask.UpdateOperation?.ScratchBytes ?? 0);
                         Volatile.Write(ref job.TemporaryBytes, temporary);
                         bool firstBytes = job.ReportedBytes == 0 && (current?.ResumableBytes ?? attemptBytes) > 0;
                         ReportBytes(job, current?.ResumableBytes ?? attemptBytes);
@@ -232,35 +242,46 @@ internal partial class NteGameInstaller
                 string[] roots = cdnBaseUrls.Skip(job.Attempt % cdnBaseUrls.Length)
                     .Concat(cdnBaseUrls.Take(job.Attempt % cdnBaseUrls.Length)).ToArray();
                 if (downloadTask.UpdateOperation is { } update)
-                    await update.DownloadAsync(this, roots, branchName, downloadToken, progressCallback).ConfigureAwait(false);
-                else switch (downloadTask.Kind)
-                {
-                    case DownloadTaskKind.DirectResource:
+                    await update.DownloadAsync(this, roots, branchName, downloadToken, progressCallback,
+                        (done, total) =>
+                        {
+                            lock (progressLock)
+                            {
+                                PublishProgress();
+                                PreparingFile(done, total);
+                            }
+                        }).ConfigureAwait(false);
+                else
+                    switch (downloadTask.Kind)
                     {
-                        NteResListEntry res = downloadTask.ResEntry!;
-                        if (res.HasBlocks)
+                        case DownloadTaskKind.DirectResource:
                         {
-                            await DownloadBlockedResourceAsync(roots, branchName, res,
-                                downloadTask.OutputPath, downloadToken, progressCallback, true).ConfigureAwait(false);
-                        }
-                        else
-                        {
-                            await DownloadResourceFileAsync(roots, branchName,
-                                res.Md5, res.Filesize,
-                                downloadTask.OutputPath, downloadToken, progressCallback, true).ConfigureAwait(false);
+                            NteResListEntry res = downloadTask.ResEntry!;
+                            if (res.HasBlocks)
+                            {
+                                await DownloadBlockedResourceAsync(roots, branchName, res,
+                                        downloadTask.OutputPath, downloadToken, progressCallback, true)
+                                    .ConfigureAwait(false);
+                            }
+                            else
+                            {
+                                await DownloadResourceFileAsync(roots, branchName,
+                                        res.Md5, res.Filesize,
+                                        downloadTask.OutputPath, downloadToken, progressCallback, true)
+                                    .ConfigureAwait(false);
+                            }
+
+                            break;
                         }
 
-                        break;
+                        case DownloadTaskKind.PakEntry:
+                        {
+                            await DownloadPakEntryAsync(roots, branchName,
+                                downloadTask.PakInfo!, downloadTask.PakEntry!,
+                                downloadTask.OutputPath, downloadToken, progressCallback, true).ConfigureAwait(false);
+                            break;
+                        }
                     }
-
-                    case DownloadTaskKind.PakEntry:
-                    {
-                        await DownloadPakEntryAsync(roots, branchName,
-                            downloadTask.PakInfo!, downloadTask.PakEntry!,
-                            downloadTask.OutputPath, downloadToken, progressCallback, true).ConfigureAwait(false);
-                        break;
-                    }
-                }
             }
             finally
             {
@@ -279,10 +300,12 @@ internal partial class NteGameInstaller
                 update.Complete(localToken, (done, total) =>
                 {
                     lock (progressLock)
-                        if (networkActive.Count == 0) PreparingFile(done, total);
+                        if (networkActive.Count == 0)
+                            PreparingFile(done, total);
                 }, bytes => Volatile.Write(ref job.TemporaryBytes, bytes));
                 return;
             }
+
             string temporary = file.OutputPath + ".tmp";
             if (file.TotalSize == 0 && !File.Exists(temporary))
             {
@@ -323,7 +346,9 @@ internal partial class NteGameInstaller
             progress.DownloadedCount = totalFileCount;
             progressStateDelegate?.Invoke(InstallProgressState.Completed);
             progressDelegate?.Invoke(in progress);
-            SharedStatic.InstanceLogger.LogInformation("[NTE Preload] Cached version {Version}; installed resources and version are unchanged.", preload.Version);
+            SharedStatic.InstanceLogger.LogInformation(
+                "[NTE Preload] Cached version {Version}; installed resources and version are unchanged.",
+                preload.Version);
             return;
         }
 
@@ -346,11 +371,13 @@ internal partial class NteGameInstaller
         if (_originalRemoteManifest != null && _selectedManifest != null && mgr.ReleaseConfigXml != null)
             NteOfficialPatcherState.Commit(gamePath, branchName, mgr.AppId, mgr.ReleaseConfigXml,
                 _originalRemoteManifest, _selectedManifest, token);
+        if (_selectedManifest != null) NteInstalledManifest.Save(gamePath, mgr.Region, _selectedManifest);
         GameManager.GetApiGameVersion(out GameVersion apiVer);
         GameManager.SetCurrentGameVersion(in apiVer);
         GameManager.SaveConfig();
         if (_selectedManifest != null && mgr.ReleaseConfigXml != null)
-            NteSharedInstallation.RecordUpdate(gamePath, mgr.Region, branchName, mgr.ReleaseConfigXml, _selectedManifest);
+            NteSharedInstallation.RecordUpdate(gamePath, mgr.Region, branchName, mgr.ReleaseConfigXml,
+                _selectedManifest);
 
         progressStateDelegate?.Invoke(InstallProgressState.Completed);
         progress.StateCount = 2;
@@ -544,7 +571,13 @@ internal partial class NteGameInstaller
         public NtePakInfo? PakInfo { get; init; }
         public NtePakEntry? PakEntry { get; init; }
         public string OutputPath { get; init; } = string.Empty;
-        public long TotalSize { get => UpdateOperation?.TransferSize ?? _totalSize; init => _totalSize = value; }
+
+        public long TotalSize
+        {
+            get => UpdateOperation?.TransferSize ?? _totalSize;
+            init => _totalSize = value;
+        }
+
         public string ExpectedMd5 { get; init; } = string.Empty;
     }
 }

@@ -37,6 +37,7 @@ internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? do
     private NtePatchList _releasePatches = new();
     private NtePreloadPlan? _preloadPlan;
     private readonly NteFileVerificationCache _verificationCache = new();
+    internal int VerificationHashReads => _verificationCache.HashReads;
     internal TimeSpan MetadataRequestTimeout { get; set; } = NteLauncherResourceClient.MetadataTimeout;
     internal Action<long, long> ReportPerFileProgress { get; set; } = SharedStaticV1Ext.InvokePerFileProgress;
 
@@ -100,7 +101,8 @@ internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? do
         // 下载 ResList.bin.zip
         var archive = await DownloadManifestArchiveAsync(branchName, gameVersion, token).ConfigureAwait(false);
         byte[] resListXmlBytes = archive.Manifest;
-        string? releaseHash = NteOfficialPatcherState.ParseXml(mgr.ReleaseConfigXml!).SelectSingleNode("config/Extra/listHash")?.InnerText;
+        string? releaseHash = NteOfficialPatcherState.ParseXml(mgr.ReleaseConfigXml!)
+            .SelectSingleNode("config/Extra/listHash")?.InnerText;
         if (!string.IsNullOrWhiteSpace(releaseHash)) NtePatchList.ValidateHash(resListXmlBytes, releaseHash);
         _releasePatches = NtePatchList.Parse(archive.Patches, mgr.ReleaseConfigXml);
 
@@ -113,25 +115,17 @@ internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? do
         if (_cachedResList.Version != gameVersion)
             throw new InvalidDataException("Resource manifest does not match the selected game version.");
 
-        // Ordinary updates compare manifests first. A missing basis falls back to a full integrity check.
+        // A local resource list remains usable when only the displayed version marker was rolled back.
         _installedResList = null;
         GameManager.GetCurrentGameVersion(out GameVersion installedVersion);
-        if (installedVersion != GameVersion.Empty && installedVersion < apiVer)
+        if (!string.IsNullOrEmpty(currentPath) && installedVersion != GameVersion.Empty && installedVersion <= apiVer)
         {
-            GameManager.GetGamePath(out string? installedPath);
-            string? localManifest = string.IsNullOrEmpty(installedPath)
-                ? null
-                : Path.Combine(installedPath,
-                    mgr.Region.SdkDirectory, "ResList.xml");
+            _installedResList = await NteInstalledManifest
+                .LoadAsync(currentPath, mgr.Region, installedVersion, apiVer, token)
+                .ConfigureAwait(false);
+            if (_installedResList == null && installedVersion == apiVer) _installedResList = _cachedResList;
             try
             {
-                if (localManifest != null && File.Exists(localManifest))
-                {
-                    byte[] bytes = await File.ReadAllBytesAsync(localManifest, token).ConfigureAwait(false);
-                    NteResListParser previous = NteResListParser.Parse(NteResListDecryptor.Decrypt(bytes, mgr.AppId));
-                    if (previous.Version == installedVersion.ToString()) _installedResList = previous;
-                }
-
                 if (_installedResList == null)
                 {
                     NteResListParser previous = NteResListParser.Parse(await DownloadAndDecryptResListAsync(
@@ -142,8 +136,12 @@ internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? do
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 SharedStatic.InstanceLogger.LogWarning(ex,
-                    "[NteCNInstaller] No installed-version manifest; using full verification.");
+                    "[NTE Update] No installed-version manifest; planning from metadata without scanning game contents. Use repair for a full integrity check.");
             }
+
+            SharedStatic.InstanceLogger.LogInformation(
+                "[NTE Update] Manifest basis={ManifestVersion}, recorded version={RecordedVersion}, release={ReleaseVersion}; no game file checksums read during planning.",
+                _installedResList?.Version ?? "unavailable", installedVersion, apiVer);
         }
 
         SharedStatic.InstanceLogger.LogInformation(
@@ -182,8 +180,9 @@ internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? do
                 return _cachedResList.GetTotalExtractedSize();
 
             return await Task.Factory.StartNew(() => CalculateTotalBytes(BuildUpdateTasks(
-                    BuildDownloadTasks(_cachedResList, gamePath, false, false, token), gamePath,
-                    ((NteGameManager)GameManager).AppId, token)), token, TaskCreationOptions.LongRunning, TaskScheduler.Default)
+                        BuildDownloadTasks(_cachedResList, gamePath, false, false, token), gamePath,
+                        ((NteGameManager)GameManager).AppId, token)), token, TaskCreationOptions.LongRunning,
+                    TaskScheduler.Default)
                 .ConfigureAwait(false);
         }
 
@@ -217,6 +216,7 @@ internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? do
                     gamePath, ((NteGameManager)GameManager).AppId, token);
                 return plan.Sum(task => NteDownloadSpace.Capture(task).ResumableBytes);
             }
+
             List<DownloadTask> tasks =
                 BuildDownloadTasks(_cachedResList, gamePath, onlyMissing, false, token, _installedResList);
             return CalculateDownloadedBytes(tasks,
@@ -250,6 +250,8 @@ internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? do
         progressStateDelegate?.Invoke(InstallProgressState.Preparing);
         InstallProgress preparing = new();
         progressDelegate?.Invoke(in preparing);
+        SharedStatic.InstanceLogger.LogInformation(
+            "[NTE Update] Refreshing release metadata before building the update plan.");
         if (await InitAsync(token).ConfigureAwait(false) != 0)
             throw new InvalidOperationException("Cannot refresh the official game release before updating.");
 
@@ -389,12 +391,15 @@ internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? do
                     patches = NteResListDecryptor.Decrypt(bytes.AsSpan(), ((NteGameManager)GameManager).AppId);
                     break;
                 }
+
                 return (decryptedXml, patches);
             }
             catch (OperationCanceledException ex) when (!token.IsCancellationRequested)
             {
                 lastException = new TimeoutException($"Official resource manifest request timed out: {url}", ex);
-                SharedStatic.InstanceLogger.LogWarning("[NteCNInstaller::DownloadAndDecryptResListAsync] CDN {Index} timed out; trying the next endpoint", i);
+                SharedStatic.InstanceLogger.LogWarning(
+                    "[NteCNInstaller::DownloadAndDecryptResListAsync] CDN {Index} timed out; trying the next endpoint",
+                    i);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

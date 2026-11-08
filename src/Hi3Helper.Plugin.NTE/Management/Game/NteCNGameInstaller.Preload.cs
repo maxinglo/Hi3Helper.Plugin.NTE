@@ -26,7 +26,8 @@ internal partial class NteGameInstaller
         string xml = await config.ReadReleaseConfigAsync(_downloadHttpClient, token).ConfigureAwait(false);
         if (NteGameManager.ParseReleaseVersion(xml) != release.Version)
             throw new InvalidDataException("The preload configuration differs from the advertised version.");
-        var archive = await DownloadManifestArchiveAsync(release.BranchName, release.Version.ToString(), token).ConfigureAwait(false);
+        var archive = await DownloadManifestArchiveAsync(release.BranchName, release.Version.ToString(), token)
+            .ConfigureAwait(false);
         NtePatchList.ValidateHash(archive.Manifest,
             NteOfficialPatcherState.ParseXml(xml).SelectSingleNode("config/Extra/listHash")?.InnerText);
         GameManager.GetGamePath(out string? root);
@@ -34,7 +35,8 @@ internal partial class NteGameInstaller
             NteOfficialPatcherState.SelectInstalledBaseVersions(archive.Manifest, root, manager.Region));
         if (manifest.Version != release.Version.ToString())
             throw new InvalidDataException("The preload manifest differs from the advertised version.");
-        return _preloadPlan = new(release.BranchName, release.Version, manifest, NtePatchList.Parse(archive.Patches, xml));
+        return _preloadPlan = new(release.BranchName, release.Version, manifest,
+            NtePatchList.Parse(archive.Patches, xml));
     }
 
     private async Task<long> GetPreloadSizeAsync(bool downloaded, CancellationToken token)
@@ -51,13 +53,16 @@ internal partial class NteGameInstaller
             {
                 token.ThrowIfCancellationRequested();
                 bytes += IsFileAlreadyValid(task, true, token, _verificationCache)
-                    ? task.TotalSize : NteDownloadSpace.Capture(task).ResumableBytes;
+                    ? task.TotalSize
+                    : NteDownloadSpace.Capture(task).ResumableBytes;
             }
+
             return bytes;
         }, token, TaskCreationOptions.LongRunning, TaskScheduler.Default).ConfigureAwait(false);
     }
 
-    internal async Task PreloadAsync(InstallProgressDelegate? progress, InstallProgressStateDelegate? state, CancellationToken token)
+    internal async Task PreloadAsync(InstallProgressDelegate? progress, InstallProgressStateDelegate? state,
+        CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
         GameManager.GetGamePath(out string? selectedRoot);
@@ -70,7 +75,8 @@ internal partial class NteGameInstaller
             throw new InvalidOperationException("Cannot refresh official preload availability.");
         NtePreloadPlan? plan = await GetPreloadPlanAsync(token).ConfigureAwait(false);
         if (plan == null) return;
-        await RunInstallAsync(progress, state, GameInstallerKind.Preload, token, operationHeld: true, preload: plan).ConfigureAwait(false);
+        await RunInstallAsync(progress, state, GameInstallerKind.Preload, token, operationHeld: true, preload: plan)
+            .ConfigureAwait(false);
     }
 
     internal static List<DownloadTask> BuildPreloadTasks(NtePreloadPlan plan, NteResListParser current,
@@ -83,7 +89,8 @@ internal partial class NteGameInstaller
         {
             token.ThrowIfCancellationRequested();
             previous.TryGetValue(target.OutputPath, out DownloadTask? old);
-            bool sourceExists = old != null && File.Exists(old.OutputPath) && new FileInfo(old.OutputPath).Length == old.TotalSize;
+            bool sourceExists = old != null && File.Exists(old.OutputPath) &&
+                                new FileInfo(old.OutputPath).Length == old.TotalSize;
             if (sourceExists && old!.TotalSize == target.TotalSize &&
                 old.ExpectedMd5.Equals(target.ExpectedMd5, StringComparison.OrdinalIgnoreCase)) continue;
             NtePatchEntry? patch = sourceExists ? plan.Patches.Find(target, old) : null;
@@ -98,6 +105,7 @@ internal partial class NteGameInstaller
                 ExpectedMd5 = md5, TotalSize = size, OutputPath = path
             });
         }
+
         return [.. result.Values];
     }
 
@@ -105,7 +113,8 @@ internal partial class NteGameInstaller
         InstallProgressDelegate? report, Action<long, long> fileProgress)
     {
         List<DownloadTask> missing = [];
-        InstallProgress progress = new() { TotalCountToDownload = tasks.Count, TotalBytesToDownload = CalculateTotalBytes(tasks) };
+        InstallProgress progress = new()
+            { TotalCountToDownload = tasks.Count, TotalBytesToDownload = CalculateTotalBytes(tasks) };
         foreach (DownloadTask task in tasks)
         {
             token.ThrowIfCancellationRequested();
@@ -115,6 +124,7 @@ internal partial class NteGameInstaller
             progress.DownloadedBytes += task.TotalSize;
             report?.Invoke(in progress);
         }
+
         return missing;
     }
 
@@ -124,25 +134,51 @@ internal partial class NteGameInstaller
         ResEntry = target.ResEntry, PakInfo = target.PakInfo, PakEntry = target.PakEntry
     };
 
-    internal List<DownloadTask> BuildUpdateTasks(List<DownloadTask> targets, string gameRoot, string appId, CancellationToken token)
+    internal List<DownloadTask> BuildUpdateTasks(List<DownloadTask> targets, string gameRoot, string appId,
+        CancellationToken token)
     {
+        long started = Environment.TickCount64, lastLog = started;
+        int examined = 0;
+        SharedStatic.InstanceLogger.LogInformation(
+            "[NTE Update Plan] Comparing {Files} entries using metadata only; source checksums are deferred until before delta download.",
+            targets.Count);
         NteUpdateContext context = new(gameRoot, appId, _verificationCache);
-        Dictionary<string, DownloadTask> previous = _installedResList == null ? [] :
-            BuildDownloadTasks(_installedResList, gameRoot, false, false, token).ToDictionary(t => t.OutputPath, StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, DownloadTask> previous = _installedResList == null
+            ? []
+            : BuildDownloadTasks(_installedResList, gameRoot, false, false, token)
+                .ToDictionary(t => t.OutputPath, StringComparer.OrdinalIgnoreCase);
         List<DownloadTask> result = [];
         List<NteUpdateOperation> operations = [];
         foreach (DownloadTask target in targets)
         {
             token.ThrowIfCancellationRequested();
+            examined++;
+            long now = Environment.TickCount64;
+            if (now - lastLog >= 2000)
+            {
+                SharedStatic.InstanceLogger.LogInformation(
+                    "[NTE Update Plan] Compared {Done}/{Total} entries, elapsed={ElapsedMs} ms", examined,
+                    targets.Count, now - started);
+                lastLog = now;
+            }
+
             previous.TryGetValue(target.OutputPath, out DownloadTask? old);
             FileInfo installed = new(target.OutputPath);
             bool unchanged = old != null && old.TotalSize == target.TotalSize &&
-                old.ExpectedMd5.Equals(target.ExpectedMd5, StringComparison.OrdinalIgnoreCase);
+                             old.ExpectedMd5.Equals(target.ExpectedMd5, StringComparison.OrdinalIgnoreCase);
             if (installed.Exists && installed.Length == target.TotalSize &&
-                (unchanged || IsFileAlreadyValid(target, true, token, _verificationCache))) continue;
-            if (!NtePatchList.IsMd5(target.ExpectedMd5)) { result.Add(target); continue; }
+                (unchanged ||
+                 _verificationCache.KnownValidity(target.OutputPath, target.TotalSize, target.ExpectedMd5) ==
+                 true)) continue;
+            if (!NtePatchList.IsMd5(target.ExpectedMd5))
+            {
+                result.Add(target);
+                continue;
+            }
+
             if (old != null && (!installed.Exists || installed.Length != old.TotalSize ||
-                    _verificationCache.KnownValidity(target.OutputPath, old.TotalSize, old.ExpectedMd5) == false)) old = null;
+                                _verificationCache.KnownValidity(target.OutputPath, old.TotalSize, old.ExpectedMd5) ==
+                                false)) old = null;
             NteDownloadSpace actual = NteDownloadSpace.Capture(target);
             var cachedPartial = NteDownloadSpace.Capture(NteUpdateContext.CacheTask(
                 context.PathFor(target.ExpectedMd5, target.TotalSize), target.ExpectedMd5, target.TotalSize));
@@ -150,21 +186,32 @@ internal partial class NteGameInstaller
             NtePatchRoute? route = _releasePatches.FindRoute(target, old,
                 (md5, size) => context.Cached(md5, size, token), resource => context.Remaining(resource, token),
                 (md5, size) => installed.Exists && installed.Length == size &&
-                    _verificationCache.Verify(target.OutputPath, size, md5, token));
+                               (_verificationCache.KnownValidity(target.OutputPath, size, md5) ??
+                                (old != null
+                                    ? old.TotalSize == size &&
+                                      old.ExpectedMd5.Equals(md5, StringComparison.OrdinalIgnoreCase)
+                                    : !target.ExpectedMd5.Equals(md5, StringComparison.OrdinalIgnoreCase))));
             if (route != null && route.NetworkBytes >= fullRemaining && route.Steps.Count != 0) route = null;
             NteUpdateOperation operation = new(target, context, route);
             operations.Add(operation);
             result.Add(operation.AsTask());
         }
+
         context.Register(operations);
+        SharedStatic.InstanceLogger.LogInformation(
+            "[NTE Update Plan] Metadata comparison completed: {Files} entries, pending={Pending}, elapsed={ElapsedMs} ms",
+            targets.Count, result.Count, Environment.TickCount64 - started);
         return result;
     }
 
-    private void RestorePreloadedFiles(List<DownloadTask> targets, string gameRoot, string appId, CancellationToken token,
+    private void RestorePreloadedFiles(List<DownloadTask> targets, string gameRoot, string appId,
+        CancellationToken token,
         InstallProgressDelegate? report, Action<long, long> fileProgress)
     {
-        Dictionary<string, DownloadTask> previous = _installedResList == null ? [] :
-            BuildDownloadTasks(_installedResList, gameRoot, false, false, token).ToDictionary(t => t.OutputPath, StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, DownloadTask> previous = _installedResList == null
+            ? []
+            : BuildDownloadTasks(_installedResList, gameRoot, false, false, token)
+                .ToDictionary(t => t.OutputPath, StringComparer.OrdinalIgnoreCase);
         InstallProgress progress = new() { TotalCountToDownload = targets.Count };
         foreach (DownloadTask target in targets)
         {
@@ -177,7 +224,8 @@ internal partial class NteGameInstaller
                 old.ExpectedMd5.Equals(target.ExpectedMd5, StringComparison.OrdinalIgnoreCase)) continue;
             string cached = NtePreloadCache.PathFor(gameRoot, appId, target.ExpectedMd5, target.TotalSize);
             string temporary = target.OutputPath + ".tmp";
-            if (_verificationCache.Verify(cached, target.TotalSize, target.ExpectedMd5, token, done => fileProgress(done, target.TotalSize)))
+            if (_verificationCache.Verify(cached, target.TotalSize, target.ExpectedMd5, token,
+                    done => fileProgress(done, target.TotalSize)))
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(temporary)!);
                 PrepareTemporaryFile(temporary, target.ExpectedMd5, target.TotalSize);
@@ -186,6 +234,7 @@ internal partial class NteGameInstaller
                 _verificationCache.RememberVerified(target.OutputPath, target.TotalSize, target.ExpectedMd5);
                 continue;
             }
+
             DownloadTask cachedTask = CacheTask(target, cached);
             long resumable = NteDownloadSpace.Capture(cachedTask).ResumableBytes;
             if (resumable > 0 && resumable > NteDownloadSpace.Capture(target).ResumableBytes)
@@ -194,6 +243,7 @@ internal partial class NteGameInstaller
                 File.Move(cached + ".tmp", temporary, overwrite: true);
                 File.Move(cached + ".tmp.identity", temporary + ".identity", overwrite: true);
             }
+
             NtePatchEntry? patch = _releasePatches.Find(target, old);
             if (patch == null) continue;
             string patchPath = NtePreloadCache.PathFor(gameRoot, appId, patch.Resource.Md5, patch.Resource.Filesize);
@@ -219,7 +269,8 @@ internal partial class NteGameInstaller
             }
             catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException)
             {
-                SharedStatic.InstanceLogger.LogWarning(ex, "[NTE Preload] Cannot reuse patch for {File}; using the normal verified download.",
+                SharedStatic.InstanceLogger.LogWarning(ex,
+                    "[NTE Preload] Cannot reuse patch for {File}; using the normal verified download.",
                     Path.GetFileName(target.OutputPath));
             }
             finally
