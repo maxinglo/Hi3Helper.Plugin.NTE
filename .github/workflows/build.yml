@@ -1,4 +1,4 @@
-name: Build and Test NTE Plugin
+name: Build and Package NTE Plugin
 
 on:
   push:
@@ -33,6 +33,11 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
+      - name: Build managed projects
+        shell: pwsh
+        run: |
+          $configuration = if ('${{ matrix.profile }}' -like '*NoReflection*') { 'ReleaseNoReflection' } else { 'Release' }
+          ./scripts/Build.ps1 -Configuration $configuration
       - name: Publish, verify native ABI and package
         shell: pwsh
         run: ./scripts/Publish.ps1 -Profile '${{ matrix.profile }}' -Package

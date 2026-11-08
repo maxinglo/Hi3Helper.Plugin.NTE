@@ -58,7 +58,7 @@ git submodule update --init --recursive
 ./scripts/Publish.ps1 -Profile ReleasePublish-O1 -Package
 ```
 
-可导入的 ZIP 位于 `artifacts/packages/`。构建脚本会运行回归测试，发布脚本会检查原生接口、自包含登录宿主和包内容。更多说明见[构建与验证](docs/development.md)。
+可导入的 ZIP 位于 `artifacts/packages/`。构建脚本编译插件和登录组件，发布脚本检查原生接口、自包含登录宿主和包内容。
 
 [架构说明](docs/architecture.md) · [地区与共享安装](docs/regions.md) · [登录说明与隐私](docs/login-privacy.md)
 
