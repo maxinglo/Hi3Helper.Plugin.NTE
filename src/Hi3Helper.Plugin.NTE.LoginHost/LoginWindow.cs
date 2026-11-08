@@ -80,6 +80,7 @@ internal sealed partial class LoginWindow : Window
     private bool automaticResumeInProgress;
     private EventHandler? statusTextChanged;
     private bool cardSizeQueued;
+    private double maximumNoticeHeight = 610;
 
     private void ShowWelcome(string label)
     {
@@ -101,6 +102,7 @@ internal sealed partial class LoginWindow : Window
         FontFamily = new("Microsoft YaHei UI");
         UseLayoutRounding = true;
         SnapsToDevicePixels = true;
+        TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
         SetResourceReference(ForegroundProperty, "TextBrush");
         content.RowDefinitions.Add(new() { Height = GridLength.Auto });
         content.RowDefinitions.Add(new() { Height = GridLength.Auto });
@@ -147,14 +149,20 @@ internal sealed partial class LoginWindow : Window
         footer.Children.Add(login);
         Grid.SetRow(footer, 3);
         content.Children.Add(footer);
+        // Keep the shadow's intermediate bitmap separate from the live text.
+        Grid material = new()
+        {
+            IsHitTestVisible = false,
+            Effect = new DropShadowEffect { BlurRadius = 22, ShadowDepth = 4, Opacity = .22 }
+        };
+        material.Children.Add(cachedBackdrop);
+        material.Children.Add(materialTint);
         Grid layers = new();
-        layers.Children.Add(cachedBackdrop);
-        layers.Children.Add(materialTint);
+        layers.Children.Add(material);
         layers.Children.Add(content);
         card = new()
         {
-            Width = CardWidth, Height = CardHeight, CornerRadius = new(17), BorderThickness = new(1), Child = layers,
-            Effect = new DropShadowEffect { BlurRadius = 22, ShadowDepth = 4, Opacity = .22 }
+            Width = CardWidth, Height = CardHeight, CornerRadius = new(17), BorderThickness = new(1), Child = layers
         };
         Canvas.SetLeft(card, 10);
         Canvas.SetTop(card, 18);
@@ -378,9 +386,9 @@ internal sealed partial class LoginWindow : Window
             double.PositiveInfinity));
         double naturalHeight = Math.Ceiling(content.DesiredSize.Height) + card.BorderThickness.Top +
                                card.BorderThickness.Bottom + 4;
-        double height = Math.Clamp(naturalHeight, 260, 610);
+        double height = Math.Clamp(naturalHeight, 260, helpOpen ? maximumNoticeHeight : 610);
         scroll.VerticalScrollBarVisibility =
-            naturalHeight > 610 ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
+            naturalHeight > height ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
         if (Math.Abs(card.Height - height) < .5) return;
         card.Height = height;
         scene.Height = height + SceneHeight - CardHeight;
@@ -816,7 +824,18 @@ internal sealed partial class LoginWindow : Window
         }
 
         double scale = Math.Max(1, WindowNative.GetDpiForWindow(handle) / 96d);
-        double width = Math.Min(SceneWidth, (clientRect.Width / scale - 36) * .62);
+        // Long notices should scroll at their normal font size before the view
+        // resorts to scaling the entire card to fit the game's client area.
+        double availableCardHeight = Math.Clamp(clientRect.Height / scale - view.Margin.Top - view.Margin.Bottom -
+                                                (SceneHeight - CardHeight), 260, 610);
+        if (Math.Abs(maximumNoticeHeight - availableCardHeight) > .1)
+        {
+            maximumNoticeHeight = availableCardHeight;
+            if (helpOpen) UpdateCardSize();
+        }
+
+        double availableWidth = clientRect.Width / scale - view.Margin.Left - view.Margin.Right;
+        double width = Math.Min(SceneWidth, helpOpen ? availableWidth : availableWidth * .62);
         double height = Math.Min(scene.Height, clientRect.Height / scale - 28);
         width = Math.Min(width, height * SceneWidth / scene.Height);
         view.Width = width;
