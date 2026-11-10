@@ -8,6 +8,7 @@
     <UseWPF>true</UseWPF>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>../Hi3Helper.Plugin.NTE/Assets/nte-icon.ico</ApplicationIcon>
     <AssemblyName>Nte.LoginHost</AssemblyName>
     <RootNamespace>Nte.LoginHost</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>

@@ -198,7 +198,7 @@ internal sealed class NteRegionSwitchService(HttpClient http, Action<string>? en
             byte[] localManifest = NteOfficialPatcherState.CreateLocalManifest(context.Selected, target.AppId, root);
             string localConfig =
                 NteOfficialPatcherState.CreateConfiguration(current, release, context.Manager.BranchName,
-                    context.Selected);
+                    context.Selected, verifiedRelease: true);
             await ReplaceMetadataAsync(transaction, root, sdk + "/ResList.xml", localManifest, token)
                 .ConfigureAwait(false);
             await ReplaceMetadataAsync(transaction, root, sdk + "/config.xml", Encoding.UTF8.GetBytes(localConfig),

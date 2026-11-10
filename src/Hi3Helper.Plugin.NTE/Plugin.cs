@@ -6,6 +6,7 @@ using Hi3Helper.Plugin.NTE.Localization;
 using Hi3Helper.Plugin.NTE.Management.Config;
 using Hi3Helper.Plugin.NTE.Management.PresetConfig;
 using System;
+using System.IO;
 using System.Runtime.InteropServices.Marshalling;
 
 namespace Hi3Helper.Plugin.NTE;
@@ -15,6 +16,17 @@ public partial class NtePlugin : PluginBase
 {
     private static readonly IPluginPresetConfig[] PresetConfigInstances = [new NteCNPresetConfig(), new NteCNPresetConfig(NteConfigProvider.Global), new NteCNPresetConfig(NteConfigProvider.Taiwan)];
     private static DateTime _pluginCreationDate = new(2026, 04, 21, 00, 00, 00, DateTimeKind.Utc);
+    private static readonly string AppIcon = LoadAppIcon();
+
+    private static string LoadAppIcon()
+    {
+        using Stream resource = typeof(NtePlugin).Assembly.GetManifestResourceStream(
+            "Hi3Helper.Plugin.NTE.Assets.nte-icon.png") ?? throw new InvalidOperationException("Missing NTE icon resource.");
+        using MemoryStream buffer = new();
+        resource.CopyTo(buffer);
+        // Collapse accepts raw Base64 for plugin icons, including manifest-only previews.
+        return Convert.ToBase64String(buffer.ToArray());
+    }
 
     public override void GetPluginName(out string result) => result = NteResourceProvider.GetString("PluginName");
 
@@ -22,7 +34,7 @@ public partial class NtePlugin : PluginBase
 
     public override void GetPluginAuthor(out string result) => result = "Maxing";
 
-    public override void GetPluginAppIconUrl(out string result) => result = NteConfigProvider.CN.ZoneLogoUrl;
+    public override void GetPluginAppIconUrl(out string result) => result = AppIcon;
 
     public override void GetNotificationPosterUrl(out string result) => result = NteConfigProvider.CN.ZonePosterUrl;
 

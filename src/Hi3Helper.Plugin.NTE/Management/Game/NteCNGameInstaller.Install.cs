@@ -74,6 +74,9 @@ internal partial class NteGameInstaller
 
         string[] cdnBaseUrls = mgr.GameResBaseUrls;
         string branchName = preload?.BranchName ?? mgr.BranchName;
+        string? releaseXml = mgr.ReleaseConfigXml;
+        byte[]? originalManifest = _originalRemoteManifest, selectedManifest = _selectedManifest;
+        GameVersion targetVersion = new(resListParser.Version);
         // Build the complete target list separately from the unfinished work.
         progressStateDelegate?.Invoke(InstallProgressState.Preparing);
         List<DownloadTask> allTasks = preload == null
@@ -178,11 +181,8 @@ internal partial class NteGameInstaller
                 InstallProgress snapshot = progress;
                 snapshot.DownloadedBytes = downloadedBytes;
                 snapshot.DownloadedCount = downloadedCount;
-                var currentFile = perFile.Current;
-                if (currentFile is { } current)
-                    ReportPerFileProgress(current.Done, current.Total);
-                else
-                    ReportPerFileProgress(downloadedCount == totalFileCount ? 1 : 0, 1);
+                var currentFile = perFile.Snapshot(downloadedCount == totalFileCount);
+                ReportPerFileProgress(currentFile.Done, currentFile.Total);
                 if (currentState != next)
                 {
                     currentState = next;
@@ -236,7 +236,7 @@ internal partial class NteGameInstaller
                         Volatile.Write(ref job.TemporaryBytes, temporary);
                         bool firstBytes = job.ReportedBytes == 0 && (current?.ResumableBytes ?? attemptBytes) > 0;
                         ReportBytes(job, current?.ResumableBytes ?? attemptBytes);
-                        PublishProgress(firstBytes);
+                        PublishProgress(firstBytes || job.ReportedBytes == downloadTask.TotalSize);
                     }
                 };
                 string[] roots = cdnBaseUrls.Skip(job.Attempt % cdnBaseUrls.Length)
@@ -247,8 +247,8 @@ internal partial class NteGameInstaller
                         {
                             lock (progressLock)
                             {
-                                PublishProgress();
-                                PreparingFile(done, total);
+                                perFile.Set(order, done, total, NteFileProgressStage.SourceVerification);
+                                PublishProgress(done == 0 || done == total);
                             }
                         }).ConfigureAwait(false);
                 else
@@ -289,33 +289,48 @@ internal partial class NteGameInstaller
                 {
                     networkActive.Remove(job);
                     perFile.End(order);
+                    perFile.End(order, NteFileProgressStage.SourceVerification);
                     PublishProgress(true);
                 }
             }
         }, (job, localToken) =>
         {
             DownloadTask file = job.File;
-            if (file.UpdateOperation is { } update)
+            int order = fileOrder[file];
+            try
             {
-                update.Complete(localToken, (done, total) =>
+                if (file.UpdateOperation is { } update)
                 {
-                    lock (progressLock)
-                        if (networkActive.Count == 0)
-                            PreparingFile(done, total);
-                }, bytes => Volatile.Write(ref job.TemporaryBytes, bytes));
-                return;
-            }
+                    update.Complete(localToken, (done, total) =>
+                    {
+                        lock (progressLock)
+                        {
+                            perFile.Set(order, done, total, NteFileProgressStage.Completion);
+                            PublishProgress(done == 0 || done == total);
+                        }
+                    }, bytes => Volatile.Write(ref job.TemporaryBytes, bytes));
+                    return;
+                }
 
-            string temporary = file.OutputPath + ".tmp";
-            if (file.TotalSize == 0 && !File.Exists(temporary))
+                string temporary = file.OutputPath + ".tmp";
+                if (file.TotalSize == 0 && !File.Exists(temporary))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(temporary)!);
+                    PrepareTemporaryFile(temporary, file.ExpectedMd5, 0);
+                    File.Create(temporary).Dispose();
+                }
+
+                CompleteDownloadedFile(temporary, file.OutputPath, file.TotalSize, file.ExpectedMd5, localToken);
+                _verificationCache.RememberVerified(file.OutputPath, file.TotalSize, file.ExpectedMd5);
+            }
+            finally
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(temporary)!);
-                PrepareTemporaryFile(temporary, file.ExpectedMd5, 0);
-                File.Create(temporary).Dispose();
+                lock (progressLock)
+                {
+                    perFile.End(order, NteFileProgressStage.Completion);
+                    PublishProgress(true);
+                }
             }
-
-            CompleteDownloadedFile(temporary, file.OutputPath, file.TotalSize, file.ExpectedMd5, localToken);
-            _verificationCache.RememberVerified(file.OutputPath, file.TotalSize, file.ExpectedMd5);
         }, job =>
         {
             lock (progressLock)
@@ -336,14 +351,29 @@ internal partial class NteGameInstaller
 
             SharedStatic.InstanceLogger.LogWarning("[NTE Download] Retry {Attempt}/3 for {File}: {Error}",
                 job.Attempt + 1, Path.GetFileName(job.File.OutputPath), error.Message);
-        }, token, (job, prepareToken) => job.File.UpdateOperation!.PrepareAsync(prepareToken, (done, total) =>
+        }, token, async (job, prepareToken) =>
         {
-            lock (progressLock)
+            int order = fileOrder[job.File];
+            try
             {
-                PublishProgress();
-                if (networkActive.Count == 0) PreparingFile(done, total);
+                await job.File.UpdateOperation!.PrepareAsync(prepareToken, (done, total) =>
+                {
+                    lock (progressLock)
+                    {
+                        perFile.Set(order, done, total, NteFileProgressStage.SourceVerification);
+                        PublishProgress(done == 0 || done == total);
+                    }
+                }).ConfigureAwait(false);
             }
-        })).ConfigureAwait(false);
+            finally
+            {
+                lock (progressLock)
+                {
+                    perFile.End(order, NteFileProgressStage.SourceVerification);
+                    PublishProgress(true);
+                }
+            }
+        }).ConfigureAwait(false);
         token.ThrowIfCancellationRequested();
 
         if (preload != null)
@@ -375,16 +405,15 @@ internal partial class NteGameInstaller
         }
 
         // 保存版本信息
-        if (_originalRemoteManifest != null && _selectedManifest != null && mgr.ReleaseConfigXml != null)
-            NteOfficialPatcherState.Commit(gamePath, branchName, mgr.AppId, mgr.ReleaseConfigXml,
-                _originalRemoteManifest, _selectedManifest, token);
-        if (_selectedManifest != null) NteInstalledManifest.Save(gamePath, mgr.Region, _selectedManifest);
-        GameManager.GetApiGameVersion(out GameVersion apiVer);
-        GameManager.SetCurrentGameVersion(in apiVer);
+        if (originalManifest != null && selectedManifest != null && releaseXml != null)
+            NteOfficialPatcherState.Commit(gamePath, branchName, mgr.AppId, releaseXml,
+                originalManifest, selectedManifest, token);
+        if (selectedManifest != null) NteInstalledManifest.Save(gamePath, mgr.Region, selectedManifest);
+        GameManager.SetCurrentGameVersion(in targetVersion);
         GameManager.SaveConfig();
-        if (_selectedManifest != null && mgr.ReleaseConfigXml != null)
-            NteSharedInstallation.RecordUpdate(gamePath, mgr.Region, branchName, mgr.ReleaseConfigXml,
-                _selectedManifest);
+        if (selectedManifest != null && releaseXml != null)
+            NteSharedInstallation.RecordUpdate(gamePath, mgr.Region, branchName, releaseXml,
+                selectedManifest);
 
         progressStateDelegate?.Invoke(InstallProgressState.Completed);
         progress.StateCount = 2;
@@ -393,7 +422,7 @@ internal partial class NteGameInstaller
         progressDelegate?.Invoke(in progress);
 
         SharedStatic.InstanceLogger.LogInformation(
-            "[NteCNInstaller::RunInstallAsync] Installation completed. Version set to {Ver}", apiVer);
+            "[NteCNInstaller::RunInstallAsync] Installation completed. Version set to {Ver}", targetVersion);
     }
 
     /// <summary>

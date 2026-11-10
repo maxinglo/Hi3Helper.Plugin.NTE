@@ -22,7 +22,7 @@
     <Company>Maxing</Company>
     <Authors>$(Company)</Authors>
     <Copyright>Copyright 2022-2026 $(Company)</Copyright>
-    <Version>0.13.8</Version>
+    <Version>0.13.9</Version>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <NoWarn>$(NoWarn);CA2256</NoWarn>
     <Configurations>Debug;Release;DebugNoReflection;ReleaseNoReflection</Configurations>
@@ -56,6 +56,7 @@
     <PackageReference Include="StbImageWriteSharp" Version="1.16.7"/>
     <InternalsVisibleTo Include="Hi3Helper.Plugin.NTE.Tests"/>
     <InternalsVisibleTo Include="NteStateAudit"/>
+    <EmbeddedResource Include="Assets/nte-icon.png" LogicalName="Hi3Helper.Plugin.NTE.Assets.nte-icon.png"/>
     <None Include="../../scripts/Check-NteIntegrity.ps1" Link="Check-NteIntegrity.ps1" CopyToPublishDirectory="PreserveNewest"/>
     <None Update="ThirdParty/HDiffPatch.LICENSE.txt" CopyToPublishDirectory="PreserveNewest"/>
   </ItemGroup>

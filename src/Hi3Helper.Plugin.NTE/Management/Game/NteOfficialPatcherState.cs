@@ -121,7 +121,7 @@ internal static class NteOfficialPatcherState
     }
 
     internal static string CreateConfiguration(string currentXml, string releaseXml, string branch,
-        byte[] selectedManifest)
+        byte[] selectedManifest, bool verifiedRelease = false)
     {
         XmlDocument local = ParseXml(currentXml);
         XmlDocument release = ParseXml(releaseXml);
@@ -129,16 +129,26 @@ internal static class NteOfficialPatcherState
         XmlElement root = local.DocumentElement ?? throw new InvalidDataException("Missing installed configuration.");
         if (root.Name != "config" || target.Name != "config")
             throw new InvalidDataException("Invalid official configuration root.");
+        if (!NtePatcherConfig.IsValidBranch(branch))
+            throw new InvalidDataException("Invalid official game branch.");
         if (root.SelectSingleNode("LocalBranch")?.InnerText != branch)
         {
-            // A major-version preload is published on a new branch. Only the branch previously
-            // advertised by the installed official configuration may be promoted here.
-            if (root["LocalBranch"] == null || root["PreReleaseBranch"]?.InnerText != branch ||
-                !Core.Management.GameVersion.TryParse(root["PreReleaseVersion"]?.InnerText, out var preview) ||
-                !Core.Management.GameVersion.TryParse(target["ResVersion"]?.InnerText, out var released) ||
-                released < preview)
-                throw new InvalidDataException("Official game branch changed during the update.");
-            root["LocalBranch"]!.InnerText = branch;
+            string previousBranch = root["LocalBranch"]?.InnerText ?? "";
+            if (!Core.Management.GameVersion.TryParse(target["ResVersion"]?.InnerText, out var released) ||
+                Core.Management.GameVersion.TryParse(root["ResVersion"]?.InnerText, out var installed) &&
+                released < installed)
+                throw new InvalidDataException(
+                    $"Cannot change official branch from '{previousBranch}' to '{branch}': invalid or older target version.");
+            bool advertised = root["LocalBranch"] != null && root["PreReleaseBranch"]?.InnerText == branch &&
+                              Core.Management.GameVersion.TryParse(root["PreReleaseVersion"]?.InnerText,
+                                  out var preview) && released >= preview;
+            // A validated official release can advance without a local preload advertisement.
+            // Callers may assert this only after checking the original manifest hash and version.
+            if (!verifiedRelease && !advertised)
+                throw new InvalidDataException(
+                    $"Cannot change official branch from '{previousBranch}' to '{branch}' without verified release metadata.");
+            XmlNode localBranch = root["LocalBranch"] ?? root.AppendChild(local.CreateElement("LocalBranch"))!;
+            localBranch.InnerText = branch;
         }
 
         void Set(string name, string value)
@@ -158,6 +168,8 @@ internal static class NteOfficialPatcherState
         }
 
         XmlDocument manifest = ParseXml(Encoding.UTF8.GetString(selectedManifest));
+        if (verifiedRelease && manifest.DocumentElement?.GetAttribute("version") != target["ResVersion"]?.InnerText)
+            throw new InvalidDataException("Cannot commit official state for a different game version.");
         Set("ResCount",
             (manifest.DocumentElement!.SelectNodes("Res")!.Count +
              manifest.DocumentElement.SelectNodes("Package/Pak/Entry")!.Count)
@@ -208,7 +220,8 @@ internal static class NteOfficialPatcherState
 
             byte[] installed = CreateLocalManifest(selectedManifest, appId, gameRoot);
             byte[] configuration =
-                Encoding.UTF8.GetBytes(CreateConfiguration(current, releaseXml, branch, selectedManifest));
+                Encoding.UTF8.GetBytes(CreateConfiguration(current, releaseXml, branch, selectedManifest,
+                    verifiedRelease: true));
             token.ThrowIfCancellationRequested();
             NteSharedInstallation.WriteAtomic(manifestPath, installed);
             NteSharedInstallation.WriteAtomic(configPath, configuration);
@@ -219,7 +232,8 @@ internal static class NteOfficialPatcherState
         byte[] oldManifest = File.ReadAllBytes(manifestPath);
         byte[] newManifest = CreateLocalManifest(selectedManifest, appId, gameRoot);
         string newConfig =
-            CreateConfiguration(Encoding.UTF8.GetString(oldConfig), releaseXml, branch, selectedManifest);
+            CreateConfiguration(Encoding.UTF8.GetString(oldConfig), releaseXml, branch, selectedManifest,
+                verifiedRelease: true);
         string backup =
             Path.Combine(
                 backupDirectory ??

@@ -1,0 +1,12 @@
+{
+  "source": "Official NTE Windows launcher",
+  "rights": "Icon artwork belongs to the official game rights holders; included only to identify NTE.",
+  "resource_pack": "ResData/1289.dat",
+  "resource": "res/res/1289/WmgpLauncher.ico",
+  "png_frame_index": 9,
+  "width": 256,
+  "height": 256,
+  "bits_per_pixel": 32,
+  "ico_sha256": "2bb9ae991c1fcc5ea97dbecd08700d8526a0a1c74f71302b281e855fb53434c6",
+  "png_sha256": "65dff7690592f5aa9028ae52a7a2362732f9d7555609230ae15c31477c90eb10"
+}
