@@ -134,7 +134,7 @@ internal partial class NteGameInstaller
         DriveInfo drive = new(Path.GetPathRoot(Path.GetFullPath(gamePath))!);
         NteDownloadScheduler scheduler = new(jobs, () => drive.AvailableFreeSpace);
         SharedStatic.InstanceLogger.LogInformation(
-            "[NTE Download] Mode={Mode}, pending files={Files}, remaining network bytes={Remaining}, required additional space={Required}, network slots={Slots}, local verification threads=1",
+            "[NTE Download] Mode={Mode}, pending files={Files}, remaining network bytes={Remaining}, required additional space={Required}, network slots={Slots}, source checks=1, local verification threads=1",
             installerKind, jobs.Count, jobs.Sum(job => job.Space.NetworkBytes),
             NteDownloadSpace.RequiredFreeBytes(jobs.Select(job => job.Space), NteDownloadScheduler.ReserveBytes),
             MaxParallelDownloads);
@@ -336,7 +336,14 @@ internal partial class NteGameInstaller
 
             SharedStatic.InstanceLogger.LogWarning("[NTE Download] Retry {Attempt}/3 for {File}: {Error}",
                 job.Attempt + 1, Path.GetFileName(job.File.OutputPath), error.Message);
-        }, token).ConfigureAwait(false);
+        }, token, (job, prepareToken) => job.File.UpdateOperation!.PrepareAsync(prepareToken, (done, total) =>
+        {
+            lock (progressLock)
+            {
+                PublishProgress();
+                if (networkActive.Count == 0) PreparingFile(done, total);
+            }
+        })).ConfigureAwait(false);
         token.ThrowIfCancellationRequested();
 
         if (preload != null)

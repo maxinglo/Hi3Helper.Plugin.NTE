@@ -41,6 +41,16 @@ internal sealed class NteUpdateContext(string root, string appId, NteFileVerific
     internal async Task VerifySourceBeforeDownloadAsync(string path, string md5, long size, CancellationToken token,
         Action<long, long>? progress)
     {
+        token.ThrowIfCancellationRequested();
+        // A prepared transfer must not wait behind the next file's long source check.
+        try
+        {
+            if (verification.IsVerified(path, size, md5)) return;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new NtePatchFallbackException("Cannot read the selected patch source; using the full resource.", ex);
+        }
         await _sourceVerification.WaitAsync(token).ConfigureAwait(false);
         try
         {
@@ -244,6 +254,12 @@ internal sealed class NteUpdateOperation
         return new(TransferSize, temporary + ScratchBytes, old, resumable, ScratchPeak, reclaimed);
     }
 
+    internal Task PrepareAsync(CancellationToken token, Action<long, long>? progress = null)
+        => IsDelta
+            ? _context.VerifySourceBeforeDownloadAsync(_sourceCache ?? Target.OutputPath, _route!.SourceMd5,
+                _route.SourceSize, token, progress)
+            : Task.CompletedTask;
+
     internal async Task DownloadAsync(NteGameInstaller installer, string[] roots, string branch,
         CancellationToken token, Action<long> progress,
         Action<long, long>? sourceProgress = null)
@@ -265,8 +281,7 @@ internal sealed class NteUpdateOperation
         }
 
         // Hash only this operation's source, and do it before requesting any of its delta payloads.
-        await _context.VerifySourceBeforeDownloadAsync(_sourceCache ?? Target.OutputPath, _route!.SourceMd5,
-            _route.SourceSize, token, sourceProgress).ConfigureAwait(false);
+        await PrepareAsync(token, sourceProgress).ConfigureAwait(false);
         foreach (NteResListEntry resource in _resources)
         {
             string path = _context.PathFor(resource.Md5, resource.Filesize);

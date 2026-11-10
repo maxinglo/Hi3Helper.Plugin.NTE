@@ -27,9 +27,11 @@ internal sealed class NteDownloadJob
     internal long ReadyAt { get; set; }
     internal long TemporaryBytes;
     internal long ReportedBytes { get; set; }
+    internal bool SourcePrepared { get; set; }
+    internal bool PreparingSource { get; set; }
 }
 
-/// <summary>Async network workers and one dedicated local verification thread share a disk reservation budget.</summary>
+/// <summary>Source checks, network transfers and local completion overlap within a disk reservation budget.</summary>
 internal sealed class NteDownloadScheduler
 {
     internal const long ReserveBytes = 512L * 1024 * 1024;
@@ -40,6 +42,7 @@ internal sealed class NteDownloadScheduler
     private TaskCompletionSource changed = NewSignal();
     private int completed;
     private readonly int total;
+    private bool prepareSources;
 
     internal NteDownloadScheduler(IReadOnlyList<NteDownloadJob> jobs, Func<long> freeSpace)
     {
@@ -58,8 +61,9 @@ internal sealed class NteDownloadScheduler
         Func<NteDownloadJob, CancellationToken, Task> transfer,
         Action<NteDownloadJob, CancellationToken> verify,
         Action<NteDownloadJob> verified, Action<NteDownloadJob, Exception> retry,
-        CancellationToken token)
+        CancellationToken token, Func<NteDownloadJob, CancellationToken, Task>? prepare = null)
     {
+        prepareSources = prepare != null;
         using CancellationTokenSource cancel = CancellationTokenSource.CreateLinkedTokenSource(token);
         using BlockingCollection<NteDownloadJob>
             verification = new(); // Metadata only; file handles/buffers are closed before enqueueing.
@@ -96,6 +100,37 @@ internal sealed class NteDownloadScheduler
             }
         }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
+        async Task PrepareWorker()
+        {
+            try
+            {
+                while (await TakePreparationAsync(cancel.Token).ConfigureAwait(false) is { } job)
+                {
+                    try
+                    {
+                        await prepare!(job, cancel.Token).ConfigureAwait(false);
+                    }
+                    catch (NtePatchFallbackException ex)
+                    {
+                        if (!TryRetry(job, ex, retry)) throw;
+                        continue;
+                    }
+
+                    lock (sync)
+                    {
+                        job.SourcePrepared = true;
+                        job.PreparingSource = false;
+                        Pulse();
+                    }
+                }
+            }
+            catch
+            {
+                cancel.Cancel();
+                throw;
+            }
+        }
+
         async Task NetworkWorker()
         {
             try
@@ -124,6 +159,7 @@ internal sealed class NteDownloadScheduler
         }
 
         Exception? error = null;
+        Task preparationWorker = prepareSources ? PrepareWorker() : Task.CompletedTask;
         try
         {
             await Task.WhenAll(Enumerable.Range(0, Math.Max(1, networkWorkers)).Select(_ => NetworkWorker()))
@@ -141,6 +177,15 @@ internal sealed class NteDownloadScheduler
 
         try
         {
+            await preparationWorker.ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            if (error == null || error is OperationCanceledException && !token.IsCancellationRequested) error = ex;
+        }
+
+        try
+        {
             await localWorker.ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -150,6 +195,39 @@ internal sealed class NteDownloadScheduler
 
         if (error != null) ExceptionDispatchInfo.Capture(error).Throw();
         token.ThrowIfCancellationRequested();
+    }
+
+    private bool NeedsPreparation(NteDownloadJob job)
+        => prepareSources && !job.SourcePrepared && job.Space.NetworkBytes > 0 &&
+           job.File.UpdateOperation?.IsDelta == true;
+
+    private async Task<NteDownloadJob?> TakePreparationAsync(CancellationToken token)
+    {
+        while (true)
+        {
+            Task signal;
+            long delay = -1;
+            lock (sync)
+            {
+                token.ThrowIfCancellationRequested();
+                if (completed == total) return null;
+                long now = Environment.TickCount64;
+                foreach (NteDownloadJob job in pending)
+                {
+                    if (!NeedsPreparation(job)) continue;
+                    if (job.ReadyAt <= now)
+                    {
+                        job.PreparingSource = true;
+                        return job;
+                    }
+                    delay = delay < 0 ? job.ReadyAt - now : Math.Min(delay, job.ReadyAt - now);
+                }
+
+                signal = changed.Task;
+            }
+
+            await WaitForChangeAsync(signal, delay, token).ConfigureAwait(false);
+        }
     }
 
     private async Task<NteDownloadJob?> TakeAsync(CancellationToken token)
@@ -176,6 +254,11 @@ internal sealed class NteDownloadScheduler
                     bool releasesSpace = job.Space.ReclaimedBytes >= job.Space.AdditionalBytes;
                     if (!releasesSpace && spaceReleasingPending) break;
                     spaceReleasingPending |= releasesSpace;
+                    if (job.PreparingSource || NeedsPreparation(job))
+                    {
+                        if (!releasesSpace) break;
+                        continue;
+                    }
                     if (job.ReadyAt > now)
                     {
                         delay = delay < 0 ? job.ReadyAt - now : Math.Min(delay, job.ReadyAt - now);
@@ -194,22 +277,48 @@ internal sealed class NteDownloadScheduler
                     return job;
                 }
 
-                if (active.Count == 0 && pending.Count > 0 && delay < 0)
+                // Bypass a source check only when the remaining plan still fits. Waiting for a
+                // large source must not idle the network or spend space needed by its patch.
+                bool sourcePending = pending.Any(job => job.PreparingSource || NeedsPreparation(job));
+                if (sourcePending)
+                {
+                    foreach (NteDownloadJob job in pending)
+                    {
+                        if (job.PreparingSource || NeedsPreparation(job) || job.ReadyAt > now) continue;
+                        if (job.Space.AdditionalBytes > 0 && available - ReserveBytes < job.Space.AdditionalBytes)
+                            continue;
+                        long remaining = NteDownloadSpace.RequiredFreeBytes(
+                            pending.Where(other => other != job).Select(other => other.Space), ReserveBytes);
+                        if (available - job.Space.AdditionalBytes < remaining) break;
+                        pending.Remove(job);
+                        active.Add(job);
+                        return job;
+                    }
+                }
+
+                if (active.Count == 0 && pending.Count > 0 && delay < 0 && !sourcePending)
                     throw new IOException(
                         $"Insufficient remaining disk space for the next file. Available {available} bytes.");
                 signal = changed.Task;
             }
 
-            if (delay >= 0)
-            {
-                using CancellationTokenSource wake = CancellationTokenSource.CreateLinkedTokenSource(token);
-                Task timer = Task.Delay(TimeSpan.FromMilliseconds(delay), wake.Token);
-                await Task.WhenAny(signal.WaitAsync(wake.Token), timer).ConfigureAwait(false);
-                wake.Cancel();
-                token.ThrowIfCancellationRequested();
-            }
-            else await signal.WaitAsync(token).ConfigureAwait(false);
+            await WaitForChangeAsync(signal, delay, token).ConfigureAwait(false);
         }
+    }
+
+    private static async Task WaitForChangeAsync(Task signal, long delay, CancellationToken token)
+    {
+        if (delay < 0)
+        {
+            await signal.WaitAsync(token).ConfigureAwait(false);
+            return;
+        }
+
+        using CancellationTokenSource wake = CancellationTokenSource.CreateLinkedTokenSource(token);
+        Task timer = Task.Delay(TimeSpan.FromMilliseconds(delay), wake.Token);
+        await Task.WhenAny(signal.WaitAsync(wake.Token), timer).ConfigureAwait(false);
+        wake.Cancel();
+        token.ThrowIfCancellationRequested();
     }
 
     private bool TryRetry(NteDownloadJob job, Exception error, Action<NteDownloadJob, Exception> retry)
@@ -222,14 +331,18 @@ internal sealed class NteDownloadScheduler
         {
             job.Space = current;
             Volatile.Write(ref job.TemporaryBytes, current.TemporaryBytes);
+            job.SourcePrepared = false;
             job.Attempt++;
-            job.ReadyAt = Environment.TickCount64 + (error is InvalidDataException ? 0 : 500L << (job.Attempt - 1));
+            job.ReadyAt = Environment.TickCount64 +
+                          (error is InvalidDataException or NtePatchFallbackException ? 0 : 500L << (job.Attempt - 1));
         }
 
         retry(job, error);
         lock (sync)
         {
             active.Remove(job);
+            pending.Remove(job);
+            job.PreparingSource = false;
             pending.Add(job);
             SortPending();
             Pulse();
