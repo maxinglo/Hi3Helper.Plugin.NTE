@@ -36,6 +36,14 @@
 
 各地区的账号和设置分别保存。共用安装目录不会转换账号，也不会合并角色或服务端数据。台港澳手机号支持台湾、香港及澳门区号。
 
+## 界面预览
+
+| 启动器主界面 | 登录说明与隐私 |
+|:------------:|:--------------:|
+| ![Collapse 启动器中的异环主页](assets/screenshots/launcher.png) | ![登录说明与隐私](assets/screenshots/login-privacy.png) |
+| **已保存账号** | **手机验证码登录** |
+| ![已保存账号与继续登录](assets/screenshots/saved-accounts.png) | ![手机验证码登录](assets/screenshots/sms-login.png) |
+
 ## 安装插件
 
 需要 Windows 10／11 x64，以及支持 **Plugin Core API 0.1.6** 的 Collapse Launcher。
