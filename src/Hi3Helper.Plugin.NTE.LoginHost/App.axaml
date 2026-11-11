@@ -4,11 +4,15 @@
              RequestedThemeVariant="Light">
   <Application.Styles>
     <FluentTheme />
+    <Style Selector="ScrollBar">
+      <Setter Property="Theme" Value="{DynamicResource LoginScrollBarTheme}" />
+    </Style>
   </Application.Styles>
   <Application.Resources>
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
         <ResourceInclude Source="avares://Nte.LoginHost/Styles/Login.axaml" />
+        <ResourceInclude Source="avares://Nte.LoginHost/Styles/ScrollBars.axaml" />
       </ResourceDictionary.MergedDictionaries>
     </ResourceDictionary>
   </Application.Resources>

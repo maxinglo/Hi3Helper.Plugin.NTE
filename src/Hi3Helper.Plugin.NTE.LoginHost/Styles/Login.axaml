@@ -181,6 +181,5 @@
   </ControlTheme>
   <ControlTheme x:Key="LoginScrollViewerStyle" TargetType="ScrollViewer" BasedOn="{StaticResource {x:Type ScrollViewer}}">
     <Setter Property="AllowAutoHide" Value="False" />
-    <Style Selector="^ /template/ ScrollBar:vertical"><Setter Property="Width" Value="10" /></Style>
   </ControlTheme>
 </ResourceDictionary>
