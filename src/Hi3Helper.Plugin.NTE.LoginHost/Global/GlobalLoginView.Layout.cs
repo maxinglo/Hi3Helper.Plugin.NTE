@@ -1,10 +1,13 @@
 using Nte.LoginHost.ViewModels;
 using System.IO;
-using System.Windows;
-using System.Windows.Automation;
-using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Styling;
+using Avalonia.Automation;
+
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Nte.LoginHost.Accounts;
 using Nte.LoginHost.Localization;
 
@@ -12,7 +15,7 @@ namespace Nte.LoginHost;
 
 internal sealed partial class OverseasLoginView
 {
-    private void BuildLayout(Func<string, Style> style)
+    private void BuildLayout(Func<string, ControlTheme> style)
     {
         Configure(back, "BackToSavedAccounts", "back");
         back.HorizontalAlignment = HorizontalAlignment.Left;
@@ -34,8 +37,8 @@ internal sealed partial class OverseasLoginView
         methodsBody.Children.Add(facebook);
         methodsBody.Children.Add(emailEntry);
         newBody.Children.Add(methodsBody);
-        email.Style = emailCode.Style = style("LoginTextBoxStyle");
-        secret.Style = style("LoginPasswordBoxStyle");
+        email.Theme = emailCode.Theme = style("LoginTextBoxStyle");
+        secret.Theme = style("LoginPasswordBoxStyle");
         AutomationProperties.SetName(email, LoginText.Get("Email"));
         AutomationProperties.SetAutomationId(email, "email");
         AutomationProperties.SetName(secret, LoginText.Get("Password"));
@@ -44,13 +47,13 @@ internal sealed partial class OverseasLoginView
         AutomationProperties.SetAutomationId(emailCode, "email-code");
         passwordMode.Content = LoginText.Get("PasswordSignIn");
         codeMode.Content = LoginText.Get("CodeSignIn");
-        passwordMode.Style = codeMode.Style = style("LoginModeRadioStyle");
+        passwordMode.Theme = codeMode.Theme = style("LoginModeRadioStyle");
         AutomationProperties.SetAutomationId(passwordMode, "email-password-mode");
         AutomationProperties.SetAutomationId(codeMode, "email-code-mode");
         SlidingModeSelector rail = new(passwordMode, codeMode) { Margin = new(0, 0, 0, 14) };
         emailBody.Children.Add(rail);
         AutomationProperties.SetAutomationId(phoneCountry, "phone-country");
-        phoneCountry.Style = style("LoginComboBoxStyle");
+        phoneCountry.Theme = style("LoginComboBoxStyle");
         AutomationProperties.SetName(phoneCountry, LoginText.Get("CountryCode"));
         identifierRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         identifierRow.ColumnDefinitions.Add(new());
@@ -74,7 +77,7 @@ internal sealed partial class OverseasLoginView
         codeGroup.Children.Add(LabeledGroup(codeLabel, codeRow));
         emailBody.Children.Add(codeGroup);
         newBody.Children.Add(emailBody);
-        remember.Style = style("FormCheckBoxStyle");
+        remember.Theme = style("FormCheckBoxStyle");
         remember.Content = new TextBlock { Text = LoginText.Get("SaveOnDevice"), TextWrapping = TextWrapping.Wrap };
         remember.Margin = new(0, 12, 0, 0);
         AutomationProperties.SetAutomationId(remember, "remember");
@@ -84,7 +87,7 @@ internal sealed partial class OverseasLoginView
         Children.Add(newBody);
         status.Margin = new(0, 10, 0, 4);
         AutomationProperties.SetAutomationId(status, "status");
-        AutomationProperties.SetLiveSetting(status, System.Windows.Automation.AutomationLiveSetting.Polite);
+        AutomationProperties.SetLiveSetting(status, Avalonia.Automation.AutomationLiveSetting.Polite);
         Children.Add(status);
         Configure(signIn, "ContinueSignIn", "submit", "AccentButtonStyle");
         signIn.Margin = new(0, 12, 0, 0);
@@ -103,7 +106,7 @@ internal sealed partial class OverseasLoginView
 
         void Configure(Button button, string key, string id, string styleName = "QuietButtonStyle")
         {
-            button.Style = style(styleName);
+            button.Theme = style(styleName);
             button.Content = new TextBlock
                 { Text = LoginText.Get(key), TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center };
             button.MinHeight = styleName == "QuietButtonStyle" ? 28 : 44;
@@ -114,7 +117,7 @@ internal sealed partial class OverseasLoginView
         }
     }
 
-    private static StackPanel Group(string key, UIElement input)
+    private static StackPanel Group(string key, Control input)
     {
         StackPanel group = new() { Margin = new(0, 0, 0, 12) };
         group.Children.Add(new TextBlock { Text = LoginText.Get(key), FontSize = 12, Margin = new(0, 0, 0, 7) });
@@ -122,7 +125,7 @@ internal sealed partial class OverseasLoginView
         return group;
     }
 
-    private static StackPanel LabeledGroup(TextBlock label, UIElement input)
+    private static StackPanel LabeledGroup(TextBlock label, Control input)
     {
         StackPanel group = new() { Margin = new(0, 0, 0, 12) };
         label.FontSize = 12; label.Margin = new(0, 0, 0, 7);
@@ -135,22 +138,17 @@ internal sealed partial class OverseasLoginView
         row.ColumnDefinitions.Add(new() { Width = new(30) });
         row.ColumnDefinitions.Add(new());
         row.ColumnDefinitions.Add(new() { Width = new(30) });
-        BitmapImage bitmap = new();
-        bitmap.BeginInit();
-        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-        bitmap.UriSource = new(Path.Combine(AppContext.BaseDirectory, "Assets", "Brand", asset));
-        bitmap.EndInit();
-        bitmap.Freeze();
+        Bitmap bitmap = new(Path.Combine(AppContext.BaseDirectory, "Assets", "Brand", asset));
         Image image = new()
         {
             Source = bitmap, Width = 20, Height = 20, Stretch = Stretch.Uniform,
             HorizontalAlignment = HorizontalAlignment.Left
         };
-        RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
+        RenderOptions.SetBitmapInterpolationMode(image, BitmapInterpolationMode.HighQuality);
         row.Children.Add(image);
         TextBlock text = new()
         {
-            Text = LoginText.Get(key), FontSize = 14, FontWeight = FontWeights.Medium,
+            Text = LoginText.Get(key), FontSize = 14, FontWeight = FontWeight.Medium,
             TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -161,17 +159,31 @@ internal sealed partial class OverseasLoginView
 
     private void RefreshLayout()
     {
+        updatingFields = true;
+        try
+        {
+            if (email.Text != model.Identifier) email.Text = model.Identifier;
+            if (emailCode.Text != model.EmailCode) emailCode.Text = model.EmailCode;
+            if (!ReferenceEquals(phoneCountry.ItemsSource, model.PhoneCountries)) phoneCountry.ItemsSource = model.PhoneCountries;
+            phoneCountry.SelectedItem = model.PhoneCountries.FirstOrDefault(country => country.CountryCode == model.CountryCode);
+            remember.IsChecked = model.Remember;
+            agreement.IsChecked = model.Agreement;
+            status.Text = model.Status;
+            passwordMode.IsChecked = model.UsePassword;
+            codeMode.IsChecked = !model.UsePassword;
+        }
+        finally { updatingFields = false; }
         bool busy = model.IsBusy;
         var page = model.Page;
         bool phone = page == GlobalLoginPage.Phone;
         bool credentials = phone || page == GlobalLoginPage.Email;
-        savedBody.Visibility = !busy && page == GlobalLoginPage.Saved ? Visibility.Visible : Visibility.Collapsed;
-        newBody.Visibility = !busy && (page == GlobalLoginPage.Methods || credentials) ? Visibility.Visible : Visibility.Collapsed;
-        methodsBody.Visibility = page == GlobalLoginPage.Methods ? Visibility.Visible : Visibility.Collapsed;
-        emailEntry.Visibility = model.SupportsEmail ? Visibility.Visible : Visibility.Collapsed;
-        phoneEntry.Visibility = model.SupportsPhone ? Visibility.Visible : Visibility.Collapsed;
-        emailBody.Visibility = credentials ? Visibility.Visible : Visibility.Collapsed;
-        phoneCountry.Visibility = phone ? Visibility.Visible : Visibility.Collapsed;
+        savedBody.IsVisible = !busy && page == GlobalLoginPage.Saved;
+        newBody.IsVisible = !busy && (page == GlobalLoginPage.Methods || credentials);
+        methodsBody.IsVisible = page == GlobalLoginPage.Methods;
+        emailEntry.IsVisible = model.SupportsEmail;
+        phoneEntry.IsVisible = model.SupportsPhone;
+        emailBody.IsVisible = credentials;
+        phoneCountry.IsVisible = phone;
         identifierLabel.Text = LoginText.Get(phone ? "Phone" : "Email");
         codeLabel.Text = LoginText.Get(phone ? "SmsCode" : "EmailCode");
         AutomationProperties.SetName(email, identifierLabel.Text);
@@ -180,20 +192,17 @@ internal sealed partial class OverseasLoginView
         AutomationProperties.SetAutomationId(emailCode, phone ? "phone-code" : "email-code");
         AutomationProperties.SetAutomationId(passwordMode, phone ? "phone-password-mode" : "email-password-mode");
         AutomationProperties.SetAutomationId(codeMode, phone ? "phone-code-mode" : "email-code-mode");
-        passwordMode.SetCurrentValue(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, model.UsePassword);
-        codeMode.SetCurrentValue(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, !model.UsePassword);
-        helpBody.Visibility = !busy && page == GlobalLoginPage.Help ? Visibility.Visible : Visibility.Collapsed;
-        back.Visibility = !busy && (credentials || page == GlobalLoginPage.Help || page == GlobalLoginPage.Methods && picker.HasAccounts)
-            ? Visibility.Visible : Visibility.Collapsed;
+        helpBody.IsVisible = !busy && page == GlobalLoginPage.Help;
+        back.IsVisible = !busy && (credentials || page == GlobalLoginPage.Help || page == GlobalLoginPage.Methods && picker.HasAccounts);
         back.Content = LoginText.Get(credentials ? "BackToMethods" : page == GlobalLoginPage.Help ? "BackToSignIn" : "BackToSavedAccounts");
-        signIn.Visibility = !busy && (credentials || page == GlobalLoginPage.Saved && !picker.IsManaging) ? Visibility.Visible : Visibility.Collapsed;
-        otherAccount.Visibility = !busy && page == GlobalLoginPage.Saved && !picker.IsManaging ? Visibility.Visible : Visibility.Collapsed;
-        retry.Visibility = !busy && !model.IsPreview && !model.Ready && page == GlobalLoginPage.Methods ? Visibility.Visible : Visibility.Collapsed;
-        cancelWork.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
-        help.Visibility = Visibility.Collapsed;
-        status.Visibility = string.IsNullOrWhiteSpace(model.Status) ? Visibility.Collapsed : Visibility.Visible;
-        passwordGroup.Visibility = model.UsePassword ? Visibility.Visible : Visibility.Collapsed;
-        codeGroup.Visibility = model.UsePassword ? Visibility.Collapsed : Visibility.Visible;
+        signIn.IsVisible = !busy && (credentials || page == GlobalLoginPage.Saved && !picker.IsManaging);
+        otherAccount.IsVisible = !busy && page == GlobalLoginPage.Saved && !picker.IsManaging;
+        retry.IsVisible = !busy && !model.IsPreview && !model.Ready && page == GlobalLoginPage.Methods;
+        cancelWork.IsVisible = busy;
+        help.IsVisible = false;
+        status.IsVisible = !(string.IsNullOrWhiteSpace(model.Status));
+        passwordGroup.IsVisible = model.UsePassword;
+        codeGroup.IsVisible = !(model.UsePassword);
         email.IsEnabled = secret.IsEnabled = emailCode.IsEnabled = passwordMode.IsEnabled = codeMode.IsEnabled = !busy;
         phoneCountry.IsEnabled = !busy;
         agreement.IsEnabled = remember.IsEnabled = picker.IsEnabled = !busy;

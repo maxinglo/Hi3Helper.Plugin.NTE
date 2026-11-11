@@ -5,7 +5,12 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
-    <UseWPF>true</UseWPF>
+    <PublishAot>true</PublishAot>
+    <IsAotCompatible>true</IsAotCompatible>
+    <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <IlcOptimizationPreference>Size</IlcOptimizationPreference>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>../Hi3Helper.Plugin.NTE/Assets/nte-icon.ico</ApplicationIcon>
@@ -20,12 +25,17 @@
   <ItemGroup>
     <Compile Include="../Hi3Helper.Plugin.NTE.SdkShared/**/*.cs" Link="Sdk/%(Filename)%(Extension)"/>
     <Compile Include="../Hi3Helper.Plugin.NTE/Management/Game/NteProcessImage.cs" Link="Launch/NteProcessImage.cs"/>
-    <Page Remove="ThirdParty/Collapse/*.xaml"/>
     <Content Include="Assets/*.png" CopyToOutputDirectory="PreserveNewest"/>
     <Content Include="Assets/Brand/*.png;Assets/Brand/*.txt;Assets/Brand/*.json" CopyToOutputDirectory="PreserveNewest"/>
-    <Resource Include="Assets/Brand/*.ttf"/>
     <Content Include="ThirdParty/Collapse/LICENSE" CopyToOutputDirectory="PreserveNewest"/>
     <Content Include="ThirdParty/Collapse/UPSTREAM.json" CopyToOutputDirectory="PreserveNewest"/>
     <Content Include="ThirdParty/Collapse/*.xaml" CopyToOutputDirectory="PreserveNewest"/>
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.2.7"/>
+    <PackageReference Include="Avalonia.Win32" Version="11.2.7"/>
+    <PackageReference Include="Avalonia.Skia" Version="11.2.7"/>
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.7"/>
+    <AvaloniaXaml Remove="ThirdParty/Collapse/*.xaml"/>
   </ItemGroup>
 </Project>

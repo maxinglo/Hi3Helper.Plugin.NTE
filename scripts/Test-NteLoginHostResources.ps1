@@ -1,23 +1,12 @@
 [CmdletBinding()]
 param([Parameter(Mandatory)][string] $HostDirectory)
-$ErrorActionPreference='Stop'
-$directory=(Resolve-Path -LiteralPath $HostDirectory).Path
-$assembly=[Reflection.Assembly]::LoadFile((Join-Path $directory 'Nte.LoginHost.dll'))
-$manager=[Resources.ResourceManager]::new('Nte.LoginHost.Localization.Strings',$assembly)
-$baseline=$manager.GetResourceSet([Globalization.CultureInfo]::InvariantCulture,$true,$false)
-$keys=@($baseline.GetEnumerator() | ForEach-Object Key | Sort-Object)
-$rows=@(foreach($culture in @('en','zh-CN','zh-TW','ja','ko','de','fr','ru','es')){
-    $info=[Globalization.CultureInfo]::GetCultureInfo($culture)
-    $resourceCulture=if($culture -eq 'en'){[Globalization.CultureInfo]::InvariantCulture}else{$info}
-    $explicitResources=$manager.GetResourceSet($resourceCulture,$true,$false)
-    if($null -eq $explicitResources){throw "Missing explicit resource catalog: $culture"}
-    foreach($key in $keys){
-        $value=$explicitResources.GetString($key)
-        if([string]::IsNullOrWhiteSpace($value)){throw "Missing login resource: $culture / $key"}
-        $expected=@([regex]::Matches($baseline.GetString($key),'\{\d+\}') | ForEach-Object Value | Sort-Object)
-        $actual=@([regex]::Matches($value,'\{\d+\}') | ForEach-Object Value | Sort-Object)
-        if(($expected -join ',') -ne ($actual -join ',')){throw "Resource format placeholders differ: $culture / $key"}
-    }
-    [pscustomobject]@{Culture=$culture;Title=$manager.GetString('GlobalTitle',$info);ExplicitKeys=$keys.Count;Passed=$true}
-})
-$rows
+$ErrorActionPreference = 'Stop'
+$directory = (Resolve-Path -LiteralPath $HostDirectory).Path
+$executable = Join-Path $directory 'Nte.LoginHost.exe'
+if (-not (Test-Path -LiteralPath $executable)) { throw "Missing login host: $executable" }
+# Resource-only mode executes in the published Native AOT binary without a
+# renderer, account access, or network requests. Loading its former DLL via
+# reflection would neither work nor verify the deployed executable.
+$process = Start-Process -FilePath $executable -ArgumentList '--verify-resources' -WindowStyle Hidden -Wait -PassThru
+if ($process.ExitCode -ne 0) { throw "Native login resource verification failed ($($process.ExitCode))." }
+[pscustomobject]@{ passed = $true; cultures = 9; publishedExecutable = $true; accountRequests = 0 }

@@ -40,14 +40,14 @@ try {
     dotnet @publishArguments
     if ($LASTEXITCODE -ne 0) { throw "NativeAOT publish failed ($LASTEXITCODE)." }
 
-    # The plugin only hands off launch; WPF, SDK transport and authentication
+    # The plugin only hands off launch; Avalonia, SDK transport and authentication
     # run in this separate, self-contained process beside the native library.
     $loginProject = Join-Path $repositoryRoot 'src/Hi3Helper.Plugin.NTE.LoginHost/Hi3Helper.Plugin.NTE.LoginHost.csproj'
     $loginOutput = Join-Path $outputDirectory 'LoginHost'
     dotnet publish $loginProject -c Release -r win-x64 -p:Platform=x64 --self-contained true `
-        -p:PublishSingleFile=false -p:PublishTrimmed=false -p:CopyOutputSymbolsToPublishDirectory=false `
+        -p:PublishAot=true -p:CopyOutputSymbolsToPublishDirectory=false `
         -p:RestoreLockedMode=true -p:NuGetAudit=false "-p:Version=$((Get-Item (Join-Path $outputDirectory 'NTE.dll')).VersionInfo.ProductVersion.Split('+')[0])" --nologo -o $loginOutput
-    if ($LASTEXITCODE -ne 0) { throw "Bundled WPF login host publish failed ($LASTEXITCODE)." }
+    if ($LASTEXITCODE -ne 0) { throw "Bundled Native AOT login host publish failed ($LASTEXITCODE)." }
 
     & (Join-Path $PSScriptRoot 'Test-NteLoginHostResources.ps1') -HostDirectory $loginOutput | Out-Host
 

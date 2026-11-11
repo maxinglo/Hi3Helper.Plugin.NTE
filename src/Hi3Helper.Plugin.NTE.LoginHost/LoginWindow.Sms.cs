@@ -1,4 +1,4 @@
-using System.Windows.Threading;
+using Avalonia.Threading;
 
 namespace Nte.LoginHost;
 
@@ -31,7 +31,7 @@ internal sealed partial class LoginWindow
         await ExecuteAsync(async (api, token, generation) =>
         {
             status.Text = Localization.LoginText.Get("RequestingSmsCode");
-            Task sending = api.SendSmsAsync(phone.Text.Trim(), token);
+            Task sending = api.SendSmsAsync((phone.Text ?? "").Trim(), token);
             UpdateSmsButton();
             try
             {

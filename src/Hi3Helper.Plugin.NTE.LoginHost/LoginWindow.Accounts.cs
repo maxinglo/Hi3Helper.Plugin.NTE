@@ -1,8 +1,11 @@
 using System.IO;
 using System.Security.Cryptography;
-using System.Windows;
-using System.Windows.Automation;
-using System.Windows.Controls;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Styling;
+using Avalonia.Automation;
+
 using Nte.Login;
 using Nte.LoginHost.Accounts;
 using Nte.LoginHost.Localization;
@@ -26,7 +29,7 @@ internal sealed partial class LoginWindow
     private readonly Dictionary<Guid, AccountDisplayProfile> mainlandProfiles = [];
     private SavedAccountPicker? mainlandPicker;
     private readonly Button otherMainlandAccount = new();
-    private readonly Border modeRail = new() { Visibility = Visibility.Collapsed };
+    private readonly Border modeRail = new() { IsVisible = false };
     private readonly CheckBox saveAccount = new() { MinHeight = 28, FontSize = 12, IsChecked = true };
     private Task rememberedChange = Task.CompletedTask;
     private bool automaticAttempt, autoResumeDisabled;
@@ -69,7 +72,7 @@ internal sealed partial class LoginWindow
 
     private void ConfigureAccounts()
     {
-        saveAccount.Style = FindStyle("FormCheckBoxStyle");
+        saveAccount.Theme = FindStyle("FormCheckBoxStyle");
         saveAccount.Content = new TextBlock { Text = LoginText.Get("SaveOnDevice"), TextWrapping = TextWrapping.Wrap };
         AutomationProperties.SetName(saveAccount, LoginText.Get("SaveOnDevice"));
         AutomationProperties.SetAutomationId(saveAccount, "remember");
@@ -96,7 +99,7 @@ internal sealed partial class LoginWindow
         {
             if (selectedAccount is { } selected) await RemoveAccountAsync(selected);
         };
-        otherMainlandAccount.Style = FindStyle("QuietButtonStyle");
+        otherMainlandAccount.Theme = FindStyle("QuietButtonStyle");
         otherMainlandAccount.MinHeight = 28;
         otherMainlandAccount.Margin = new(0, 6, 0, 0);
         otherMainlandAccount.FontSize = 12;
@@ -105,7 +108,7 @@ internal sealed partial class LoginWindow
         footer.Children.Add(otherMainlandAccount);
     }
 
-    private void AddAccountTabs() => modeRail.Visibility = Visibility.Collapsed;
+    private void AddAccountTabs() => modeRail.IsVisible = false;
     private void AddAccountSaveFields() => Add(form, saveAccount, 0);
 
     private IReadOnlyList<LocalAccount> MainlandAccounts() =>
@@ -162,15 +165,13 @@ internal sealed partial class LoginWindow
     {
         editingLabel = mainlandPicker?.IsManaging == true && localMode;
         bool hasAccounts = MainlandAccounts().Count > 0;
-        otherMainlandAccount.Visibility = !helpOpen && !editingLabel && (localMode || hasAccounts)
-            ? Visibility.Visible
-            : Visibility.Collapsed;
+        otherMainlandAccount.IsVisible = !helpOpen && !editingLabel && (localMode || hasAccounts);
         otherMainlandAccount.Content = new TextBlock
         {
             Text = LoginText.Get(localMode ? "UseOtherAccount" : "BackToSavedAccounts"),
             TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center
         };
-        login.Visibility = editingLabel ? Visibility.Collapsed : Visibility.Visible;
+        login.IsVisible = !(editingLabel);
         login.IsDefault = !editingLabel;
     }
 
@@ -317,7 +318,7 @@ internal sealed partial class LoginWindow
     {
         bool useLocal = localMode, save = !localMode && saveAccount.IsChecked == true;
         experimentalHello = ReadProtectionPreference();
-        string label = useLocal ? selectedAccount?.Label ?? "" : AccountLabels.FromPhone(phone.Text.Trim());
+        string label = useLocal ? selectedAccount?.Label ?? "" : AccountLabels.FromPhone((phone.Text ?? "").Trim());
         ProbeIdentityEnvelope? channel = null, identity = null;
         try
         {
@@ -351,7 +352,7 @@ internal sealed partial class LoginWindow
             else
             {
                 status.Text = Localization.LoginText.Get("VerifyingSmsCode");
-                channel = await api.LoginChannelAsync(phone.Text.Trim(), captcha.Text.Trim(), token);
+                channel = await api.LoginChannelAsync((phone.Text ?? "").Trim(), (captcha.Text ?? "").Trim(), token);
                 RequireCurrent(generation, token);
                 status.Text = Localization.LoginText.Get("ObtainingGameIdentity");
                 identity = await api.ExchangeGameIdentityAsync(channel, token);

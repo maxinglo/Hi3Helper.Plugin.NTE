@@ -16,7 +16,7 @@ internal sealed record AccountDisplayProfile(
     public override string ToString() => "Account display [personal data omitted]";
 }
 
-internal sealed class AccountDisplayStore(string directory, IAccountKeyProtector protector)
+internal sealed partial class AccountDisplayStore(string directory, IAccountKeyProtector protector)
 {
     private readonly string root = Path.GetFullPath(directory);
 
@@ -31,7 +31,7 @@ internal sealed class AccountDisplayStore(string directory, IAccountKeyProtector
         {
             if (new FileInfo(path).Length is < 1 or > 4096) throw new InvalidDataException("Display size bound.");
             plain = await protector.UnwrapAsync(Purpose(account.Id), File.ReadAllBytes(path), 0, token);
-            Document value = JsonSerializer.Deserialize<Document>(plain) ??
+            Document value = JsonSerializer.Deserialize(plain, DisplayJsonContext.Default.Document) ??
                              throw new InvalidDataException("Invalid display data.");
             if (value.Format != 1 || value.Account != account.Id || value.IdentityKey != account.IdentityKey)
                 throw new InvalidDataException("Display account mismatch.");
@@ -79,7 +79,8 @@ internal sealed class AccountDisplayStore(string directory, IAccountKeyProtector
             };
             Validate(merged);
             byte[] plain =
-                JsonSerializer.SerializeToUtf8Bytes(new Document(1, account.Id, account.IdentityKey, merged));
+                JsonSerializer.SerializeToUtf8Bytes(new Document(1, account.Id, account.IdentityKey, merged),
+                    DisplayJsonContext.Default.Document);
             byte[] wrapped;
             try
             {
@@ -126,7 +127,8 @@ internal sealed class AccountDisplayStore(string directory, IAccountKeyProtector
             || !Valid(value.InitialLabel, 32) || !Valid(value.MaskedPhone, 32)
             || (value.MaskedPhone != null &&
                 !System.Text.RegularExpressions.Regex.IsMatch(value.MaskedPhone, value.Provider == 7
-                    ? @"\A\+[1-9][0-9]{0,3} \*{3} [0-9]{4}\z" : @"\A1[0-9]{2}\*{4}[0-9]{4}\z")))
+                    ? @"\A\+[1-9][0-9]{0,3} \*{3} [0-9]{4}\z"
+                    : @"\A1[0-9]{2}\*{4}[0-9]{4}\z")))
             throw new InvalidDataException("Invalid account display contract.");
     }
 
@@ -160,4 +162,7 @@ internal sealed class AccountDisplayStore(string directory, IAccountKeyProtector
             if (File.Exists(temporary)) File.Delete(temporary);
         }
     }
+
+    [System.Text.Json.Serialization.JsonSerializable(typeof(Document))]
+    private partial class DisplayJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
 }

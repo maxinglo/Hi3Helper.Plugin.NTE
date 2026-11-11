@@ -18,8 +18,13 @@ internal static class NteLoginHostLaunch
     internal static string ResolveHostPath(string pluginDirectory)
     {
         string root = Path.Combine(Path.GetFullPath(pluginDirectory), "LoginHost");
-        foreach (string file in new[] { "Nte.LoginHost.exe", "Nte.LoginHost.dll", "Nte.LoginHost.runtimeconfig.json", "Assets/question-mascot.png" })
-            if (!File.Exists(Path.Combine(root, file))) throw new FileNotFoundException("The bundled NTE login component is incomplete.");
+        foreach (string file in new[]
+                 {
+                     "Nte.LoginHost.exe", "libSkiaSharp.dll", "libHarfBuzzSharp.dll", "Assets/question-mascot.png",
+                     "Assets/Brand/google-g.png", "Assets/Brand/facebook-primary.png"
+                 })
+            if (!File.Exists(Path.Combine(root, file)))
+                throw new FileNotFoundException("The bundled NTE login component is incomplete.");
         return Path.Combine(root, "Nte.LoginHost.exe");
     }
 
@@ -32,9 +37,13 @@ internal static class NteLoginHostLaunch
         char* buffer = stackalloc char[32768];
         uint length = GetModuleFileNameW(module, buffer, 32768);
         if (length is 0 or >= 32768) throw new Win32Exception(Marshal.GetLastWin32Error());
-        return Path.GetDirectoryName(new string(buffer, 0, (int)length)) ?? throw new InvalidDataException("Plugin directory unavailable.");
+        return Path.GetDirectoryName(new string(buffer, 0, (int)length)) ??
+               throw new InvalidDataException("Plugin directory unavailable.");
     }
 
-    [DllImport("kernel32", SetLastError = true)] private static extern bool GetModuleHandleExW(uint flags, nint address, out nint module);
-    [DllImport("kernel32", SetLastError = true)] private static extern unsafe uint GetModuleFileNameW(nint module, char* buffer, uint length);
+    [DllImport("kernel32", SetLastError = true)]
+    private static extern bool GetModuleHandleExW(uint flags, nint address, out nint module);
+
+    [DllImport("kernel32", SetLastError = true)]
+    private static extern unsafe uint GetModuleFileNameW(nint module, char* buffer, uint length);
 }

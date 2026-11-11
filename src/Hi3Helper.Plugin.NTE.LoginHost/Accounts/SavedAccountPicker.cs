@@ -1,6 +1,9 @@
-using System.Windows;
-using System.Windows.Automation;
-using System.Windows.Controls;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Styling;
+using Avalonia.Automation;
+using Avalonia.Controls.Templates;
 using Nte.LoginHost.Accounts;
 using Nte.LoginHost.Localization;
 
@@ -22,7 +25,7 @@ internal sealed class SavedAccountPicker : StackPanel
 
     private readonly TextBlock confirmationContext = new()
     {
-        FontSize = 13, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new(0, 0, 0, 12)
+        FontSize = 13, FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new(0, 0, 0, 12)
     };
 
     private readonly TextBlock context = new()
@@ -36,17 +39,42 @@ internal sealed class SavedAccountPicker : StackPanel
     internal bool IsManaging { get; private set; }
     internal bool HasAccounts => accounts.Count > 0;
     internal LocalAccount? Selected => (selector.SelectedItem as SavedAccountChoice)?.Account;
-    internal string Remark => remark.Text.Trim();
+    internal string Remark => (remark.Text ?? "").Trim();
     internal event Action? SelectionChanged, LayoutChanged;
     internal event Func<Task>? RenameRequested, RemoveRequested;
 
-    internal SavedAccountPicker(Func<string, Style> style, Func<LocalAccount, SavedAccountChoice> present)
+    internal SavedAccountPicker(Func<string, ControlTheme> style, Func<LocalAccount, SavedAccountChoice> present)
     {
         this.present = present;
-        selector.Style = style("SavedAccountListStyle");
+        selector.Theme = style("SavedAccountListStyle");
+        selector.ItemTemplate = new FuncDataTemplate<SavedAccountChoice>((choice, _) =>
+        {
+            if (choice == null) return new Panel(); // Containers clear their content while recycling.
+            StackPanel body = new();
+            AutomationProperties.SetName(body, choice.AccessibilityLabel);
+            ToolTip.SetTip(body, choice.AccessibilityLabel);
+            Grid row = new() { ColumnDefinitions = new("*,Auto") };
+            row.Children.Add(new TextBlock
+            {
+                Text = choice.Primary, FontSize = 14, FontWeight = FontWeight.SemiBold,
+                TextWrapping = TextWrapping.Wrap, Margin = new(0, 0, 10, 0)
+            });
+            TextBlock source = new()
+                { Text = choice.Source, FontSize = 10, Opacity = .7, VerticalAlignment = VerticalAlignment.Center };
+            Grid.SetColumn(source, 1);
+            row.Children.Add(source);
+            body.Children.Add(row);
+            body.Children.Add(new TextBlock
+            {
+                Text = choice.Secondary, FontSize = 12, Opacity = .78, Margin = new(0, 5, 0, 0),
+                TextWrapping = TextWrapping.Wrap, MinHeight = 16, MaxHeight = 40,
+                FlowDirection = FlowDirection.LeftToRight
+            });
+            return body;
+        });
         AutomationProperties.SetAutomationId(selector, "account-selector");
         AutomationProperties.SetName(selector, LoginText.Get("SavedAccounts"));
-        remark.Style = style("LoginTextBoxStyle");
+        remark.Theme = style("LoginTextBoxStyle");
         AutomationProperties.SetAutomationId(remark, "remark");
         AutomationProperties.SetName(remark, LoginText.Get("AccountLabel"));
         Grid header = new() { Margin = new(0, 0, 0, 8) };
@@ -90,8 +118,8 @@ internal sealed class SavedAccountPicker : StackPanel
         {
             if (Selected == null) return;
             confirmationContext.Text = present(Selected).AccessibilityLabel;
-            editor.Visibility = Visibility.Collapsed;
-            confirmation.Visibility = Visibility.Visible;
+            editor.IsVisible = false;
+            confirmation.IsVisible = true;
             LayoutChanged?.Invoke();
         };
         foreach (Button button in editor.Children.OfType<Grid>().SelectMany(grid => grid.Children.OfType<Button>()))
@@ -111,22 +139,22 @@ internal sealed class SavedAccountPicker : StackPanel
             else
                 button.Click += (_, _) =>
                 {
-                    confirmation.Visibility = Visibility.Collapsed;
-                    editor.Visibility = Visibility.Visible;
+                    confirmation.IsVisible = false;
+                    editor.IsVisible = true;
                     LayoutChanged?.Invoke();
                 };
-        remark.PreviewKeyDown += (_, args) =>
+        remark.KeyDown += (_, args) =>
         {
-            if (args.Key == System.Windows.Input.Key.Escape)
+            if (args.Key == Avalonia.Input.Key.Escape)
             {
                 EndManage();
                 args.Handled = true;
             }
-            else if (args.Key == System.Windows.Input.Key.Enter && editor.IsVisible)
+            else if (args.Key == Avalonia.Input.Key.Enter && editor.IsVisible)
             {
                 Button save = editor.Children.OfType<Grid>().SelectMany(row => row.Children.OfType<Button>())
                     .Single(button => AutomationProperties.GetAutomationId(button) == "save-remark");
-                save.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                save.RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
                 args.Handled = true;
             }
         };
@@ -140,7 +168,7 @@ internal sealed class SavedAccountPicker : StackPanel
                 {
                     Text = LoginText.Get(key), TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center
                 },
-                Style = style(styleName), MinHeight = 30, FontSize = 12, Padding = new(8, 6, 8, 6)
+                Theme = style(styleName), MinHeight = 30, FontSize = 12, Padding = new(8, 6, 8, 6)
             };
             AutomationProperties.SetAutomationId(result, id);
             AutomationProperties.SetName(result, LoginText.Get(key));
@@ -185,9 +213,9 @@ internal sealed class SavedAccountPicker : StackPanel
         heading.Text = LoginText.Get("ManageAccounts");
         context.Text = present(selected).AccessibilityLabel;
         remark.Text = selected.Label;
-        selector.Visibility = manage.Visibility = Visibility.Collapsed;
-        editor.Visibility = Visibility.Visible;
-        confirmation.Visibility = Visibility.Collapsed;
+        selector.IsVisible = manage.IsVisible = false;
+        editor.IsVisible = true;
+        confirmation.IsVisible = false;
         LayoutChanged?.Invoke();
         remark.Focus();
         remark.SelectAll();
@@ -197,8 +225,8 @@ internal sealed class SavedAccountPicker : StackPanel
     {
         IsManaging = false;
         heading.Text = LoginText.Get("SavedAccounts");
-        editor.Visibility = confirmation.Visibility = Visibility.Collapsed;
-        selector.Visibility = manage.Visibility = Visibility.Visible;
+        editor.IsVisible = confirmation.IsVisible = false;
+        selector.IsVisible = manage.IsVisible = true;
         LayoutChanged?.Invoke();
     }
 

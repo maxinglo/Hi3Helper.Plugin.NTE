@@ -41,7 +41,11 @@ internal sealed partial class LoginWindow
                 default: throw new InvalidDataException("Unknown preview action.");
             }
             WritePreviewState();
-            File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "preview-action-result.json"), JsonSerializer.Serialize(new { id, passed = true }));
+            File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "preview-action-result.json"), JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["id"] = id,
+            ["passed"] = true
+        }, NteJsonContext.Default.DictionaryStringObject));
         }
         finally { previewActionRunning = false; }
     }

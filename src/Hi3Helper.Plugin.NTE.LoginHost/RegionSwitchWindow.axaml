@@ -1,5 +1,5 @@
-<Window x:Class="Nte.LoginHost.RegionSwitchWindow" x:ClassModifier="internal"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+<Window x:Class="Nte.LoginHost.RegionSwitchWindow" x:ClassModifier="internal" x:DataType="vm:RegionSwitchViewModel" xmlns:vm="using:Nte.LoginHost.ViewModels"
+        xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="{Binding Title}" Width="660" MinWidth="520" Height="430" MinHeight="380"
         WindowStartupLocation="CenterScreen" FontFamily="Segoe UI" FontSize="14">
