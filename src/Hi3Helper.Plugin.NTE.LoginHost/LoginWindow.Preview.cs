@@ -32,6 +32,10 @@ internal sealed partial class LoginWindow
             lastPreviewAction = id;
             switch (command.GetProperty("action").GetString())
             {
+                // Simulate a deferred first presentation without moving or
+                // activating the fixture. Discovery must recover it unaided.
+                case "defer-presentation": HidePresented(); break;
+                case "defer-native-presentation": WindowNative.ShowWindow(handle, 0); break;
                 case "send-sms": await SendSmsFromUiAsync(); break;
                 case "accounts": await SwitchModeAsync(true); break;
                 case "sms": await SwitchModeAsync(false); break;

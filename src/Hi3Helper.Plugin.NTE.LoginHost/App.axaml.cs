@@ -122,7 +122,9 @@ public partial class App : Application
                 return;
             }
 
-            if (arguments.Length == 2 && arguments[0] is "--preview-pid" or "--preview-welcome-pid" &&
+            // Owned preview keeps the production taskbar/window styles while
+            // using the same isolated, non-authenticating fixture accounts.
+            if (arguments.Length == 2 && arguments[0] is "--preview-pid" or "--preview-owned-pid" or "--preview-welcome-pid" &&
                 int.TryParse(arguments[1], out int pid))
             {
                 await window!.PreviewAsync(pid, arguments[0] == "--preview-welcome-pid");
@@ -159,7 +161,7 @@ public partial class App : Application
         catch (Exception ex)
         {
             exitCode = 1;
-            if (arguments.Length == 2 && arguments[0] is "--preview-pid" or "--preview-welcome-pid")
+            if (arguments.Length == 2 && arguments[0] is "--preview-pid" or "--preview-owned-pid" or "--preview-welcome-pid")
                 System.IO.File.WriteAllText(
                     System.IO.Path.Combine(AppContext.BaseDirectory, "preview-startup-error.txt"), ex.ToString());
             string key = officialLaunch && ex is System.IO.FileNotFoundException

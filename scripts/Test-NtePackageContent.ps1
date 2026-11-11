@@ -68,6 +68,7 @@ function Find-PackageEntry([string] $RelativePath) {
 }
 foreach ($required in @('NTE.dll','LoginHost/Nte.LoginHost.exe','LoginHost/libSkiaSharp.dll',
     'LoginHost/libHarfBuzzSharp.dll','LoginHost/av_libglesv2.dll','LoginHost/Assets/question-mascot.png',
+    'LoginHost/Assets/question-mascot-night.png','LoginHost/Assets/question-mascot-sunset.png',
     'LoginHost/Assets/Brand/google-g.png','LoginHost/Assets/Brand/facebook-primary.png','LoginHost/ThirdParty/Collapse/LICENSE') +
     @('zh-CN','zh-TW','ja','ko','de','fr','ru','es' | ForEach-Object { "LoginHost/$_/Nte.LoginHost.resources.dll" })) {
     if (@(Find-PackageEntry $required).Count -ne 1) { throw "Release content is missing or duplicates a login component: $required" }

@@ -59,8 +59,10 @@ internal sealed partial class LoginWindow : Window
     private readonly ScrollViewer scroll;
 
     private readonly Image mascot;
+    private readonly Dictionary<string, Bitmap> mascotImages = new(StringComparer.Ordinal);
 
-    // Discovery and theme only. Geometry is driven by SDK and WinEvents.
+    // Discover windows and retry pending presentation; visible-window geometry
+    // continues to follow SDK notifications and WinEvents.
     private readonly DispatcherTimer tracker = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly nint handle;
     private readonly Viewbox view;
@@ -170,7 +172,7 @@ internal sealed partial class LoginWindow : Window
         {
             Width = 72, Height = 92, Stretch = Stretch.Uniform
         };
-        mascot.Source = new Bitmap(Path.Combine(AppContext.BaseDirectory, "Assets", "question-mascot.png"));
+        mascot.Source = GetMascot("day");
         RenderOptions.SetBitmapInterpolationMode(mascot, BitmapInterpolationMode.HighQuality);
         Button mascotButton = new()
         {
@@ -246,6 +248,14 @@ internal sealed partial class LoginWindow : Window
             ? (WindowNative.GetWindowLongPtr(handle, -20) | 0x40000) & ~0x88
             : (WindowNative.GetWindowLongPtr(handle, -20) | 0x80) & ~0x40008);
         Win32Properties.AddWndProcHookCallback(this, NativeMessage);
+        Opened += (_, _) =>
+        {
+            // Complete layout after the native surface has opened, even if the
+            // game stays still and sends no subsequent location-change event.
+            QueueBodyWidth();
+            QueueCardSize();
+            QueueLayout();
+        };
         ConfigureAccounts();
         view.SizeChanged += (_, _) => UpdateBackdropViewbox();
         scroll.SizeChanged += (_, _) => QueueBodyWidth();
@@ -719,7 +729,7 @@ internal sealed partial class LoginWindow : Window
         }
 
         nint target = WindowNative.FindGameWindow(game.Id);
-        if (target != gameWindow)
+        if (target != gameWindow || !IsVisible || !WindowNative.IsWindowVisible(handle))
         {
             gameWindow = target;
             QueueLayout();
@@ -761,7 +771,8 @@ internal sealed partial class LoginWindow : Window
         WindowNative.GetWindowThreadProcessId(foreground, out uint foregroundProcess);
         // A native Hello dialog runs in a system process. Keep its owner alive
         // and visible during that operation instead of hiding it on activation.
-        if (!preview && helloPrompts == 0 && foreground != target && foregroundProcess != Environment.ProcessId)
+        if (!preview && helloPrompts == 0 && foreground != target &&
+            foregroundProcess != (uint)game.Id && foregroundProcess != Environment.ProcessId)
         {
             HidePresented();
             return;
@@ -803,15 +814,15 @@ internal sealed partial class LoginWindow : Window
                 throw new System.ComponentModel.Win32Exception();
         }
 
-        WindowNative.Rect previous = WindowNative.ScreenClient(handle);
-        if (!IsVisible) Show();
-        if (previous.Left != clientRect.Left || previous.Top != clientRect.Top || previous.Width != clientRect.Width ||
-            previous.Height != clientRect.Height)
+        bool opening = !IsVisible;
+        if (opening)
         {
-            if (!WindowNative.SetWindowPos(handle, 0, clientRect.Left, clientRect.Top, clientRect.Width,
-                    clientRect.Height, 0x214))
-                throw new System.ComponentModel.Win32Exception();
-            placementChanges++;
+            // Give Avalonia the actual client size before its first layout.
+            // Updating only the HWND after Show can leave the first frame with
+            // the hidden window's default size until the owner moves.
+            Position = new PixelPoint(clientRect.Left, clientRect.Top);
+            double initialScale = Math.Max(1, WindowNative.GetDpiForWindow(handle) / 96d);
+            ClientSize = new Size(clientRect.Width / initialScale, clientRect.Height / initialScale);
         }
 
         double scale = Math.Max(1, WindowNative.GetDpiForWindow(handle) / 96d);
@@ -831,6 +842,24 @@ internal sealed partial class LoginWindow : Window
         width = Math.Min(width, height * SceneWidth / scene.Height);
         view.Width = width;
         view.Height = width * scene.Height / SceneWidth;
+        if (opening)
+        {
+            Show();
+            UpdateLayout();
+        }
+
+        // Show may apply the platform's initial sizing. Compare after it, and
+        // also recover a native surface hidden independently of IsVisible.
+        WindowNative.Rect previous = WindowNative.ScreenClient(handle);
+        bool nativeHidden = !WindowNative.IsWindowVisible(handle);
+        if (nativeHidden || previous.Left != clientRect.Left || previous.Top != clientRect.Top ||
+            previous.Width != clientRect.Width || previous.Height != clientRect.Height)
+        {
+            if (!WindowNative.SetWindowPos(handle, 0, clientRect.Left, clientRect.Top, clientRect.Width,
+                    clientRect.Height, 0x214u | (nativeHidden ? 0x40u : 0u)))
+                throw new System.ComponentModel.Win32Exception();
+            placementChanges++;
+        }
         UpdateBackdropViewbox();
         if (!gameCursor.HasCursor) gameCursor.TryObserve(target, handle);
         gameCursor.Apply();
@@ -839,9 +868,21 @@ internal sealed partial class LoginWindow : Window
 
     private void ApplyClockTheme() => ApplyTheme(LoginTheme.ForLocalTime(DateTime.Now));
 
+    private Bitmap GetMascot(string theme)
+    {
+        string asset = LoginTheme.MascotAsset(theme);
+        if (!mascotImages.TryGetValue(asset, out Bitmap? image))
+        {
+            image = new Bitmap(Path.Combine(AppContext.BaseDirectory, "Assets", asset));
+            mascotImages.Add(asset, image);
+        }
+        return image;
+    }
+
     private void ApplyTheme(string theme)
     {
         if (theme == currentTheme) return;
+        mascot.Source = GetMascot(theme);
         currentTheme = theme;
         bool dark = theme == "night", warm = theme == "sunset";
         Resources["TextBrush"] = new SolidColorBrush(dark ? Color.FromRgb(232, 241, 247) : Color.FromRgb(31, 45, 53));
@@ -869,6 +910,8 @@ internal sealed partial class LoginWindow : Window
             ["theme"] = currentTheme,
             ["themeSource"] = "system-local-time",
             ["themeDerivedFromPixels"] = false,
+            ["visible"] = IsVisible && WindowNative.IsWindowVisible(handle),
+            ["mascotAsset"] = LoginTheme.MascotAsset(currentTheme),
             ["gamePid"] = game?.Id,
             ["hostPid"] = Environment.ProcessId,
             ["width"] = bounds.Width,
@@ -1077,6 +1120,9 @@ internal sealed partial class LoginWindow : Window
         WindowNative.SetWindowLongPtr(handle, -8, 0);
         game?.Dispose();
         Close();
+        mascot.Source = null;
+        foreach (Bitmap image in mascotImages.Values) image.Dispose();
+        mascotImages.Clear();
         GC.KeepAlive(windowEvents);
     }
 
