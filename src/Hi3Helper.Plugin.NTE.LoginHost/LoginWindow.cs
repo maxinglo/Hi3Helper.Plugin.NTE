@@ -807,14 +807,6 @@ internal sealed partial class LoginWindow : Window
             ScheduleBackdropRefresh();
         }
 
-        if (WindowNative.GetWindow(handle, 4) != target)
-        {
-            System.Runtime.InteropServices.Marshal.SetLastPInvokeError(0);
-            WindowNative.SetWindowLongPtr(handle, -8, target);
-            if (System.Runtime.InteropServices.Marshal.GetLastPInvokeError() != 0)
-                throw new System.ComponentModel.Win32Exception();
-        }
-
         bool opening = !IsVisible;
         if (opening)
         {
@@ -849,6 +841,16 @@ internal sealed partial class LoginWindow : Window
             UpdateLayout();
         }
 
+        // Avalonia Show resets the native owner to its own hidden helper.
+        // Restore the external owner afterwards, before repairing the Z order.
+        if (WindowNative.GetWindow(handle, 4) != target)
+        {
+            System.Runtime.InteropServices.Marshal.SetLastPInvokeError(0);
+            WindowNative.SetWindowLongPtr(handle, -8, target);
+            if (System.Runtime.InteropServices.Marshal.GetLastPInvokeError() != 0)
+                throw new System.ComponentModel.Win32Exception();
+        }
+
         // Show may apply the platform's initial sizing. Compare after it, and
         // also recover a native surface hidden independently of IsVisible.
         WindowNative.Rect previous = WindowNative.ScreenClient(handle);
@@ -859,10 +861,11 @@ internal sealed partial class LoginWindow : Window
         {
             // The game can be above a visible cover after activation/Show.
             // Repair that order explicitly without activating either window.
-            // HWND_TOP stays in the ordinary window band; foreground checks
-            // above prevent this from covering another app in the foreground.
+            // Insert immediately before the owner, rather than requesting the
+            // global HWND_TOP position (which needs foreground permission).
             uint flags = 0x210u | (coveredByGame ? 0u : 0x4u) | (nativeHidden ? 0x40u : 0u);
-            if (!WindowNative.SetWindowPos(handle, 0, clientRect.Left, clientRect.Top, clientRect.Width,
+            nint insertAfter = coveredByGame ? WindowNative.GetWindow(target, 3) : 0;
+            if (!WindowNative.SetWindowPos(handle, insertAfter, clientRect.Left, clientRect.Top, clientRect.Width,
                     clientRect.Height, flags))
                 throw new System.ComponentModel.Win32Exception();
             placementChanges++;
