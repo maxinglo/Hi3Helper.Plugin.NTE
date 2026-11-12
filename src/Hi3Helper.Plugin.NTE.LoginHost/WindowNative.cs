@@ -48,6 +48,20 @@ internal static class WindowNative
         return best;
     }
 
+    internal static bool IsWindowAbove(nint window, nint reference)
+    {
+        if (window == 0 || reference == 0 || window == reference) return false;
+        bool above = false;
+        // EnumWindows follows the top-level Z order. A visible HWND and an
+        // assigned owner alone do not prove that the game cannot cover it.
+        EnumWindows((candidate, _) =>
+        {
+            if (candidate == window) { above = true; return false; }
+            return candidate != reference;
+        }, 0);
+        return above;
+    }
+
     internal static Rect ScreenClient(nint window)
     {
         if (!GetClientRect(window, out Rect rect)) return default;

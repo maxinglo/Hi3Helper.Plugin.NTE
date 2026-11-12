@@ -36,6 +36,10 @@ internal sealed partial class LoginWindow
                 // activating the fixture. Discovery must recover it unaided.
                 case "defer-presentation": HidePresented(); break;
                 case "defer-native-presentation": WindowNative.ShowWindow(handle, 0); break;
+                case "defer-z-order":
+                    if (!WindowNative.SetWindowPos(handle, 1, 0, 0, 0, 0, 0x213))
+                        throw new System.ComponentModel.Win32Exception();
+                    break;
                 case "send-sms": await SendSmsFromUiAsync(); break;
                 case "accounts": await SwitchModeAsync(true); break;
                 case "sms": await SwitchModeAsync(false); break;

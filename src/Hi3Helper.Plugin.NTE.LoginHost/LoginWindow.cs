@@ -70,7 +70,7 @@ internal sealed partial class LoginWindow : Window
     private readonly List<nint> eventHooks = [];
     private bool layoutQueued;
     private int sdkGeometryNotifications, windowGeometryNotifications;
-    private int placementChanges;
+    private int placementChanges, stackingChanges;
     private Process? game;
     private nint gameWindow;
     private bool requested, preview, busy, stopping, helpOpen;
@@ -729,7 +729,8 @@ internal sealed partial class LoginWindow : Window
         }
 
         nint target = WindowNative.FindGameWindow(game.Id);
-        if (target != gameWindow || !IsVisible || !WindowNative.IsWindowVisible(handle))
+        if (target != gameWindow || !IsVisible || !WindowNative.IsWindowVisible(handle) ||
+            (helloPrompts == 0 && !WindowNative.IsWindowAbove(handle, target)))
         {
             gameWindow = target;
             QueueLayout();
@@ -852,13 +853,20 @@ internal sealed partial class LoginWindow : Window
         // also recover a native surface hidden independently of IsVisible.
         WindowNative.Rect previous = WindowNative.ScreenClient(handle);
         bool nativeHidden = !WindowNative.IsWindowVisible(handle);
-        if (nativeHidden || previous.Left != clientRect.Left || previous.Top != clientRect.Top ||
+        bool coveredByGame = helloPrompts == 0 && !WindowNative.IsWindowAbove(handle, target);
+        if (nativeHidden || coveredByGame || previous.Left != clientRect.Left || previous.Top != clientRect.Top ||
             previous.Width != clientRect.Width || previous.Height != clientRect.Height)
         {
+            // The game can be above a visible cover after activation/Show.
+            // Repair that order explicitly without activating either window.
+            // HWND_TOP stays in the ordinary window band; foreground checks
+            // above prevent this from covering another app in the foreground.
+            uint flags = 0x210u | (coveredByGame ? 0u : 0x4u) | (nativeHidden ? 0x40u : 0u);
             if (!WindowNative.SetWindowPos(handle, 0, clientRect.Left, clientRect.Top, clientRect.Width,
-                    clientRect.Height, 0x214u | (nativeHidden ? 0x40u : 0u)))
+                    clientRect.Height, flags))
                 throw new System.ComponentModel.Win32Exception();
             placementChanges++;
+            if (coveredByGame) stackingChanges++;
         }
         UpdateBackdropViewbox();
         if (!gameCursor.HasCursor) gameCursor.TryObserve(target, handle);
@@ -956,6 +964,8 @@ internal sealed partial class LoginWindow : Window
             ["nativeChild"] = false,
             ["ownerWindow"] = (long)WindowNative.GetWindow(handle, 4),
             ["gameWindow"] = (long)gameWindow,
+            ["aboveGame"] = WindowNative.IsWindowAbove(handle, gameWindow),
+            ["stackingChanges"] = stackingChanges,
             ["fullClientCover"] = true,
             ["geometryPolling"] = false,
             ["placementChanges"] = placementChanges,
