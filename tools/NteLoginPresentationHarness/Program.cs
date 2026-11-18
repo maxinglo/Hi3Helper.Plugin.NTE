@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Runtime.InteropServices;
 using Nte.LoginHost;
 
 // A stationary, non-authenticating owner plus an independent native Z-order
@@ -9,6 +10,24 @@ internal static class Program
     private static int Main(string[] arguments)
     {
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
+        if (arguments is ["inspect-cursor"])
+        {
+            Console.WriteLine(JsonSerializer.Serialize(CursorFixture.Inspect()));
+            return 0;
+        }
+        if (arguments.Length == 3 && arguments[0] == "notify-login")
+        {
+            using JsonDocument descriptor = JsonDocument.Parse(File.ReadAllBytes(arguments[1]));
+            JsonElement sdk = descriptor.RootElement;
+            int expectedPid = int.Parse(arguments[2]);
+            nint window = (nint)sdk.GetProperty("window").GetInt64();
+            uint message = sdk.GetProperty("message").GetUInt32();
+            WindowNative.GetWindowThreadProcessId(window, out uint pid);
+            if (pid != expectedPid || sdk.GetProperty("hostPid").GetInt32() != expectedPid ||
+                message is < 0xc000 or > 0xffff || !PostMessageW(window, message, 1, 0))
+                throw new InvalidOperationException("Cannot notify the isolated login fixture.");
+            return 0;
+        }
         if (arguments.Length >= 2 && arguments[0] == "inspect-stack")
         {
             int[] processes = arguments.Skip(1).Select(int.Parse).ToArray();
@@ -22,7 +41,7 @@ internal static class Program
                     windows.Add(new { pid, window = (long)window, order = index });
                 return true;
             }, 0);
-            Console.WriteLine(JsonSerializer.Serialize(new { windows }));
+            Console.WriteLine(JsonSerializer.Serialize(new { foreground = (long)WindowNative.GetForegroundWindow(), windows }));
             return 0;
         }
         if (arguments.Length == 2 && arguments[0] == "inspect")
@@ -52,7 +71,8 @@ internal static class Program
             }));
             return 0;
         }
-        if (arguments.Length is 2 or 3 && arguments[0] == "window")
+        bool cursorFixture = arguments.Length == 4 && arguments[0] == "window-cursor";
+        if (cursorFixture || arguments.Length is 2 or 3 && arguments[0] == "window")
         {
             Directory.CreateDirectory(arguments[1]);
             Application.EnableVisualStyles();
@@ -62,6 +82,24 @@ internal static class Program
                 Location = new(40, 40), StartPosition = FormStartPosition.Manual,
                 BackColor = Color.FromArgb(36, 50, 72)
             };
+            using CursorFixture? customCursor = cursorFixture
+                ? new(int.Parse(arguments[2]), int.Parse(arguments[3]))
+                : null;
+            if (customCursor != null)
+            {
+                owner.Text = "NTE cursor sizing fixture";
+                owner.Cursor = customCursor.Cursor;
+                owner.TopMost = true;
+                if (WindowNative.GetCursorPos(out var position))
+                {
+                    Point pointer = new(position.X, position.Y);
+                    Rectangle workArea = Screen.FromPoint(pointer).WorkingArea;
+                    owner.Location = new Point(Math.Max(workArea.Left, pointer.X - owner.ClientSize.Width / 2),
+                        Math.Max(workArea.Top, pointer.Y - owner.ClientSize.Height / 2));
+                }
+                owner.Activated += (_, _) => customCursor.ApplyWithin(owner.Handle);
+                owner.Shown += (_, _) => customCursor.ApplyWithin(owner.Handle);
+            }
             if (arguments.Length == 3 && File.Exists(arguments[2]))
             {
                 owner.BackgroundImage = Image.FromFile(arguments[2]);
@@ -73,6 +111,10 @@ internal static class Program
             owner.BackgroundImage?.Dispose();
             return 0;
         }
-        throw new ArgumentException("window <directory> [background], inspect <pid>, or inspect-stack <pids>");
+        throw new ArgumentException(
+            "window <directory> [background], window-cursor <directory> <width> <height>, inspect <pid>, inspect-stack <pids>, inspect-cursor, or notify-login <descriptor> <pid>");
     }
+
+    [DllImport("user32")]
+    private static extern bool PostMessageW(nint window, uint message, nint wParam, nint lParam);
 }

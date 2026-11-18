@@ -38,7 +38,7 @@ internal sealed partial class LoginWindow
         subtitle.IsVisible = modeRail.IsVisible = status.IsVisible = login.IsVisible = false;
         UpdateCardSize();
         QueueBodyWidth();
-        Track();
+        Track(raise: true);
         try
         {
             return await content.RunAsync(token);

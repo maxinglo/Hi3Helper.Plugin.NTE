@@ -127,7 +127,8 @@ public partial class App : Application
             if (arguments.Length == 2 && arguments[0] is "--preview-pid" or "--preview-owned-pid" or "--preview-welcome-pid" &&
                 int.TryParse(arguments[1], out int pid))
             {
-                await window!.PreviewAsync(pid, arguments[0] == "--preview-welcome-pid");
+                await window!.PreviewAsync(pid, arguments[0] == "--preview-welcome-pid",
+                    arguments[0] == "--preview-owned-pid");
                 return;
             }
 

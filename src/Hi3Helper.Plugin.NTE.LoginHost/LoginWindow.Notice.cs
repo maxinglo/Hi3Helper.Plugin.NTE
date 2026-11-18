@@ -33,7 +33,7 @@ internal sealed partial class LoginWindow
         automaticResumeInProgress = false;
         noticeGlobal = global;
         ShowLoginNotice();
-        Track();
+        Track(raise: true);
         using CancellationTokenRegistration registration = token.Register(() => Dispatcher.UIThread.Post(CancelForGameExit));
         try { return await answer; }
         finally

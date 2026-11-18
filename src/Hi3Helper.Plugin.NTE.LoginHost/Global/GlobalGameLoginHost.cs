@@ -49,6 +49,7 @@ internal sealed class OverseasGameLoginHost(NteHostLaunchOptions options, LoginW
         context = new(root, true, useOwnExecutable: true, hostExecutable: Environment.ProcessPath!,
             launcherDirectoryName: region.LauncherDirectory, applicationId: region.AppId);
         context.GameWindowChanged += window.NotifySdkGeometryChanged;
+        context.LoginRequested += window.NotifySdkLoginRequested;
         // The global SDK uses 101 for logout and 102 for account switching.
         // Both notifications already clear its local identity before posting.
         context.LogoutRequested += () => Avalonia.Threading.Dispatcher.UIThread.Post(() =>

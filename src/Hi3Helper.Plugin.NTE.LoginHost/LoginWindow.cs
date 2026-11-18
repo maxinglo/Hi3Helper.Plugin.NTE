@@ -65,14 +65,15 @@ internal sealed partial class LoginWindow : Window
     // continues to follow SDK notifications and WinEvents.
     private readonly DispatcherTimer tracker = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly nint handle;
+    private readonly Win32Properties.CustomWindowStylesCallback windowStyles;
     private readonly Viewbox view;
     private readonly WindowNative.WinEventProcedure windowEvents;
     private readonly List<nint> eventHooks = [];
-    private bool layoutQueued;
-    private int sdkGeometryNotifications, windowGeometryNotifications;
+    private bool layoutQueued, raiseQueued, raisedForGame;
+    private int sdkGeometryNotifications, windowGeometryNotifications, sdkLoginNotifications;
     private int placementChanges, stackingChanges;
     private Process? game;
-    private nint gameWindow;
+    private nint gameWindow, avaloniaOwner;
     private bool requested, preview, busy, stopping, helpOpen;
     private bool syntheticLayoutOnly;
     private string currentTheme = "";
@@ -242,11 +243,10 @@ internal sealed partial class LoginWindow : Window
         };
         handle = TryGetPlatformHandle()?.Handle ??
                  throw new InvalidOperationException("Native login window unavailable.");
-        WindowNative.SetWindowLongPtr(handle, -16,
-            (WindowNative.GetWindowLongPtr(handle, -16) | unchecked((nint)0x80000000)) & ~0x40000000);
-        WindowNative.SetWindowLongPtr(handle, -20, exposePreview
-            ? (WindowNative.GetWindowLongPtr(handle, -20) | 0x40000) & ~0x88
-            : (WindowNative.GetWindowLongPtr(handle, -20) | 0x80) & ~0x40008);
+        // Avalonia reapplies its styles on Show, including after an Alt+Tab.
+        windowStyles = (style, extended) => ((style | 0x80000000u) & ~0x40000000u,
+            exposePreview ? (extended | 0x40000u) & ~0x80u : (extended | 0x80u) & ~0x40000u);
+        Win32Properties.AddWindowStylesCallback(this, windowStyles);
         Win32Properties.AddWndProcHookCallback(this, NativeMessage);
         Opened += (_, _) =>
         {
@@ -508,7 +508,7 @@ internal sealed partial class LoginWindow : Window
 
         ShowForm();
         Nte.Login.NteHostStartupDiagnostics.Phase("presenting-login-panel");
-        Track();
+        Track(raise: true);
         try
         {
             Nte.Login.NteHostStartupDiagnostics.Phase("login-panel-initializing");
@@ -525,7 +525,7 @@ internal sealed partial class LoginWindow : Window
         {
             automaticAttempt = automaticResumeInProgress = false;
             if (requested) welcome?.Dismiss();
-            Track();
+            Track(raise: resumeLast);
         }
 
         return await completion.Task;
@@ -559,16 +559,20 @@ internal sealed partial class LoginWindow : Window
         tracker.Start();
     }
 
-    internal async Task PreviewAsync(int pid, bool welcomeOnly = false)
+    internal async Task PreviewAsync(int pid, bool welcomeOnly, bool waitForSdkRequest)
     {
         Attach(pid);
-        preview = requested = initialized = true;
+        preview = initialized = true;
+        Task gameExit = game!.WaitForExitAsync();
+        using ProbeWindow? bridge = waitForSdkRequest ? new() : null;
+        if (bridge != null && !await WaitForPreviewLoginAsync(bridge, gameExit)) return;
+        requested = true;
         SetMainlandPreviewAccounts(3);
         ResetBackdrop();
         status.Text = "";
         SetAccountControlsEnabled(true);
         ShowForm();
-        Track();
+        Track(raise: true);
         if (welcomeOnly)
         {
             requested = false;
@@ -576,7 +580,7 @@ internal sealed partial class LoginWindow : Window
             ShowWelcome(Localization.LoginText.Get("PreviewMainAccount"));
         }
 
-        await game!.WaitForExitAsync();
+        await gameExit;
     }
 
     private Task ExecuteAsync(Func<ProbeAuthenticationClient, CancellationToken, int, Task> action,
@@ -686,28 +690,38 @@ internal sealed partial class LoginWindow : Window
         QueueLayout();
     }
 
-    private void QueueLayout()
+    internal void NotifySdkLoginRequested()
+    {
+        Interlocked.Increment(ref sdkLoginNotifications);
+        QueueLayout(raise: true);
+    }
+
+    private void QueueLayout(bool raise = false)
     {
         if (!Dispatcher.UIThread.CheckAccess())
         {
-            Dispatcher.UIThread.Post(QueueLayout, DispatcherPriority.Send);
+            Dispatcher.UIThread.Post(() => QueueLayout(raise), DispatcherPriority.Send);
             return;
         }
 
-        if (stopping || layoutQueued) return;
+        if (stopping) return;
+        raiseQueued |= raise;
+        if (layoutQueued) return;
         layoutQueued = true;
         Dispatcher.UIThread.Post(() =>
         {
             layoutQueued = false;
-            Track();
+            bool raiseNow = raiseQueued;
+            raiseQueued = false;
+            Track(raiseNow);
         }, DispatcherPriority.Send);
     }
 
     private nint NativeMessage(nint window, uint message, nint wParam, nint lParam, ref bool handled)
     {
         if (message is 0x2E0 or 0x7E) QueueLayout();
-        if (message == 0x20 && IsVisible && requested &&
-            gameCursor.RequestSynchronize(gameWindow, handle, gameCursor.Apply))
+        if (message == 0x20 && ((int)lParam & 0xffff) == 1 && IsVisible && requested &&
+            gameCursor.Synchronize(gameWindow, handle))
         {
             handled = true;
             return 1;
@@ -730,9 +744,9 @@ internal sealed partial class LoginWindow : Window
 
         nint target = WindowNative.FindGameWindow(game.Id);
         if (target != gameWindow || !IsVisible || !WindowNative.IsWindowVisible(handle) ||
-            (helloPrompts == 0 && !WindowNative.IsWindowAbove(handle, target)))
+            (helloPrompts == 0 && (!HasGameForeground(game.Id) ||
+                                   !WindowNative.IsTopmost(handle) || !WindowNative.IsWindowAbove(handle, target))))
         {
-            gameWindow = target;
             QueueLayout();
         }
 
@@ -740,7 +754,14 @@ internal sealed partial class LoginWindow : Window
         if (preview) WritePreviewState();
     }
 
-    private void Track()
+    private bool HasGameForeground(int gamePid)
+    {
+        if (preview && !previewFollowForeground) return true;
+        WindowNative.GetWindowThreadProcessId(WindowNative.GetForegroundWindow(), out uint foregroundPid);
+        return foregroundPid == gamePid || foregroundPid == Environment.ProcessId;
+    }
+
+    private void Track(bool raise = false)
     {
         if (syntheticLayoutOnly) return;
         if (failureCompletion != null) return;
@@ -767,13 +788,11 @@ internal sealed partial class LoginWindow : Window
             return;
         }
 
+        if (gameWindow != target) gameCursor.Reset();
         gameWindow = target;
-        nint foreground = WindowNative.GetForegroundWindow();
-        WindowNative.GetWindowThreadProcessId(foreground, out uint foregroundProcess);
         // A native Hello dialog runs in a system process. Keep its owner alive
         // and visible during that operation instead of hiding it on activation.
-        if (!preview && helloPrompts == 0 && foreground != target &&
-            foregroundProcess != (uint)game.Id && foregroundProcess != Environment.ProcessId)
+        if (helloPrompts == 0 && !HasGameForeground(game.Id))
         {
             HidePresented();
             return;
@@ -807,6 +826,7 @@ internal sealed partial class LoginWindow : Window
             ScheduleBackdropRefresh();
         }
 
+        gameCursor.ObserveGame(target);
         bool opening = !IsVisible;
         if (opening)
         {
@@ -838,42 +858,46 @@ internal sealed partial class LoginWindow : Window
         if (opening)
         {
             Show();
+            avaloniaOwner = WindowNative.GetWindow(handle, 4);
             UpdateLayout();
+        }
+
+        if (helloPrompts == 0 && !HasGameForeground(game.Id))
+        {
+            HidePresented();
+            return;
         }
 
         // Avalonia Show resets the native owner to its own hidden helper.
         // Restore the external owner afterwards, before repairing the Z order.
-        if (WindowNative.GetWindow(handle, 4) != target)
-        {
-            System.Runtime.InteropServices.Marshal.SetLastPInvokeError(0);
-            WindowNative.SetWindowLongPtr(handle, -8, target);
-            if (System.Runtime.InteropServices.Marshal.GetLastPInvokeError() != 0)
-                throw new System.ComponentModel.Win32Exception();
-        }
+        WindowNative.SetOwner(handle, target);
 
         // Show may apply the platform's initial sizing. Compare after it, and
         // also recover a native surface hidden independently of IsVisible.
         WindowNative.Rect previous = WindowNative.ScreenClient(handle);
         bool nativeHidden = !WindowNative.IsWindowVisible(handle);
-        bool coveredByGame = helloPrompts == 0 && !WindowNative.IsWindowAbove(handle, target);
-        if (nativeHidden || coveredByGame || previous.Left != clientRect.Left || previous.Top != clientRect.Top ||
+        bool raiseForGame = helloPrompts == 0 && (raise || opening || nativeHidden ||
+            !WindowNative.IsTopmost(handle) || !WindowNative.IsWindowAbove(handle, target));
+        if (nativeHidden || raiseForGame || previous.Left != clientRect.Left || previous.Top != clientRect.Top ||
             previous.Width != clientRect.Width || previous.Height != clientRect.Height)
         {
-            // The game can be above a visible cover after activation/Show.
-            // Repair that order explicitly without activating either window.
-            // Insert immediately before the owner, rather than requesting the
-            // global HWND_TOP position (which needs foreground permission).
-            uint flags = 0x210u | (coveredByGame ? 0u : 0x4u) | (nativeHidden ? 0x40u : 0u);
-            nint insertAfter = coveredByGame ? WindowNative.GetWindow(target, 3) : 0;
+            // Keep the owned panel above the game even when the game raises
+            // itself. The foreground guard bounds this promotion to the login
+            // session, and SWP_NOACTIVATE leaves the user's focus alone.
+            uint flags = 0x210u | (raiseForGame ? 0u : 0x4u) | (nativeHidden ? 0x40u : 0u);
+            nint insertAfter = raiseForGame ? -1 : 0;
             if (!WindowNative.SetWindowPos(handle, insertAfter, clientRect.Left, clientRect.Top, clientRect.Width,
                     clientRect.Height, flags))
                 throw new System.ComponentModel.Win32Exception();
             placementChanges++;
-            if (coveredByGame) stackingChanges++;
+            if (raiseForGame)
+            {
+                raisedForGame = true;
+                stackingChanges++;
+            }
         }
         UpdateBackdropViewbox();
-        if (!gameCursor.HasCursor) gameCursor.TryObserve(target, handle);
-        gameCursor.Apply();
+        if (opening || raiseForGame) gameCursor.Synchronize(target, handle);
         if (preview) WritePreviewState();
     }
 
@@ -922,6 +946,7 @@ internal sealed partial class LoginWindow : Window
             ["themeSource"] = "system-local-time",
             ["themeDerivedFromPixels"] = false,
             ["visible"] = IsVisible && WindowNative.IsWindowVisible(handle),
+            ["nativeTopmost"] = WindowNative.IsTopmost(handle),
             ["mascotAsset"] = LoginTheme.MascotAsset(currentTheme),
             ["gamePid"] = game?.Id,
             ["hostPid"] = Environment.ProcessId,
@@ -973,6 +998,7 @@ internal sealed partial class LoginWindow : Window
             ["geometryPolling"] = false,
             ["placementChanges"] = placementChanges,
             ["sdkGeometryNotifications"] = sdkGeometryNotifications,
+            ["sdkLoginNotifications"] = sdkLoginNotifications,
             ["windowGeometryNotifications"] = windowGeometryNotifications,
             ["accountRequests"] = 0,
             ["helloInvoked"] = false,
@@ -1009,6 +1035,20 @@ internal sealed partial class LoginWindow : Window
     {
         if (failureCompletion != null && !stopping) return;
         if (IsVisible) Hide();
+        gameCursor.Reset();
+        if (raisedForGame && helloPrompts == 0 && WindowNative.IsWindow(handle))
+        {
+            // Demoting an owned window may also demote its owner. Detach
+            // from a topmost game by restoring Avalonia's hidden owner first.
+            if (WindowNative.IsTopmost(WindowNative.GetWindow(handle, 4)))
+            {
+                if (avaloniaOwner == 0) return; // Taskbar preview has no helper owner.
+                WindowNative.SetOwner(handle, avaloniaOwner);
+            }
+            if (!WindowNative.SetWindowPos(handle, -2, 0, 0, 0, 0, 0x213))
+                throw new System.ComponentModel.Win32Exception();
+            raisedForGame = false;
+        }
     }
 
     private void ResetBackdrop()
@@ -1097,6 +1137,7 @@ internal sealed partial class LoginWindow : Window
     internal Task ShowFailureAsync(string text)
     {
         requested = false;
+        HidePresented();
         ResetBackdrop();
         form.Children.Clear();
         Add(form, new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, FontSize = 13 });
@@ -1129,8 +1170,8 @@ internal sealed partial class LoginWindow : Window
         foreach (nint hook in eventHooks) WindowNative.UnhookWinEvent(hook);
         eventHooks.Clear();
         Win32Properties.RemoveWndProcHookCallback(this, NativeMessage);
+        Win32Properties.RemoveWindowStylesCallback(this, windowStyles);
         gameCursor.Dispose();
-        WindowNative.SetWindowLongPtr(handle, -8, 0);
         game?.Dispose();
         Close();
         mascot.Source = null;

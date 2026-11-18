@@ -42,6 +42,7 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
         if (!created) throw new NteCnLaunchException("CnLoginHostRunning");
         context = new(root, true, useOwnExecutable: true, hostExecutable: Environment.ProcessPath!);
         context.GameWindowChanged += window.NotifySdkGeometryChanged;
+        context.LoginRequested += window.NotifySdkLoginRequested;
         context.LogoutRequested += () => ui.Post(_ => window.OnSdkLogout(), null);
         string pipeName = "Collapse.NTE.Login." + Guid.NewGuid().ToString("N");
         using NamedPipeServerStream pipe = new(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Message, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);

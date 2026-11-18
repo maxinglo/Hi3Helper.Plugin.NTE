@@ -22,6 +22,9 @@ internal sealed class ProbeWindow : IDisposable
     internal Task WaitForLoginRequestAsync(CancellationToken token) => loginRequested.Task.WaitAsync(token);
     internal Task WaitForNextLoginRequestAsync(CancellationToken token) => requests.WaitAsync(token);
     internal void CompleteLoginRequest() => requests.Complete();
+    // Repeated requests may need to reveal the existing form while its
+    // authentication callback is still pending.
+    internal event Action? LoginRequested;
     // Command 14 is a geometry hint from the installed bridge's window
     // procedure. Its payload is deliberately not interpreted as an HWND.
     internal event Action? GameWindowChanged;
@@ -99,7 +102,11 @@ internal sealed class ProbeWindow : IDisposable
                 // then sends command 1. Registration alone is too early.
                 if (loginCommand == 100 && wParam is 101 or 102) LogoutRequested?.Invoke();
                 if (wParam == loginCommand || loginCommand == 100 && wParam == 102)
-                { loginRequested.TrySetResult(); requests.Notify(); }
+                {
+                    loginRequested.TrySetResult();
+                    requests.Notify();
+                    LoginRequested?.Invoke();
+                }
                 if (wParam == 14) GameWindowChanged?.Invoke();
                 if (loginCommand == 1 && wParam == 4) LogoutRequested?.Invoke();
             }

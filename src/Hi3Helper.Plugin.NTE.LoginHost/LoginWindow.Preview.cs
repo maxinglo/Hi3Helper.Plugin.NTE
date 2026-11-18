@@ -5,6 +5,23 @@ namespace Nte.LoginHost;
 
 internal sealed partial class LoginWindow
 {
+    private async Task<bool> WaitForPreviewLoginAsync(ProbeWindow bridge, Task gameExit)
+    {
+        bridge.LoginRequested += NotifySdkLoginRequested;
+        using CancellationTokenSource waiting = new();
+        Task login = bridge.WaitForNextLoginRequestAsync(waiting.Token);
+        File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "preview-sdk.json"),
+            JsonSerializer.Serialize(new Dictionary<string, object?>
+            {
+                ["hostPid"] = Environment.ProcessId,
+                ["window"] = (long)bridge.Handle,
+                ["message"] = (long)bridge.Notification
+            }, NteJsonContext.Default.DictionaryStringObject));
+        if (await Task.WhenAny(login, gameExit) == login) return true;
+        waiting.Cancel();
+        return false;
+    }
+
     internal void PreviewFirstUseNotice()
     {
         if (!preview) throw new InvalidOperationException("Synthetic preview required.");
@@ -13,7 +30,7 @@ internal sealed partial class LoginWindow
         ShowLoginNotice();
     }
     private string? lastPreviewAction;
-    private bool previewActionRunning;
+    private bool previewActionRunning, previewFollowForeground;
 
     // Isolated, non-authenticating fixture commands. This path is never used
     // by a real login session and only touches the in-memory preview accounts.
@@ -23,11 +40,13 @@ internal sealed partial class LoginWindow
         string commandPath = Path.Combine(AppContext.BaseDirectory, "preview-command.json");
         if (!File.Exists(commandPath) || new FileInfo(commandPath).Length > 2048) return;
         previewActionRunning = true;
+        string? id = null;
+        Exception? failure = null;
         try
         {
             using JsonDocument document = JsonDocument.Parse(File.ReadAllBytes(commandPath));
             JsonElement command = document.RootElement;
-            string id = command.GetProperty("id").GetString()!;
+            id = command.GetProperty("id").GetString()!;
             if (id == lastPreviewAction) return;
             lastPreviewAction = id;
             switch (command.GetProperty("action").GetString())
@@ -36,6 +55,7 @@ internal sealed partial class LoginWindow
                 // activating the fixture. Discovery must recover it unaided.
                 case "defer-presentation": HidePresented(); break;
                 case "defer-native-presentation": WindowNative.ShowWindow(handle, 0); break;
+                case "follow-foreground": previewFollowForeground = true; Track(); break;
                 case "defer-z-order":
                     if (!WindowNative.SetWindowPos(handle, 1, 0, 0, 0, 0, 0x213))
                         throw new System.ComponentModel.Win32Exception();
@@ -49,12 +69,14 @@ internal sealed partial class LoginWindow
                 default: throw new InvalidDataException("Unknown preview action.");
             }
             WritePreviewState();
-            File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "preview-action-result.json"), JsonSerializer.Serialize(new Dictionary<string, object?>
+        }
+        catch (Exception error) { failure = error; }
+        finally { previewActionRunning = false; }
+        File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "preview-action-result.json"), JsonSerializer.Serialize(new Dictionary<string, object?>
         {
             ["id"] = id,
-            ["passed"] = true
+            ["passed"] = failure == null,
+            ["error"] = failure?.ToString()
         }, NteJsonContext.Default.DictionaryStringObject));
-        }
-        finally { previewActionRunning = false; }
     }
 }

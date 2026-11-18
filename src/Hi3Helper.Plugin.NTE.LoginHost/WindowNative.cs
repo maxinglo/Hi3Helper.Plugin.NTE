@@ -26,6 +26,7 @@ internal static class WindowNative
     [DllImport("user32")] internal static extern bool ClientToScreen(nint window, ref Point point);
     [DllImport("user32")] internal static extern nint GetForegroundWindow();
     [DllImport("user32")] internal static extern bool GetCursorPos(out Point point);
+    [DllImport("user32")] internal static extern nint WindowFromPoint(Point point);
     [DllImport("user32")] internal static extern uint GetDpiForWindow(nint window);
     [DllImport("user32", EntryPoint = "SetWindowLongPtrW", SetLastError = true)] internal static extern nint SetWindowLongPtr(nint window, int index, nint value);
     [DllImport("user32", EntryPoint = "GetWindowLongPtrW")] internal static extern nint GetWindowLongPtr(nint window, int index);
@@ -33,6 +34,16 @@ internal static class WindowNative
     [DllImport("user32", SetLastError = true)] internal static extern bool SetWindowPos(nint window, nint after, int x, int y, int width, int height, uint flags);
     [DllImport("user32")] internal static extern nint GetDC(nint window);
     [DllImport("user32")] internal static extern int ReleaseDC(nint window, nint dc);
+
+    internal static bool IsTopmost(nint window) => (GetWindowLongPtr(window, -20) & 8) != 0;
+
+    internal static void SetOwner(nint window, nint owner)
+    {
+        if (GetWindow(window, 4) == owner) return;
+        nint previous = SetWindowLongPtr(window, -8, owner);
+        int error = Marshal.GetLastPInvokeError();
+        if (previous == 0 && error != 0) throw new System.ComponentModel.Win32Exception(error);
+    }
 
     internal static nint FindGameWindow(int processId)
     {

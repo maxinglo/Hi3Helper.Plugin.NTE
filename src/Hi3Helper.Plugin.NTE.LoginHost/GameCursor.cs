@@ -3,16 +3,14 @@ using Avalonia.Threading;
 
 namespace Nte.LoginHost;
 
-// Query the game asynchronously, then own a copy of its native cursor. This
-// preserves native cursor images without WPF or runtime COM interop.
+// Borrow the cursor Windows is displaying for the game. Its handle retains
+// the original size, hotspot, and system cursor behavior.
 internal sealed class GameCursor : IDisposable
 {
-    private nint cursor, source;
-    private bool observed, hidden;
+    private nint cursor;
     private readonly DispatcherTimer pending = new() { Interval = TimeSpan.FromMilliseconds(20) };
     private nint pendingGame, pendingCover;
-    private Action? changed;
-    internal bool HasCursor => observed;
+    internal bool HasCursor { get; private set; }
     internal int Synchronizations { get; private set; }
 
     internal GameCursor()
@@ -20,64 +18,65 @@ internal sealed class GameCursor : IDisposable
         pending.Tick += (_, _) =>
         {
             pending.Stop();
-            Action? update = changed;
-            changed = null;
-            if (TryObserve(pendingGame, pendingCover)) update?.Invoke();
+            if (WindowNative.IsWindow(pendingGame) && ObserveAt(pendingCover)) Apply();
         };
     }
 
-    internal bool RequestSynchronize(nint game, nint cover, Action update)
+    internal void ObserveGame(nint game)
     {
-        if (!CanObserve(game, cover)) return false;
-        Apply();
-        if (pending.IsEnabled) return true;
-        if (!PostMessageW(game, 0x20, game, 0x02000001)) return false;
-        pendingGame = game;
-        pendingCover = cover;
-        changed = update;
-        pending.Start();
-        return true;
+        ObserveAt(game);
     }
 
-    private static bool CanObserve(nint game, nint cover)
+    internal bool Synchronize(nint game, nint cover)
     {
-        nint foreground = WindowNative.GetForegroundWindow();
-        return game != 0 && WindowNative.IsWindow(game) && (foreground == game || foreground == cover);
+        if (!WindowNative.IsWindow(game) || !WindowNative.GetCursorPos(out var point) ||
+            !MatchesWindowAt(point, cover)) return false;
+        bool applied = Apply();
+        if (!pending.IsEnabled && PostMessageW(game, 0x20, game, 0x02000001))
+        {
+            pendingGame = game;
+            pendingCover = cover;
+            pending.Start();
+        }
+        return applied;
     }
 
-    internal bool TryObserve(nint game, nint cover)
+    private static bool MatchesWindowAt(WindowNative.Point point, nint window)
+        => window != 0 && WindowNative.GetAncestor(WindowNative.WindowFromPoint(point), 2) == window;
+
+    private bool ObserveAt(nint window)
     {
-        if (!CanObserve(game, cover)) return false;
         CursorInfo info = new() { Size = (uint)Marshal.SizeOf<CursorInfo>() };
-        if (!GetCursorInfo(ref info)) return false;
-        nint selected = GetCursor();
-        bool nextHidden = (info.Flags & 1) == 0 || selected == 0;
-        if (observed && source == selected && hidden == nextHidden) return true;
-        nint replacement = nextHidden ? 0 : CopyImage(selected, 2, 0, 0, 0);
-        if (!nextHidden && replacement == 0) return false;
-        nint previous = cursor;
-        cursor = replacement;
-        source = selected;
-        hidden = nextHidden;
-        observed = true;
-        Synchronizations++;
-        if (previous != 0) DestroyCursor(previous);
+        // Touch or pen can temporarily suppress a hardware cursor. That
+        // should not overwrite the last cursor the game selected.
+        if (!GetCursorInfo(ref info) || (info.Flags & 2) != 0 || !MatchesWindowAt(info.Position, window))
+            return false;
+        nint selected = (info.Flags & 1) != 0 ? info.Cursor : 0;
+        if (!HasCursor || cursor != selected)
+        {
+            cursor = selected;
+            HasCursor = true;
+            Synchronizations++;
+        }
         return true;
     }
 
-    internal void Apply()
+    private bool Apply()
     {
-        if (observed) SetCursor(cursor);
+        if (!HasCursor) return false;
+        SetCursor(cursor);
+        // The source may have destroyed a custom cursor after we observed it.
+        return GetCursor() == cursor;
     }
 
-    public void Dispose()
+    internal void Reset()
     {
         pending.Stop();
-        changed = null;
-        if (cursor != 0) DestroyCursor(cursor);
-        cursor = source = 0;
-        observed = false;
+        cursor = pendingGame = pendingCover = 0;
+        HasCursor = false;
     }
+
+    public void Dispose() => Reset();
 
     [StructLayout(LayoutKind.Sequential)]
     private struct CursorInfo
@@ -95,12 +94,6 @@ internal sealed class GameCursor : IDisposable
 
     [DllImport("user32")]
     private static extern nint SetCursor(nint cursor);
-
-    [DllImport("user32")]
-    private static extern nint CopyImage(nint image, uint type, int width, int height, uint flags);
-
-    [DllImport("user32")]
-    private static extern bool DestroyCursor(nint cursor);
 
     [DllImport("user32", SetLastError = true)]
     private static extern bool PostMessageW(nint window, uint message, nint wParam, nint lParam);

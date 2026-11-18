@@ -40,6 +40,12 @@ internal sealed class ProbeEnvironment : IDisposable
         remove => window.GameWindowChanged -= value;
     }
 
+    internal event Action? LoginRequested
+    {
+        add => window.LoginRequested += value;
+        remove => window.LoginRequested -= value;
+    }
+
     internal event Action? LogoutRequested
     {
         add => window.LogoutRequested += value;
