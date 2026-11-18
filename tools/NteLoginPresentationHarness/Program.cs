@@ -85,6 +85,7 @@ internal static class Program
             using CursorFixture? customCursor = cursorFixture
                 ? new(int.Parse(arguments[2]), int.Parse(arguments[3]))
                 : null;
+            using System.Windows.Forms.Timer cursorTimer = new() { Interval = 20 };
             if (customCursor != null)
             {
                 owner.Text = "NTE cursor sizing fixture";
@@ -99,6 +100,8 @@ internal static class Program
                 }
                 owner.Activated += (_, _) => customCursor.ApplyWithin(owner.Handle);
                 owner.Shown += (_, _) => customCursor.ApplyWithin(owner.Handle);
+                cursorTimer.Tick += (_, _) => customCursor.ApplyWithin(owner.Handle);
+                cursorTimer.Start();
             }
             if (arguments.Length == 3 && File.Exists(arguments[2]))
             {

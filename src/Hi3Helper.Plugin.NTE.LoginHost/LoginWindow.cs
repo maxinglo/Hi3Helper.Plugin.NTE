@@ -721,7 +721,7 @@ internal sealed partial class LoginWindow : Window
     {
         if (message is 0x2E0 or 0x7E) QueueLayout();
         if (message == 0x20 && ((int)lParam & 0xffff) == 1 && IsVisible && requested &&
-            gameCursor.Synchronize(gameWindow, handle))
+            gameCursor.Synchronize(handle))
         {
             handled = true;
             return 1;
@@ -805,6 +805,7 @@ internal sealed partial class LoginWindow : Window
             return;
         }
 
+        gameCursor.ObserveGame(target);
         if (!backdropAttempted && !IsVisible)
         {
             backdropAttempted = true;
@@ -826,7 +827,6 @@ internal sealed partial class LoginWindow : Window
             ScheduleBackdropRefresh();
         }
 
-        gameCursor.ObserveGame(target);
         bool opening = !IsVisible;
         if (opening)
         {
@@ -897,7 +897,7 @@ internal sealed partial class LoginWindow : Window
             }
         }
         UpdateBackdropViewbox();
-        if (opening || raiseForGame) gameCursor.Synchronize(target, handle);
+        if (opening || raiseForGame) gameCursor.Synchronize(handle);
         if (preview) WritePreviewState();
     }
 
@@ -986,6 +986,7 @@ internal sealed partial class LoginWindow : Window
             ["mascotMirrored"] = (mascot.RenderTransform?.Value.M11 ?? 1) < 0,
             ["segmentFocusOutline"] = false,
             ["gameCursorSynchronized"] = gameCursor.HasCursor,
+            ["gameCursorHandle"] = gameCursor.ObservedHandle,
             ["cursorSynchronizations"] = gameCursor.Synchronizations,
             ["renderer"] = "Avalonia-NativeAOT-owned-client-cover",
             ["nativeWindowsForLogin"] = 1,
