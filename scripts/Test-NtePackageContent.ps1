@@ -69,10 +69,11 @@ function Find-PackageEntry([string] $RelativePath) {
 foreach ($required in @('NTE.dll','LoginHost/Nte.LoginHost.exe','LoginHost/libSkiaSharp.dll',
     'LoginHost/libHarfBuzzSharp.dll','LoginHost/av_libglesv2.dll','LoginHost/Assets/question-mascot.png',
     'LoginHost/Assets/question-mascot-night.png','LoginHost/Assets/question-mascot-sunset.png',
-    'LoginHost/Assets/Brand/google-g.png','LoginHost/Assets/Brand/facebook-primary.png','LoginHost/ThirdParty/Collapse/LICENSE') +
-    @('zh-CN','zh-TW','ja','ko','de','fr','ru','es' | ForEach-Object { "LoginHost/$_/Nte.LoginHost.resources.dll" })) {
+    'LoginHost/Assets/Brand/google-g.png','LoginHost/Assets/Brand/facebook-primary.png','LoginHost/ThirdParty/Collapse/LICENSE')) {
     if (@(Find-PackageEntry $required).Count -ne 1) { throw "Release content is missing or duplicates a login component: $required" }
 }
+# The .NET 11 Native AOT executable embeds the satellite resources.
+# Test-NteLoginHostResources.ps1 checks every culture in the published executable.
 foreach ($legacy in @('coreclr.dll','hostfxr.dll','hostpolicy.dll','PresentationFramework.dll','PresentationCore.dll',
     'WindowsBase.dll','Nte.LoginHost.dll','Nte.LoginHost.runtimeconfig.json','System.Private.CoreLib.dll')) {
     if (@(Find-PackageEntry "LoginHost/$legacy").Count) { throw "Native AOT login package contains a managed runtime/host: $legacy" }

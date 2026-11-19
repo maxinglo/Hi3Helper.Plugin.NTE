@@ -46,7 +46,7 @@
 
 ## 安装插件
 
-需要 Windows 10／11 x64，以及支持 **Plugin Core API 0.1.6** 的 Collapse Launcher。
+需要 Windows 10／11 x64，以及支持 **Plugin Core API 0.1.6.2** 的 Collapse Launcher。
 
 1. 从本仓库下载插件压缩包 `NTE_*.zip`。开发构建可在 [Actions](https://github.com/maxinglo/Hi3Helper.Plugin.NTE/actions/workflows/build.yml) 的成功运行中下载
    `NTE-ReleasePublish-O1` 产物，解压外层后取得插件 ZIP。

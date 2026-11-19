@@ -52,7 +52,7 @@ public static unsafe class NteNativeSmoke
             return new Version(data[0], data[1], data[2], data[3]);
         }
         Version standard = ReadVersion("GetPluginStandardVersion");
-        if (standard != new Version(0, 1, 6, 0))
+        if (standard != new Version(0, 1, 6, 2))
             throw new InvalidOperationException("Unexpected API standard: " + standard);
         Version version = ReadVersion("GetPluginVersion");
         ((delegate* unmanaged[Cdecl]<nint, void>)Find("SetLoggerCallback"))(Marshal.GetFunctionPointerForDelegate(Log));
