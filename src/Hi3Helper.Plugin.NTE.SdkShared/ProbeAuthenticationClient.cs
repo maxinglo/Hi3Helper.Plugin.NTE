@@ -284,14 +284,14 @@ internal sealed class ProbeAuthenticationClient : IDisposable
         // attribution override, 0x3F4BA6 falls back to the same channel ID.
         string channelId = ChannelId.ToString(CultureInfo.InvariantCulture);
         string extra = JsonSerializer.Serialize(new SortedDictionary<string, string>(StringComparer.Ordinal)
-            { ["channelId"] = channelId, ["subchannelId"] = channelId });
+            { ["channelId"] = channelId, ["subchannelId"] = channelId }, NteJsonContext.Default.SortedDictionaryStringString);
         // The fixed producer returns device as a QString containing JSON,
         // then inserts that string into the outer QVariantMap.
         return new(StringComparer.Ordinal)
         {
             ["appId"] = Nte.Login.NteRegionDefinition.CnAppId, ["channelId"] = channelId,
             ["channelUid"] = uid, ["channelToken"] = token, ["extraJson"] = extra,
-            ["platformId"] = Platform.ToString(CultureInfo.InvariantCulture), ["version"] = "2", ["device"] = JsonSerializer.Serialize(device)
+            ["platformId"] = Platform.ToString(CultureInfo.InvariantCulture), ["version"] = "2", ["device"] = JsonSerializer.Serialize(device, NteJsonContext.Default.SortedDictionaryStringString)
         };
     }
 
@@ -397,8 +397,7 @@ internal sealed class ProbeAuthenticationClient : IDisposable
             if (oneLogin)
             {
                 if (gameCodec == null) throw new ProbeAuthenticationException("game-key-unavailable", null);
-                byte[] json = JsonSerializer.SerializeToUtf8Bytes(values, new JsonSerializerOptions
-                    { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+                byte[] json = JsonSerializer.SerializeToUtf8Bytes(values, NteJsonContext.Relaxed.SortedDictionaryStringString);
                 try { wireBody = gameCodec.Encode(json); }
                 finally { CryptographicOperations.ZeroMemory(json); }
             }
@@ -485,7 +484,7 @@ internal sealed class ProbeAuthenticationClient : IDisposable
 
     private static ProbeIdentityEnvelope ParseIdentity(ProbeIdentityStage stage, JsonElement response)
     {
-        byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(response);
+        byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(response, NteJsonContext.Default.JsonElement);
         try
         {
             ProbeIdentityEnvelope identity = ProbeIdentityEnvelope.Parse(stage, 200, bytes);

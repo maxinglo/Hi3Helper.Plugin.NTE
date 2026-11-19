@@ -1,4 +1,7 @@
-using System.Windows;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Styling;
 using Nte.Login;
 using Nte.LoginHost.Localization;
 
@@ -26,16 +29,16 @@ internal sealed partial class LoginWindow
             Track();
         };
         requested = true;
-        footer.Visibility = Visibility.Collapsed;
+        footer.IsVisible = false;
         login.IsDefault = false;
         ResetBackdrop();
         form.Children.Clear();
         Add(form, content, 0);
         title.Text = content.TitleLabel;
-        subtitle.Visibility = modeRail.Visibility = status.Visibility = login.Visibility = Visibility.Collapsed;
+        subtitle.IsVisible = modeRail.IsVisible = status.IsVisible = login.IsVisible = false;
         UpdateCardSize();
         QueueBodyWidth();
-        Track();
+        Track(raise: true);
         try
         {
             return await content.RunAsync(token);
@@ -47,8 +50,8 @@ internal sealed partial class LoginWindow
             HidePresented();
             ResetBackdrop();
             Track();
-            login.Visibility = Visibility.Visible;
-            footer.Visibility = Visibility.Visible;
+            login.IsVisible = true;
+            footer.IsVisible = true;
         }
     }
 
@@ -61,20 +64,20 @@ internal sealed partial class LoginWindow
         }
 
         bool transient = !requested;
-        Visibility previousLogin = login.Visibility;
-        Visibility previousFooter = footer.Visibility;
+        bool previousLogin = login.IsVisible;
+        bool previousFooter = footer.IsVisible;
         if (transient)
         {
             requested = true;
             Title = LoginText.Get(launchOptions?.Region == NteHostRegion.Taiwan ? "TaiwanTitle" : "GlobalTitle");
-            footer.Visibility = Visibility.Collapsed;
+            footer.IsVisible = false;
             title.Text = Title;
             form.Children.Clear();
-            Add(form, new System.Windows.Controls.TextBlock
+            Add(form, new Avalonia.Controls.TextBlock
             {
                 Text = LoginText.Get("UnlockAccountWithHello"), FontSize = 13, TextWrapping = TextWrapping.Wrap
             }, 0);
-            subtitle.Visibility = modeRail.Visibility = status.Visibility = login.Visibility = Visibility.Collapsed;
+            subtitle.IsVisible = modeRail.IsVisible = status.IsVisible = login.IsVisible = false;
             UpdateCardSize();
             QueueBodyWidth();
         }
@@ -92,8 +95,8 @@ internal sealed partial class LoginWindow
             if (transient)
             {
                 requested = false;
-                login.Visibility = previousLogin;
-                footer.Visibility = previousFooter;
+                login.IsVisible = previousLogin;
+                footer.IsVisible = previousFooter;
                 HidePresented();
                 ResetBackdrop();
                 Track();

@@ -1,5 +1,10 @@
-using System.Windows;
-using System.Windows.Threading;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Styling;
+using Avalonia.Threading;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Markup.Xaml;
 using Nte.Login;
 
 namespace Nte.LoginHost;
@@ -7,37 +12,50 @@ namespace Nte.LoginHost;
 public partial class App : Application
 {
     private LoginWindow? window;
+    private IClassicDesktopStyleApplicationLifetime lifetime = null!;
 
-    protected override void OnStartup(StartupEventArgs e)
+    public override void Initialize() => AvaloniaXamlLoader.Load(this);
+
+    public override void OnFrameworkInitializationCompleted()
     {
-        base.OnStartup(e);
-        if (e.Args.Length == 2 && e.Args[0] == "--global-web-callback")
+        base.OnFrameworkInitializationCompleted();
+        lifetime = (IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!;
+        string[] arguments = lifetime.Args ?? [];
+
+        if (arguments.Length == 2 && arguments[0] == "--verify-ui")
         {
-            _ = ForwardGlobalBrowserAsync(e.Args[1]);
+            _ = VerifyUiAsync(arguments[1]);
             return;
         }
 
         try
         {
-            Localization.LoginText.UseLanguage(e.Args.Length == 4 && e.Args[0] is "--preview-global-pid" or "--preview-taiwan-pid"
-                ? e.Args[3]
-                : NteHostLaunchOptions.Parse(e.Args).Language);
+            Localization.LoginText.UseLanguage(
+                arguments.Length == 4 && arguments[0] is "--preview-global-pid" or "--preview-taiwan-pid"
+                    ? arguments[3]
+                    : NteHostLaunchOptions.Parse(arguments).Language);
         }
         catch (ArgumentException)
         {
             Localization.LoginText.UseLanguage("zh-CN");
         }
 
-        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(Dispatcher));
-        if (e.Args.Length >= 1 && e.Args[0] == "--switch-region")
+        if (arguments.Length >= 1 && arguments[0] == "--switch-region")
         {
-            _ = RunRegionSwitchAsync(e.Args);
+            _ = RunRegionSwitchAsync(arguments);
             return;
         }
-        window = new LoginWindow(e.Args.Contains("--preview-pid") || e.Args.Contains("--preview-welcome-pid") ||
-                                 e.Args.Contains("--preview-global-pid") || e.Args.Contains("--preview-taiwan-pid"));
-        _ = RunAsync(e.Args);
+
+        window = new LoginWindow(arguments.Contains("--preview-pid") || arguments.Contains("--preview-welcome-pid") ||
+                                 arguments.Contains("--preview-global-pid") ||
+                                 arguments.Contains("--preview-taiwan-pid"));
+        _ = RunAsync(arguments);
     }
+
+    private void Shutdown(int exitCode) => lifetime.Shutdown(exitCode);
+
+    private async Task VerifyUiAsync(string directory)
+        => Shutdown(await LoginWindow.VerifyNativeUiAsync(directory));
 
     private async Task RunRegionSwitchAsync(string[] arguments)
     {
@@ -46,21 +64,31 @@ public partial class App : Application
             NteRegionSwitchOptions options = NteRegionSwitchOptions.Parse(arguments);
             Shutdown(await ShowRegionSwitchAsync(options, false) ? 0 : 1);
         }
-        catch (Exception)
+        catch (Exception error)
         {
-            MessageBox.Show(Localization.LoginText.Get("ServerSwitchFailed"), Localization.LoginText.Get("ServerSwitchTitle"));
-            Shutdown(1);
+            NteHostStartupDiagnostics.TryWrite(NteHostStartupDiagnostics.DefaultPath, error, "ServerSwitchFailed");
+            LoginWindow failure = new();
+            try
+            {
+                await failure.ShowFailureAsync(Localization.LoginText.Get("ServerSwitchFailed"));
+            }
+            finally
+            {
+                failure.Shutdown();
+                Shutdown(1);
+            }
         }
     }
 
     private static async Task<bool> ShowRegionSwitchAsync(NteRegionSwitchOptions options, bool closeOnCompletion)
     {
         Localization.LoginText.UseLanguage(options.Language);
-        ViewModels.RegionSwitchViewModel model = new(new Services.NativeRegionSwitchClient(), options, key => Localization.LoginText.Get(key));
+        ViewModels.RegionSwitchViewModel model = new(new Services.NativeRegionSwitchClient(), options,
+            key => Localization.LoginText.Get(key));
         RegionSwitchWindow view = new(model);
         TaskCompletionSource closed = new(TaskCreationOptions.RunContinuationsAsynchronously);
         view.Closed += (_, _) => closed.TrySetResult();
-        if (closeOnCompletion) model.Completed += () => view.Dispatcher.BeginInvoke(view.Close);
+        if (closeOnCompletion) model.Completed += () => Dispatcher.UIThread.Post(view.Close);
         view.Show();
         await closed.Task;
         return model.IsCompleted;
@@ -69,12 +97,15 @@ public partial class App : Application
     private static bool NeedsServerActivation(NteHostLaunchOptions options)
     {
         if (options.Region is not (NteHostRegion.Global or NteHostRegion.Taiwan)) return false;
-        if (System.IO.File.Exists(System.IO.Path.Combine(options.GameRoot, ".collapse-nte", "switch.json"))) return true;
+        if (System.IO.File.Exists(System.IO.Path.Combine(options.GameRoot, ".collapse-nte", "switch.json")))
+            return true;
         string state = System.IO.Path.Combine(options.GameRoot, ".collapse-nte", "state.json");
         if (!System.IO.File.Exists(state)) return false;
-        if (new System.IO.FileInfo(state).Length > 16 * 1024 * 1024) throw new System.IO.InvalidDataException("Invalid shared installation state.");
+        if (new System.IO.FileInfo(state).Length > 16 * 1024 * 1024)
+            throw new System.IO.InvalidDataException("Invalid shared installation state.");
         using var document = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllBytes(state));
-        return document.RootElement.GetProperty("ActiveAppId").GetString() != NteRegionDefinition.From(options.Region).AppId;
+        return document.RootElement.GetProperty("ActiveAppId").GetString() !=
+               NteRegionDefinition.From(options.Region).AppId;
     }
 
     private async Task RunAsync(string[] arguments)
@@ -91,16 +122,24 @@ public partial class App : Application
                 return;
             }
 
-            if (arguments.Length == 2 && arguments[0] is "--preview-pid" or "--preview-welcome-pid" &&
+            // Owned preview keeps the production taskbar/window styles while
+            // using the same isolated, non-authenticating fixture accounts.
+            if (arguments.Length == 2 && arguments[0] is "--preview-pid" or "--preview-owned-pid" or "--preview-welcome-pid" &&
                 int.TryParse(arguments[1], out int pid))
             {
-                await window!.PreviewAsync(pid, arguments[0] == "--preview-welcome-pid");
+                await window!.PreviewAsync(pid, arguments[0] == "--preview-welcome-pid",
+                    arguments[0] == "--preview-owned-pid");
                 return;
             }
 
             NteHostLaunchOptions options = NteHostLaunchOptions.Parse(arguments);
-            if (NeedsServerActivation(options) && !await ShowRegionSwitchAsync(new(options.GameRoot, options.Region, options.Language), true))
-            { exitCode = 1; return; }
+            if (NeedsServerActivation(options) &&
+                !await ShowRegionSwitchAsync(new(options.GameRoot, options.Region, options.Language), true))
+            {
+                exitCode = 1;
+                return;
+            }
+
             window!.ConfigureLaunch(options);
             officialLaunch = NteLaunchPreferences.Read(NteLaunchPreferences.GetPath(options.Region)).OfficialLauncher;
             if (officialLaunch)
@@ -108,6 +147,7 @@ public partial class App : Application
                 if (!await OfficialGameHost.RunAsync(options)) exitCode = 1;
                 return;
             }
+
             if (options.Region is NteHostRegion.Global or NteHostRegion.Taiwan)
             {
                 using OverseasGameLoginHost host = new(options, window!);
@@ -122,17 +162,18 @@ public partial class App : Application
         catch (Exception ex)
         {
             exitCode = 1;
-            if (arguments.Length == 2 && arguments[0] is "--preview-pid" or "--preview-welcome-pid")
+            if (arguments.Length == 2 && arguments[0] is "--preview-pid" or "--preview-owned-pid" or "--preview-welcome-pid")
                 System.IO.File.WriteAllText(
                     System.IO.Path.Combine(AppContext.BaseDirectory, "preview-startup-error.txt"), ex.ToString());
             string key = officialLaunch && ex is System.IO.FileNotFoundException
                 ? "OfficialLauncherMissing"
                 : ex is NteGlobalLaunchException global
-                ? global.Key
-                : ex is NteCnLaunchException china
-                ? china.Key
-                : ex is System.ComponentModel.Win32Exception native && native.NativeErrorCode == 740
-                    ? "ElevationRequired" : "StartupFailed";
+                    ? global.Key
+                    : ex is NteCnLaunchException china
+                        ? china.Key
+                        : ex is System.ComponentModel.Win32Exception native && native.NativeErrorCode == 740
+                            ? "ElevationRequired"
+                            : "StartupFailed";
             NteHostStartupDiagnostics.TryWrite(NteHostStartupDiagnostics.DefaultPath, ex, key);
             await window!.ShowFailureAsync(Localization.LoginText.Get(key));
         }

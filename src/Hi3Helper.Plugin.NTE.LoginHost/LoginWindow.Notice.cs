@@ -1,8 +1,11 @@
 using System.ComponentModel;
 using System.IO;
-using System.Windows;
-using System.Windows.Automation;
-using System.Windows.Controls;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Styling;
+using Avalonia.Automation;
+
 using Nte.Login;
 using Nte.LoginHost.Localization;
 
@@ -30,16 +33,16 @@ internal sealed partial class LoginWindow
         automaticResumeInProgress = false;
         noticeGlobal = global;
         ShowLoginNotice();
-        Track();
-        using CancellationTokenRegistration registration = token.Register(() => Dispatcher.BeginInvoke(CancelForGameExit));
+        Track(raise: true);
+        using CancellationTokenRegistration registration = token.Register(() => Dispatcher.UIThread.Post(CancelForGameExit));
         try { return await answer; }
         finally
         {
             RemoveNoticeConfirmation();
             noticeCompletion = null;
             helpOpen = false;
-            officialLauncher.Visibility = Visibility.Collapsed;
-            closeLogin.Visibility = Visibility.Visible;
+            officialLauncher.IsVisible = false;
+            closeLogin.IsVisible = true;
             requested = false;
             HidePresented();
         }
@@ -52,18 +55,18 @@ internal sealed partial class LoginWindow
         noticeConfirmation = false;
         form.Children.Clear();
         title.Text = LoginText.Get("SignInHelp");
-        subtitle.Visibility = modeRail.Visibility = status.Visibility = Visibility.Collapsed;
-        footer.Visibility = login.Visibility = Visibility.Visible;
-        closeLogin.Visibility = MandatoryNotice ? Visibility.Collapsed : Visibility.Visible;
-        otherMainlandAccount.Visibility = Visibility.Collapsed;
+        subtitle.IsVisible = modeRail.IsVisible = status.IsVisible = false;
+        footer.IsVisible = login.IsVisible = true;
+        closeLogin.IsVisible = !(MandatoryNotice);
+        otherMainlandAccount.IsVisible = false;
         login.Content = LoginText.Get("NoticeUnderstood");
         login.IsEnabled = true;
         login.IsDefault = true;
         officialLauncher.Content = LoginText.Get("UseOfficialLauncher");
-        officialLauncher.Visibility = Visibility.Visible;
+        officialLauncher.IsVisible = true;
         foreach (string section in new[] { "Purpose", "Risk", "Sharing", "Data", "Storage", "Network", "Retention", "Choice" })
         {
-            Add(form, new TextBlock { Text = LoginText.Get("Notice" + section + "Title"), FontSize = 14, FontWeight = FontWeights.SemiBold }, 6);
+            Add(form, new TextBlock { Text = LoginText.Get("Notice" + section + "Title"), FontSize = 14, FontWeight = FontWeight.SemiBold }, 6);
             string body = section == "Sharing"
                 ? LoginText.Get("NoticeSharing", LoginText.Get(noticeGlobal ? "NoticeSharingExamplesGlobal" : "NoticeSharingExamplesMainland"))
                 : LoginText.Get("Notice" + section);
@@ -77,7 +80,7 @@ internal sealed partial class LoginWindow
             Add(form, new TextBlock { Text = noticeError, FontSize = 12, TextWrapping = TextWrapping.Wrap });
         QueueBodyWidth();
         UpdateCardSize();
-        scroll.ScrollToTop();
+        scroll.ScrollToHome();
     }
 
     private void AcknowledgeNotice()
@@ -104,14 +107,14 @@ internal sealed partial class LoginWindow
         noticeError = null;
         noticeConfirmation = false;
         helpOpen = false;
-        officialLauncher.Visibility = Visibility.Collapsed;
-        closeLogin.Visibility = Visibility.Visible;
+        officialLauncher.IsVisible = false;
+        closeLogin.IsVisible = true;
         if (globalView is { } global)
         {
             form.Children.Clear();
             Add(form, global, 0);
             title.Text = global.TitleLabel;
-            footer.Visibility = Visibility.Collapsed;
+            footer.IsVisible = false;
             QueueCardSize();
         }
         else ShowForm();
@@ -122,10 +125,10 @@ internal sealed partial class LoginWindow
         if (noticeConfirmation) { ShowLoginNotice(); return; }
         noticeConfirmation = true;
         StackPanel dialog = new();
-        Add(dialog, new TextBlock { Text = LoginText.Get("UseOfficialLauncher"), FontSize = 17, FontWeight = FontWeights.SemiBold });
+        Add(dialog, new TextBlock { Text = LoginText.Get("UseOfficialLauncher"), FontSize = 17, FontWeight = FontWeight.SemiBold });
         Add(dialog, new TextBlock { Text = LoginText.Get("OfficialLauncherConfirm"), FontSize = 13, TextWrapping = TextWrapping.Wrap });
-        Button confirm = new() { Content = LoginText.Get("ConfirmOfficialLauncher"), MinHeight = 42, Style = FindStyle("AccentButtonStyle") };
-        Button cancel = new() { Content = LoginText.Get("CancelOperation"), MinHeight = 36, Margin = new(0, 8, 0, 0), Style = FindStyle("SmsButtonStyle") };
+        Button confirm = new() { Content = LoginText.Get("ConfirmOfficialLauncher"), MinHeight = 42, Theme = FindStyle("AccentButtonStyle") };
+        Button cancel = new() { Content = LoginText.Get("CancelOperation"), MinHeight = 36, Margin = new(0, 8, 0, 0), Theme = FindStyle("SmsButtonStyle") };
         AutomationProperties.SetAutomationId(confirm, "confirm-official-launcher");
         AutomationProperties.SetAutomationId(cancel, "cancel-official-launcher");
         confirm.Click += (_, _) => CompleteOfficialChoice();
@@ -136,17 +139,17 @@ internal sealed partial class LoginWindow
         // Use an opaque themed surface: a modal confirmation must be legible
         // independently of the scene and must intercept every underlying click.
         surface.SetResourceReference(Border.BackgroundProperty, "GlobalPopupBrush");
-        confirmationOverlay = new() { Child = surface, Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(180, 0, 0, 0)), CornerRadius = new(16) };
-        System.Windows.Input.KeyboardNavigation.SetTabNavigation(confirmationOverlay, System.Windows.Input.KeyboardNavigationMode.Cycle);
+        confirmationOverlay = new() { Child = surface, Background = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.FromArgb(180, 0, 0, 0)), CornerRadius = new(16) };
+        Avalonia.Input.KeyboardNavigation.SetTabNavigation(confirmationOverlay, Avalonia.Input.KeyboardNavigationMode.Cycle);
         content.IsEnabled = false;
-        ((Grid)card.Child).Children.Add(confirmationOverlay);
-        closeLogin.Visibility = Visibility.Collapsed;
+        ((Grid)card.Child!).Children.Add(confirmationOverlay);
+        closeLogin.IsVisible = false;
         cancel.Focus();
     }
 
     private void RemoveNoticeConfirmation()
     {
-        if (confirmationOverlay != null) ((Grid)card.Child).Children.Remove(confirmationOverlay);
+        if (confirmationOverlay != null) ((Grid)card.Child!).Children.Remove(confirmationOverlay);
         confirmationOverlay = null;
         content.IsEnabled = true;
         noticeConfirmation = false;

@@ -24,7 +24,9 @@ internal sealed record LocalAccount(
     DateTimeOffset SavedUtc,
     DateTimeOffset? ExpiresUtc,
     string? IdentityKey = null)
-{ public override string ToString() => Label; }
+{
+    public override string ToString() => Label;
+}
 
 internal sealed class PendingAccountSave(LocalAccount account, Action rollback, Action commit) : IDisposable
 {
@@ -49,7 +51,7 @@ internal sealed class PendingAccountSave(LocalAccount account, Action rollback, 
 
 // Every account has an independent AES key. Its explicit protection kind is
 // authenticated with the metadata; a failed Hello operation never falls back.
-internal sealed class LocalAccountStore(
+internal sealed partial class LocalAccountStore(
     string directory,
     IAccountKeyProtector protector,
     TimeProvider? clock = null,
@@ -266,7 +268,8 @@ internal sealed class LocalAccountStore(
         if (original.Account.ExpiresUtc is DateTimeOffset expires && expires <= time.GetUtcNow())
             throw new InvalidDataException("Local retention expired.");
         IAccountKeyProtector previous = Select(original.Protection);
-        IAccountKeyProtector desired = useHello is bool enabled && original.Format >= 2 ? SelectDesired(enabled) : previous;
+        IAccountKeyProtector desired =
+            useHello is bool enabled && original.Format >= 2 ? SelectDesired(enabled) : previous;
         byte[] key = [], plain = [], replacement = [];
         bool written = false, newProtection = previous.Protection != desired.Protection;
         try
@@ -287,18 +290,26 @@ internal sealed class LocalAccountStore(
                     if (identityKey(replacement, subjectSecret) != original.Account.IdentityKey)
                         throw new InvalidDataException("Refreshed account identity changed.");
                 }
-                finally { CryptographicOperations.ZeroMemory(subjectSecret); }
+                finally
+                {
+                    CryptographicOperations.ZeroMemory(subjectSecret);
+                }
             }
+
             byte[] wrapped = newProtection
                 ? await WrapAndVerifyAsync(desired, id, key, owner, token).ConfigureAwait(false)
                 : original.WrappedKey;
-            Write(Encrypt(original.Format, desired.Protection, original.Account, wrapped, replacement, key), token, overwrite: true);
+            Write(Encrypt(original.Format, desired.Protection, original.Account, wrapped, replacement, key), token,
+                overwrite: true);
             written = true;
             return new(original.Account, () =>
             {
                 Write(original, CancellationToken.None, overwrite: true);
                 if (newProtection) desired.Delete(id);
-            }, () => { if (newProtection) previous.Delete(id); });
+            }, () =>
+            {
+                if (newProtection) previous.Delete(id);
+            });
         }
         finally
         {
@@ -429,7 +440,7 @@ internal sealed class LocalAccountStore(
         string path = AccountPath(record.Account.Id), temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
-            byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(record);
+            byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(record, AccountJsonContext.Default.Record);
             using (FileStream output = new(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096,
                        FileOptions.WriteThrough))
             {
@@ -451,7 +462,7 @@ internal sealed class LocalAccountStore(
         string path = AccountPath(id);
         if (new FileInfo(path).Length < 1 || new FileInfo(path).Length > Math.Max(16384, maximumCredentialBytes * 2))
             throw new InvalidDataException("Account size bound.");
-        Record record = JsonSerializer.Deserialize<Record>(File.ReadAllBytes(path)) ??
+        Record record = JsonSerializer.Deserialize(File.ReadAllBytes(path), AccountJsonContext.Default.Record) ??
                         throw new InvalidDataException("Invalid account file.");
         LocalAccount? account = record.Account;
         if (record.Format is not (1 or 2 or 3) ||
@@ -521,4 +532,7 @@ internal sealed class LocalAccountStore(
         if (!info.Exists) System.IO.FileSystemAclExtensions.Create(info, acl);
         else System.IO.FileSystemAclExtensions.SetAccessControl(info, acl);
     }
+
+    [System.Text.Json.Serialization.JsonSerializable(typeof(Record))]
+    private partial class AccountJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
 }

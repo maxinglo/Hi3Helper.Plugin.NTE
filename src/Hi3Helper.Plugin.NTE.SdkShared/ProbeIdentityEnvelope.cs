@@ -67,8 +67,7 @@ internal sealed class ProbeIdentityEnvelope : IDisposable
             if (stage == ProbeIdentityStage.Game && root.TryGetProperty("extraOne", out JsonElement extra))
             {
                 if (Count(root, "extraOne") != 1 || extra.ValueKind != JsonValueKind.Object) return envelope;
-                parsedInformation = JsonSerializer.SerializeToUtf8Bytes(extra, new JsonSerializerOptions
-                    { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+                parsedInformation = JsonSerializer.SerializeToUtf8Bytes(extra, NteJsonContext.Relaxed.JsonElement);
                 // Operation 0x40D has a 16-byte header and a trailing NUL.
                 if (parsedInformation.Length > 65536 - 17) return envelope;
             }

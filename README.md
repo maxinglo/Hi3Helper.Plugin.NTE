@@ -54,7 +54,7 @@
 3. 重启 Collapse，在游戏列表中选择 **异环** 及对应地区。
 4. 安装游戏，或选择已有的游戏安装目录。
 
-插件包已包含登录窗口所需的 .NET 桌面运行时，无须单独安装。更新插件时同样导入新版本 ZIP；账号和游戏文件不保存在插件目录中。
+此分支的登录窗口使用 Avalonia 与 Native AOT，随包提供原生可执行文件及渲染库，无须安装 .NET 桌面运行时。更新插件时同样导入新版本 ZIP；账号和游戏文件不保存在插件目录中。
 
 ## 从源码构建
 
@@ -67,6 +67,8 @@ git submodule update --init --recursive
 ```
 
 可导入的 ZIP 位于 `artifacts/packages/`。构建脚本编译插件和登录组件，发布脚本检查原生接口、自包含登录宿主和包内容。
+
+`codex/loginhost-native-aot` 分支将 LoginHost 从 WPF 迁移至 Avalonia，保留原有登录流程与卡片风格。迁移范围、原生发布与隔离验证命令见 [LoginHost Native AOT](docs/loginhost-native-aot.md)。
 
 [架构说明](docs/architecture.md) · [地区与共享安装](docs/regions.md) · [登录说明与隐私](docs/login-privacy.md)
 

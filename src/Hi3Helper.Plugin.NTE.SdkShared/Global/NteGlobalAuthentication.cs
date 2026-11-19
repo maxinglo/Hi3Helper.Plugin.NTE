@@ -37,19 +37,34 @@ internal sealed partial class NteGlobalAuthentication : IDisposable
         ownsHttp = http == null;
         this.http = http ?? new(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
             { Timeout = TimeSpan.FromSeconds(30) };
-        ClientData = Uri.EscapeDataString(JsonSerializer.Serialize(new
+        ClientData = Uri.EscapeDataString(JsonSerializer.Serialize(new Dictionary<string, object?>
         {
-            appId = Region.ApplicationId, packageName = configuration.PackageName, appVersion = version, sdkVersion = Region.Sdk.AuthenticationVersion,
-            sdkServerVersion = Region.Sdk.AuthenticationServerVersion,
-            osType = 4, udid = DeviceId, ndid = DeviceId, deviceName = "PC",
-            phoneSystemVersion = Environment.OSVersion.VersionString,
-            channelId = 0, mediaId = "", afId = "", deviceLanguage = CultureInfo.CurrentUICulture.Name,
-            appLanguage = this.language,
-            deviceTimeZone = TimeZoneInfo.Local.Id, androidAdId = "", pcAdid = "",
-            ctz = TimeZoneInfo.Local.BaseUtcOffset.ToString(),
-            ctzid = TimeZoneInfo.Local.Id, csl = CultureInfo.CurrentUICulture.Name, gameClientLang = this.language,
-            gameServerTz = "", serverId = ""
-        }));
+            ["appId"] = Region.ApplicationId,
+            ["packageName"] = configuration.PackageName,
+            ["appVersion"] = version,
+            ["sdkVersion"] = Region.Sdk.AuthenticationVersion,
+            ["sdkServerVersion"] = Region.Sdk.AuthenticationServerVersion,
+            ["osType"] = 4,
+            ["udid"] = DeviceId,
+            ["ndid"] = DeviceId,
+            ["deviceName"] = "PC",
+            ["phoneSystemVersion"] = Environment.OSVersion.VersionString,
+            ["channelId"] = 0,
+            ["mediaId"] = "",
+            ["afId"] = "",
+            ["deviceLanguage"] = CultureInfo.CurrentUICulture.Name,
+            ["appLanguage"] = this.language,
+            ["deviceTimeZone"] = TimeZoneInfo.Local.Id,
+            ["androidAdId"] = "",
+            ["pcAdid"] = "",
+            ["ctz"] = TimeZoneInfo.Local.BaseUtcOffset.ToString(),
+            ["ctzid"] = TimeZoneInfo.Local.Id,
+            ["csl"] = CultureInfo.CurrentUICulture.Name,
+            ["gameClientLang"] = this.language,
+            ["gameServerTz"] = "",
+            ["serverId"] = ""
+
+        }, NteJsonContext.Default.DictionaryStringObject));
     }
 
     internal async Task InitializeAsync(CancellationToken token)
@@ -134,7 +149,11 @@ internal sealed partial class NteGlobalAuthentication : IDisposable
             settings["firebasejsURL"] = Decode(firebase, "jsUrl");
         }
 
-        string data = JsonSerializer.Serialize(new { code = 0, result = settings });
+        string data = JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["code"] = 0,
+            ["result"] = settings
+        }, NteJsonContext.Default.DictionaryStringObject);
         return new(page.GetLeftPart(UriPartial.Path) + "?webLoginType=out&lang=" + Uri.EscapeDataString(language) +
                    "&callback=" + Uri.EscapeDataString(data));
     }

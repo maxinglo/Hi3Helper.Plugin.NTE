@@ -59,34 +59,45 @@ $forbidden = @($entries | Where-Object {
 if ($forbidden.Count) {
     throw ('Release content contains an official launcher, research executable, debug symbols or temporary diagnostic: ' + ($forbidden -join ', '))
 }
-foreach ($required in @('NTE.dll','LoginHost/Nte.LoginHost.exe','LoginHost/Nte.LoginHost.dll',
-    'LoginHost/Nte.LoginHost.runtimeconfig.json','LoginHost/Assets/question-mascot.png',
-    'LoginHost/coreclr.dll','LoginHost/hostfxr.dll','LoginHost/PresentationFramework.dll','LoginHost/ThirdParty/Collapse/LICENSE')) {
-    if (-not @($entries | Where-Object { $_.Replace('\','/').EndsWith('/' + $required, [StringComparison]::OrdinalIgnoreCase) -or $_.Replace('\','/').Equals($required, [StringComparison]::OrdinalIgnoreCase) }).Count) {
-        throw "Release content is missing the bundled login component: $required"
-    }
+function Find-PackageEntry([string] $RelativePath) {
+    @($entries | Where-Object {
+        $name = $_.Replace('\','/')
+        if ($name.EndsWith('.br', [StringComparison]::OrdinalIgnoreCase)) { $name = $name.Substring(0, $name.Length - 3) }
+        $name.EndsWith('/' + $RelativePath, [StringComparison]::OrdinalIgnoreCase) -or $name.Equals($RelativePath, [StringComparison]::OrdinalIgnoreCase)
+    })
 }
-$runtimeJson = if ($PSCmdlet.ParameterSetName -eq 'Directory') {
-    Get-Content -LiteralPath (Join-Path $PublishDirectory 'LoginHost/Nte.LoginHost.runtimeconfig.json') -Raw
+foreach ($required in @('NTE.dll','LoginHost/Nte.LoginHost.exe','LoginHost/libSkiaSharp.dll',
+    'LoginHost/libHarfBuzzSharp.dll','LoginHost/av_libglesv2.dll','LoginHost/Assets/question-mascot.png',
+    'LoginHost/Assets/question-mascot-night.png','LoginHost/Assets/question-mascot-sunset.png',
+    'LoginHost/Assets/Brand/google-g.png','LoginHost/Assets/Brand/facebook-primary.png','LoginHost/ThirdParty/Collapse/LICENSE') +
+    @('zh-CN','zh-TW','ja','ko','de','fr','ru','es' | ForEach-Object { "LoginHost/$_/Nte.LoginHost.resources.dll" })) {
+    if (@(Find-PackageEntry $required).Count -ne 1) { throw "Release content is missing or duplicates a login component: $required" }
+}
+foreach ($legacy in @('coreclr.dll','hostfxr.dll','hostpolicy.dll','PresentationFramework.dll','PresentationCore.dll',
+    'WindowsBase.dll','Nte.LoginHost.dll','Nte.LoginHost.runtimeconfig.json','System.Private.CoreLib.dll')) {
+    if (@(Find-PackageEntry "LoginHost/$legacy").Count) { throw "Native AOT login package contains a managed runtime/host: $legacy" }
+}
+[byte[]] $executable = if ($PSCmdlet.ParameterSetName -eq 'Directory') {
+    ,([IO.File]::ReadAllBytes((Join-Path $PublishDirectory 'LoginHost/Nte.LoginHost.exe')))
 } else {
     $archive = [IO.Compression.ZipFile]::OpenRead([IO.Path]::GetFullPath($ArchivePath))
     try {
-        $runtimeEntry = $archive.Entries | Where-Object {
-            $runtimeName = $_.FullName.Replace('\','/')
-            if ($runtimeName.EndsWith('.br', [StringComparison]::OrdinalIgnoreCase)) { $runtimeName = $runtimeName.Substring(0, $runtimeName.Length - 3) }
-            $runtimeName.EndsWith('LoginHost/Nte.LoginHost.runtimeconfig.json', [StringComparison]::OrdinalIgnoreCase)
-        } | Select-Object -First 1
-        if (-not $runtimeEntry) { throw 'Missing login runtime configuration in archive.' }
-        $source = $runtimeEntry.Open()
+        $entryName = @(Find-PackageEntry 'LoginHost/Nte.LoginHost.exe')[0]
+        $entry = $archive.GetEntry($entryName)
+        $source = $entry.Open()
         try {
-            $decoded = if ($runtimeEntry.Name.EndsWith('.br',[StringComparison]::OrdinalIgnoreCase)) { [IO.Compression.BrotliStream]::new($source,[IO.Compression.CompressionMode]::Decompress) } else { $source }
-            $reader = [IO.StreamReader]::new($decoded)
-            try { $reader.ReadToEnd() } finally { $reader.Dispose() }
+            $decoded = if ($entry.Name.EndsWith('.br', [StringComparison]::OrdinalIgnoreCase)) { [IO.Compression.BrotliStream]::new($source, [IO.Compression.CompressionMode]::Decompress) } else { $source }
+            try {
+                $memory = [IO.MemoryStream]::new()
+                try { $decoded.CopyTo($memory); ,($memory.ToArray()) } finally { $memory.Dispose() }
+            } finally { if ($decoded -ne $source) { $decoded.Dispose() } }
         } finally { $source.Dispose() }
     } finally { $archive.Dispose() }
 }
-$runtime = ($runtimeJson | ConvertFrom-Json).runtimeOptions
-if ($runtime.framework -or $runtime.frameworks -or -not @($runtime.includedFrameworks | Where-Object name -eq 'Microsoft.WindowsDesktop.App').Count) {
-    throw 'Login host runtime configuration is framework-dependent; publish it with a full self-contained build.'
-}
-[pscustomobject]@{ passed = $true; checkedEntries = $entries.Count; excludesNteSelfUpdater = $true; excludesDebugSymbols = $true; bundledWpfLoginHost = $true; selfContained = $true }
+if ($executable.Length -lt 1024 -or [BitConverter]::ToUInt16($executable, 0) -ne 0x5A4D) { throw 'Invalid native login executable.' }
+$pe = [BitConverter]::ToInt32($executable, 0x3C)
+if ($pe -lt 0 -or $pe + 264 -gt $executable.Length -or [BitConverter]::ToUInt32($executable, $pe) -ne 0x4550 -or
+    [BitConverter]::ToUInt16($executable, $pe + 4) -ne 0x8664 -or [BitConverter]::ToUInt16($executable, $pe + 24) -ne 0x20B) { throw 'Login host must be a Windows x64 PE32+ executable.' }
+# A managed PE has an IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR. Native AOT has no CLR header.
+if ([BitConverter]::ToUInt64($executable, $pe + 24 + 112 + 14 * 8) -ne 0) { throw 'Login host still contains a CLR header.' }
+[pscustomobject]@{ passed = $true; checkedEntries = $entries.Count; excludesNteSelfUpdater = $true; excludesDebugSymbols = $true; bundledNativeAotLoginHost = $true; selfContained = $true; clrHeader = $false }

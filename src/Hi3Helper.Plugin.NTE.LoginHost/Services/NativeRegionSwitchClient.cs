@@ -11,7 +11,7 @@ internal sealed class NativeRegionSwitchClient : INteRegionSwitchClient
     // keeps the verified-file cache between preview and activation.
     private static readonly Lazy<nint> Module = new(() =>
     {
-        string hostDirectory = Path.GetDirectoryName(typeof(NativeRegionSwitchClient).Assembly.Location)!;
+        string hostDirectory = AppContext.BaseDirectory;
         string plugin = Path.GetFullPath(Path.Combine(hostDirectory, "..", "NTE.dll"));
         if (!File.Exists(plugin))
             throw new FileNotFoundException("Start server switching from the installed NTE plugin.", plugin);

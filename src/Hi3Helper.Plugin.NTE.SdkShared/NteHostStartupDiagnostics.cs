@@ -15,10 +15,14 @@ internal static class NteHostStartupDiagnostics
         {
             string path = Path.Combine(Path.GetDirectoryName(DefaultPath)!, "runtime.json");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, JsonSerializer.Serialize(new { utc = DateTimeOffset.UtcNow,
-                hostPid = Environment.ProcessId, hostVersion = typeof(NteHostStartupDiagnostics).Assembly.GetName().Version?.ToString(),
-                phase, exceptionType = error?.GetType().Name },
-                new JsonSerializerOptions { WriteIndented = true }));
+            File.WriteAllText(path, JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["utc"] = DateTimeOffset.UtcNow,
+            ["hostPid"] = Environment.ProcessId,
+            ["hostVersion"] = typeof(NteHostStartupDiagnostics).Assembly.GetName().Version?.ToString(),
+            ["phase"] = phase,
+            ["exceptionType"] = error?.GetType().Name
+        }, NteJsonContext.Default.DictionaryStringObject));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
@@ -31,11 +35,14 @@ internal static class NteHostStartupDiagnostics
         {
             if (key.Length > 64 || key.Any(c => !char.IsAsciiLetterOrDigit(c))) return;
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-            File.WriteAllText(path, JsonSerializer.Serialize(new { utc = DateTimeOffset.UtcNow,
-                hostVersion = typeof(NteHostStartupDiagnostics).Assembly.GetName().Version?.ToString(),
-                key, exceptionType = error.GetType().Name,
-                nativeErrorCode = error is Win32Exception native ? native.NativeErrorCode : (int?)null },
-                new JsonSerializerOptions { WriteIndented = true }));
+            File.WriteAllText(path, JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["utc"] = DateTimeOffset.UtcNow,
+            ["hostVersion"] = typeof(NteHostStartupDiagnostics).Assembly.GetName().Version?.ToString(),
+            ["key"] = key,
+            ["exceptionType"] = error.GetType().Name,
+            ["nativeErrorCode"] = error is Win32Exception native ? native.NativeErrorCode : (int?)null
+        }, NteJsonContext.Default.DictionaryStringObject));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { }
     }

@@ -1,8 +1,12 @@
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Interop;
-using System.Windows.Media;
-using System.Windows.Threading;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Styling;
+
+using Avalonia.Platform;
+
+using Avalonia.Media;
+using Avalonia.Threading;
 
 namespace Nte.LoginHost;
 
@@ -15,12 +19,12 @@ internal sealed class WelcomeToast : Window
 
     internal WelcomeToast()
     {
-        Title = Localization.LoginText.Get("WelcomeTitle"); WindowStyle = WindowStyle.None; ResizeMode = ResizeMode.NoResize;
-        AllowsTransparency = true; Background = Brushes.Transparent; ShowActivated = false; ShowInTaskbar = false;
+        Title = Localization.LoginText.Get("WelcomeTitle"); SystemDecorations = SystemDecorations.None; CanResize = false;
+        TransparencyLevelHint = [WindowTransparencyLevel.Transparent]; Background = Brushes.Transparent; ShowActivated = false; ShowInTaskbar = false;
         SizeToContent = SizeToContent.WidthAndHeight; FontFamily = new("Microsoft YaHei UI");
         Content = new Border { Background = new SolidColorBrush(Color.FromArgb(238, 30, 57, 71)), CornerRadius = new(12),
             Padding = new(22, 13, 22, 13), Child = text };
-        handle = new WindowInteropHelper(this).EnsureHandle();
+        handle = TryGetPlatformHandle()?.Handle ?? throw new InvalidOperationException("Native welcome window unavailable.");
         WindowNative.SetWindowLongPtr(handle, -20, WindowNative.GetWindowLongPtr(handle, -20) | 0x080000A0);
         expiry.Tick += (_, _) => Dismiss();
     }
@@ -43,7 +47,7 @@ internal sealed class WelcomeToast : Window
         WindowNative.SetWindowLongPtr(handle, -8, gameWindow);
         if (!IsVisible) Show();
         UpdateLayout();
-        int width = (int)Math.Ceiling(ActualWidth * scale), height = (int)Math.Ceiling(ActualHeight * scale);
+        int width = (int)Math.Ceiling(Bounds.Width * scale), height = (int)Math.Ceiling(Bounds.Height * scale);
         WindowNative.SetWindowPos(handle, 0, bounds.Left + (bounds.Width - width) / 2, bounds.Top + (int)(28 * scale), width, height, 0x214);
     }
     internal void Dismiss() { Active = false; expiry.Stop(); Hide(); }

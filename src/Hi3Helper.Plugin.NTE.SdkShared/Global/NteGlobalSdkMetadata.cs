@@ -18,7 +18,7 @@ internal static class NteGlobalSdkMetadata
             ["CountryCode"] = Text(result, "countryCode"),
             ["IP"] = Text(result, "ip"),
             ["Province"] = Text(result, "province")
-        });
+        }, NteJsonContext.Default.SortedDictionaryStringString);
     }
 
     private static string Text(JsonElement value, string name) =>
