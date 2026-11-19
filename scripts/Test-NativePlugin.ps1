@@ -114,8 +114,8 @@ public static unsafe class NteNativeSmoke
             try
             {
                 if (sourceCount != 2 || sources == null ||
-                    Marshal.PtrToStringUni((nint)sources[0]) != "https://github.com/maxinglo/Hi3Helper.Plugin.NTE/releases/latest/download" ||
-                    Marshal.PtrToStringUni((nint)sources[1]) != "https://gitee.com/maxing_long/hi3helper-plugin-nte/releases/download/latest")
+                    Marshal.PtrToStringUni((nint)sources[0]) != "https://github.com/maxinglo/Hi3Helper.Plugin.NTE/releases/download/collapse-update" ||
+                    Marshal.PtrToStringUni((nint)sources[1]) != "https://gitee.com/maxing_long/hi3helper-plugin-nte/releases/download/collapse-update")
                     throw new InvalidOperationException("Unexpected NTE plugin update sources.");
             }
             finally
