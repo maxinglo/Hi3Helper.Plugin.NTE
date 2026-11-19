@@ -103,6 +103,30 @@ public static unsafe class NteNativeSmoke
                 ((delegate* unmanaged[MemberFunction]<nint, Guid*, nint*, int>)unknownTable[0])(unknown, &pluginId, &plugin));
             // IPlugin's vtable is fixed by the pinned Core API 0.1.6 contract.
             void** table = *(void***)plugin;
+            nint updater = 0;
+            Marshal.ThrowExceptionForHR(((delegate* unmanaged[MemberFunction]<nint, nint*, int>)table[15])(plugin, &updater));
+            if (updater == 0)
+                throw new InvalidOperationException("Missing NTE self-update interface.");
+            Marshal.Release(updater);
+            int sourceCount = 0;
+            char** sources = null;
+            ((delegate* unmanaged[Cdecl]<int*, char***, void>)Find("GetPluginUpdateCdnList"))(&sourceCount, &sources);
+            try
+            {
+                if (sourceCount != 2 || sources == null ||
+                    Marshal.PtrToStringUni((nint)sources[0]) != "https://github.com/maxinglo/Hi3Helper.Plugin.NTE/releases/latest/download" ||
+                    Marshal.PtrToStringUni((nint)sources[1]) != "https://gitee.com/maxing_long/hi3helper-plugin-nte/releases/download/latest")
+                    throw new InvalidOperationException("Unexpected NTE plugin update sources.");
+            }
+            finally
+            {
+                if (sources != null)
+                {
+                    for (int i = 0; i < sourceCount; i++)
+                        Marshal.FreeCoTaskMem((nint)sources[i]);
+                    NativeMemory.Free(sources);
+                }
+            }
             int count = 0;
             Marshal.ThrowExceptionForHR(((delegate* unmanaged[MemberFunction]<nint, int*, int>)table[8])(plugin, &count));
             if (count != 3)
@@ -154,7 +178,7 @@ public static unsafe class NteNativeSmoke
             if (plugin != 0) Marshal.Release(plugin);
             Marshal.Release(unknown);
         }
-        return "Native ABI, region preview/rejection, en/zh metadata and appearance UI OK; Core " + standard + "; NTE " + version;
+        return "Native ABI, update sources, region preview/rejection, en/zh metadata and appearance UI OK; Core " + standard + "; NTE " + version;
     }
 
     private static void Check(int result, string operation)

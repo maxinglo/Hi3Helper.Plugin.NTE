@@ -38,7 +38,7 @@ public partial class NtePlugin : PluginBase
 
     public override void GetNotificationPosterUrl(out string result) => result = NteConfigProvider.CN.ZonePosterUrl;
 
-    public override void GetPluginSelfUpdater(out IPluginSelfUpdate? selfUpdate) => selfUpdate = null;
+    public override void GetPluginSelfUpdater(out IPluginSelfUpdate? selfUpdate) => selfUpdate = new NtePluginSelfUpdater();
 
     public override unsafe void GetPluginCreationDate(out DateTime* result) => result = _pluginCreationDate.AsPointer();
 

@@ -6,7 +6,8 @@ param(
     [string] $Version,
     [ValidatePattern('^[A-Za-z0-9._-]+$')]
     [string] $OutputName,
-    [switch] $Package
+    [switch] $Package,
+    [switch] $UpdateAssets
 )
 
 $ErrorActionPreference = 'Stop'
@@ -19,6 +20,7 @@ $project = Join-Path $repositoryRoot 'src/Hi3Helper.Plugin.NTE/Hi3Helper.Plugin.
 if ($Version -and $Version -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') {
     throw 'Version must contain three or four numeric components.'
 }
+if ($UpdateAssets -and -not $Package) { throw 'Request -Package together with -UpdateAssets.' }
 
 Push-Location $repositoryRoot
 try {
@@ -60,12 +62,16 @@ try {
         $packageDirectory = Join-Path $repositoryRoot 'artifacts/packages'
         New-Item -ItemType Directory -Force -Path $packageDirectory | Out-Null
         $effectiveVersion = if ($Version) { $Version } else { ([xml](Get-Content -LiteralPath $project -Raw)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1 }
-        $packageName = 'NTE_{0}_{1}.zip' -f $effectiveVersion, $effectiveOutputName
+        $packageName = 'NTE_{0}_{1}' -f $effectiveVersion, $effectiveOutputName
         & $indexer $outputDirectory
         if ($LASTEXITCODE -ne 0) { throw "Indexing failed ($LASTEXITCODE)." }
         # Preserve manifest path separators in ZIP entry names: the Collapse
         # importer compares FullName to manifest FilePath without normalization.
-        & (Join-Path $PSScriptRoot 'New-NteImportPackage.ps1') -PublishDirectory $outputDirectory -ArchivePath (Join-Path $packageDirectory $packageName) | Out-Host
+        & (Join-Path $PSScriptRoot 'New-NteImportPackage.ps1') -PublishDirectory $outputDirectory -ArchivePath (Join-Path $packageDirectory "$packageName.zip") | Out-Host
+        if ($UpdateAssets) {
+            & (Join-Path $PSScriptRoot 'New-NteUpdateAssets.ps1') -PublishDirectory $outputDirectory `
+                -UpdateDirectory (Join-Path $repositoryRoot "artifacts/update/$packageName") | Out-Host
+        }
     }
     Write-Host "Output: $outputDirectory"
 }
