@@ -17,6 +17,10 @@ on:
           - ReleasePublish-O2
           - ReleaseNoReflectionPublish-O1
           - ReleaseNoReflectionPublish-O2
+      mirror_existing_release:
+        description: Repair the OSS mirror from an existing formal GitHub Release
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -27,6 +31,7 @@ concurrency:
 
 jobs:
   release:
+    if: "!inputs.mirror_existing_release"
     runs-on: windows-latest
     permissions:
       contents: write
@@ -98,7 +103,10 @@ jobs:
 
   mirror:
     name: Mirror the installer and auto-update feed to OSS via ESA
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      ${{ !cancelled() && github.ref == 'refs/heads/main' &&
+          (needs.release.result == 'success' ||
+           (inputs.mirror_existing_release && needs.release.result == 'skipped')) }}
     needs: release
     runs-on: windows-latest
     permissions:
@@ -117,8 +125,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          $tag = "v$env:RELEASE_VERSION"
           $packageName = "NTE_${env:RELEASE_VERSION}_${env:PUBLISH_PROFILE}.zip"
-          gh release download "v$env:RELEASE_VERSION" --pattern $packageName --dir artifacts/installer
+          $release = gh release view $tag --json isDraft,isPrerelease,assets
+          if ($LASTEXITCODE -ne 0) { throw 'Could not verify the formal GitHub Release.' }
+          $release = $release | ConvertFrom-Json
+          if ($release.isDraft -or $release.isPrerelease -or $release.assets.Count -ne 1 -or $release.assets[0].name -cne $packageName) {
+            throw "GitHub Release $tag must have the requested installer as its only asset."
+          }
+          gh release download $tag --pattern $packageName --dir artifacts/installer
           if ($LASTEXITCODE -ne 0) { throw 'GitHub installer download failed.' }
           $package = Get-Item -LiteralPath "artifacts/installer/$packageName"
           $extracted = Join-Path $env:GITHUB_WORKSPACE 'artifacts/released-plugin'
@@ -127,6 +142,11 @@ jobs:
       - uses: aliyun/setup-aliyun-cli-action@09a5f86915bb556e27bf050e9a5e339aeb073df5 # v1
         with:
           version: 3.5.1
+      - name: Add the Alibaba Cloud CLI to the Windows runner path
+        shell: pwsh
+        run: |
+          $cli = Get-Item -LiteralPath 'out/aliyun.exe'
+          $cli.DirectoryName >> $env:GITHUB_PATH
       - uses: aliyun/configure-aliyun-credentials-action@1e5248c8d5d93a8781ac344a68e19a43341e79e6
         with:
           oidc-provider-arn: ${{ vars.ALIBABA_CLOUD_OIDC_PROVIDER_ARN }}
