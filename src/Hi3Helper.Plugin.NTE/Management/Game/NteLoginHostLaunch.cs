@@ -2,8 +2,10 @@ using Nte.Login;
 using System;
 using System.ComponentModel;
 using System.IO;
+using System.IO.Compression;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 
 namespace Hi3Helper.Plugin.NTE.Management.Game;
 
@@ -17,10 +19,49 @@ internal static class NteLoginHostLaunch
 
     internal static string ResolveHostPath(string pluginDirectory)
     {
-        string root = Path.Combine(Path.GetFullPath(pluginDirectory), "LoginHost");
+        pluginDirectory = Path.GetFullPath(pluginDirectory);
+        string payload = Path.Combine(pluginDirectory, "Nte.PluginPayload.zip");
+        if (!File.Exists(payload))
+            return VerifyHostPath(Path.Combine(pluginDirectory, "LoginHost"));
+
+        using FileStream archive = File.OpenRead(payload);
+        string digest = Convert.ToHexString(SHA256.HashData(archive));
+        string extracted = Path.Combine(pluginDirectory, "Nte.PluginPayload-" + digest);
+        if (Directory.Exists(extracted))
+            return VerifyHostPath(Path.Combine(extracted, "LoginHost"));
+
+        // Release attachments are flat. Restore the LoginHost layout before
+        // exposing a complete directory to other launcher processes.
+        string staging = extracted + "." + Guid.NewGuid().ToString("N");
+        try
+        {
+            archive.Position = 0;
+            ZipFile.ExtractToDirectory(archive, staging);
+            VerifyHostPath(Path.Combine(staging, "LoginHost"));
+            try
+            {
+                Directory.Move(staging, extracted);
+            }
+            catch (IOException) when (Directory.Exists(extracted))
+            {
+                // Another process already finished extracting the same payload.
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(staging))
+                Directory.Delete(staging, recursive: true);
+        }
+
+        return VerifyHostPath(Path.Combine(extracted, "LoginHost"));
+    }
+
+    private static string VerifyHostPath(string root)
+    {
         foreach (string file in new[]
                  {
-                     "Nte.LoginHost.exe", "libSkiaSharp.dll", "libHarfBuzzSharp.dll", "Assets/question-mascot.png",
+                     "Nte.LoginHost.exe", "libSkiaSharp.dll", "libHarfBuzzSharp.dll",
+                     "Assets/question-mascot.png",
                      "Assets/Brand/google-g.png", "Assets/Brand/facebook-primary.png"
                  })
             if (!File.Exists(Path.Combine(root, file)))

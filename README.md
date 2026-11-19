@@ -54,7 +54,7 @@
 3. 重启 Collapse，在游戏列表中选择 **异环** 及对应地区。
 4. 安装游戏，或选择已有的游戏安装目录。
 
-此分支的登录窗口使用 Avalonia 与 Native AOT，随包提供原生可执行文件及渲染库，无须安装 .NET 桌面运行时。更新插件时同样导入新版本 ZIP；账号和游戏文件不保存在插件目录中。
+登录窗口使用 Avalonia 与 Native AOT，随包提供原生可执行文件及渲染库，无须安装 .NET 桌面运行时。已安装旧版的用户需要先手动导入一次支持自动更新的 ZIP。之后可以在 Collapse 的 **设置 → 插件管理** 检查新版本，或启用插件自动更新。Collapse 从 GitHub Releases 或 Gitee 镜像的 `manifest.json` 检查版本、下载并校验更新文件，重启后应用。账号和游戏文件保存在插件目录之外。
 
 ## 从源码构建
 
@@ -67,6 +67,8 @@ git submodule update --init --recursive
 ```
 
 可导入的 ZIP 位于 `artifacts/packages/`。构建脚本编译插件和登录组件，发布脚本检查原生接口、自包含登录宿主和包内容。
+
+在 GitHub Actions 手动运行 **Release NTE Plugin** 时，工作流会把手动导入 ZIP、更新清单和清单引用的附件上传到同一个 GitHub Release。随后独立的镜像任务使用仓库的 Actions Secret `GITEE_TOKEN`，将相同附件发布到 [Gitee Releases](https://gitee.com/maxing_long/hi3helper-plugin-nte/releases)。令牌需要对应镜像仓库的 `projects` 权限。镜像失败时可以单独重跑镜像任务。
 
 `codex/loginhost-native-aot` 分支将 LoginHost 从 WPF 迁移至 Avalonia，保留原有登录流程与卡片风格。迁移范围、原生发布与隔离验证命令见 [LoginHost Native AOT](docs/loginhost-native-aot.md)。
 
