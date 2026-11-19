@@ -104,12 +104,37 @@ function Get-DownloadUrl([string] $ReleaseTag, [string] $Name) {
 
 function Test-PublishedFile([IO.FileInfo] $File, $Attachment, [string] $ReleaseTag) {
     if ($Attachment.name -cne $File.Name -or $Attachment.size -ne $File.Length) { return $false }
+    $curl = if ($IsWindows) { 'curl.exe' } else { 'curl' }
     $download = [IO.Path]::GetTempFileName()
     try {
         $url = Get-DownloadUrl $ReleaseTag $File.Name
-        Invoke-WebRequest -Uri $url -OutFile $download -TimeoutSec 300 -MaximumRetryCount 2 -RetryIntervalSec 2
-        $downloadHash = (Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash
-        $downloadHash -eq (Get-FileHash -LiteralPath $File.FullName -Algorithm SHA256).Hash
+        for ($attempt = 1; $attempt -le 4; $attempt++) {
+            $offset = (Get-Item -LiteralPath $download).Length
+            $status = & $curl --disable --http1.1 --silent --show-error --fail --location --max-redirs 5 `
+                --proto '=https' --proto-redir '=https' --connect-timeout 30 --max-time 300 --max-filesize $File.Length `
+                --speed-time 60 --speed-limit 1024 --continue-at - --output $download --write-out '%{http_code}' $url
+            $exitCode = $LASTEXITCODE
+            if ($exitCode -eq 0 -and $status -in @('200', '206')) {
+                $downloadHash = (Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash
+                $matches = (Get-Item -LiteralPath $download).Length -eq $File.Length -and
+                    $downloadHash -eq (Get-FileHash -LiteralPath $File.FullName -Algorithm SHA256).Hash
+                if ($matches -or $offset -eq 0) { return $matches }
+                if ($attempt -eq 4) { throw "Could not verify the resumed download of $($File.Name)." }
+                # A changed server copy can invalidate a resumed download. Retry from byte zero.
+                [IO.File]::WriteAllBytes($download, [byte[]]::new(0))
+            } else {
+                if ($attempt -eq 4) {
+                    throw "Could not download $($File.Name) for verification (curl exit $exitCode, HTTP $status)."
+                }
+                if ($exitCode -in @(33, 36) -or $status -eq '416' -or
+                    (Get-Item -LiteralPath $download).Length -ge $File.Length) {
+                    # This response did not support the range, or left an unconfirmed full file.
+                    [IO.File]::WriteAllBytes($download, [byte[]]::new(0))
+                }
+                Write-Host "Retrying verification download for $($File.Name) (curl exit $exitCode, HTTP $status)."
+            }
+            Start-Sleep -Seconds (2 * $attempt)
+        }
     } finally {
         Remove-Item -LiteralPath $download -Force
     }
@@ -127,6 +152,8 @@ function Get-Attachments([string] $Resource) {
 
 function Publish-Attachment([string] $Resource, [IO.FileInfo] $File, [string] $ReleaseTag) {
     $curl = if ($IsWindows) { 'curl.exe' } else { 'curl' }
+    # Keep the usual timeout for small files and budget for slower large uploads.
+    $uploadTimeout = [Math]::Max(900, 120 + [Math]::Ceiling($File.Length / 12000))
     $formPath = $File.FullName.Replace('\', '/').Replace('"', '\"')
     $form = 'file=@"' + $formPath + '"'
     $curlConfig = 'header = "Authorization: Bearer ' + $env:GITEE_TOKEN + '"'
@@ -135,7 +162,7 @@ function Publish-Attachment([string] $Resource, [IO.FileInfo] $File, [string] $R
         for ($attempt = 1; $attempt -le 3; $attempt++) {
             Write-Host "Uploading Gitee attachment $($File.Name) ($($File.Length) bytes), attempt $attempt."
             $metrics = $curlConfig | & $curl --disable --config - --http1.1 --silent --show-error `
-                --connect-timeout 30 --max-time 900 --speed-time 120 --speed-limit 1024 `
+                --connect-timeout 30 --max-time $uploadTimeout --speed-time 120 --speed-limit 1024 `
                 --header 'Expect:' --header 'Accept: application/json' --form $form `
                 --output $responsePath --write-out '%{http_code} %{size_upload} %{time_total}' "$apiUrl/$Resource"
             $exitCode = $LASTEXITCODE
