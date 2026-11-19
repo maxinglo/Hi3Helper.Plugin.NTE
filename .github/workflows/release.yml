@@ -17,10 +17,6 @@ on:
           - ReleasePublish-O2
           - ReleaseNoReflectionPublish-O1
           - ReleaseNoReflectionPublish-O2
-      replace_gitee_commit:
-        description: Expected old Gitee tag commit when explicitly replacing an installer
-        required: false
-        type: string
 
 permissions:
   contents: read
@@ -101,9 +97,13 @@ jobs:
           ./scripts/Publish-GitHubUpdateFeed.ps1 -Repository $env:GITHUB_REPOSITORY -UpdateDirectory artifacts/update-feed -Version $env:RELEASE_VERSION -Commit $env:GITHUB_SHA
 
   mirror:
-    name: Mirror the installer and auto-update feed to Gitee
+    name: Mirror the installer and auto-update feed to OSS via ESA
+    if: github.ref == 'refs/heads/main'
     needs: release
     runs-on: windows-latest
+    permissions:
+      contents: read
+      id-token: write
     env:
       RELEASE_VERSION: ${{ inputs.version }}
       PUBLISH_PROFILE: ${{ inputs.publish_profile }}
@@ -124,20 +124,15 @@ jobs:
           $extracted = Join-Path $env:GITHUB_WORKSPACE 'artifacts/released-plugin'
           [IO.Compression.ZipFile]::ExtractToDirectory($package.FullName, $extracted)
           ./scripts/New-NteUpdateAssets.ps1 -PublishDirectory $extracted -UpdateDirectory artifacts/update-feed
-      - name: Publish the Gitee installer and update feed
+      - uses: aliyun/setup-aliyun-cli-action@09a5f86915bb556e27bf050e9a5e339aeb073df5 # v1
+        with:
+          version: 3.5.1
+      - uses: aliyun/configure-aliyun-credentials-action@1e5248c8d5d93a8781ac344a68e19a43341e79e6
+        with:
+          oidc-provider-arn: ${{ vars.ALIBABA_CLOUD_OIDC_PROVIDER_ARN }}
+          role-to-assume: ${{ vars.ALIBABA_CLOUD_OSS_ROLE_ARN }}
+      - name: Upload to OSS and verify through ESA
         shell: pwsh
-        env:
-          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
-          REPLACE_GITEE_COMMIT: ${{ inputs.replace_gitee_commit }}
         run: |
           $package = Get-Item -LiteralPath "artifacts/installer/NTE_${env:RELEASE_VERSION}_${env:PUBLISH_PROFILE}.zip"
-          $release = @{
-            Repository = 'maxing_long/hi3helper-plugin-nte'
-            Tag = "v$env:RELEASE_VERSION"
-            Commit = $env:GITHUB_SHA
-          }
-          $replacement = @{}
-          if ($env:REPLACE_GITEE_COMMIT) { $replacement.ReplaceInstallerCommit = $env:REPLACE_GITEE_COMMIT }
-          ./scripts/Publish-GiteeRelease.ps1 @release @replacement -InstallerOnly -Files $package.FullName
-          $files = @(Get-ChildItem -LiteralPath artifacts/update-feed -File | ForEach-Object FullName)
-          ./scripts/Publish-GiteeRelease.ps1 @release -UpdateFeed -Files $files
+          ./scripts/Publish-OssMirror.ps1 -Plugin nte -Tag "v$env:RELEASE_VERSION" -Installer $package.FullName -UpdateDirectory artifacts/update-feed
