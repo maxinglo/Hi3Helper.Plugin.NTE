@@ -11,8 +11,8 @@ internal sealed partial class NtePluginSelfUpdater : PluginSelfUpdateBase
 {
     private static readonly string[] ReleaseSources =
     [
-        "https://github.com/maxinglo/Hi3Helper.Plugin.NTE/releases/latest/download",
-        "https://gitee.com/maxing_long/hi3helper-plugin-nte/releases/download/latest"
+        "https://github.com/maxinglo/Hi3Helper.Plugin.NTE/releases/download/collapse-update",
+        "https://gitee.com/maxing_long/hi3helper-plugin-nte/releases/download/collapse-update"
     ];
 
     private readonly Lazy<HttpClient> _updateHttpClient =
