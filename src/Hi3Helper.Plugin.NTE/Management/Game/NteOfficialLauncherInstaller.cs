@@ -1,5 +1,6 @@
 using Hi3Helper.Plugin.NTE.Management.Api.Media;
 using Hi3Helper.Plugin.NTE.Management.Config;
+using Nte.Login;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -13,6 +14,13 @@ namespace Hi3Helper.Plugin.NTE.Management.Game;
 // Keep UserData intact when installing official SDK and fallback-launcher components.
 internal sealed class NteOfficialLauncherInstaller(HttpClient http)
 {
+    private const string BilibiliSdkDirectory = "channelSdk/bilibili/";
+    private const string BilibiliSdkLibrary = BilibiliSdkDirectory + "PCGameSDK.dll";
+    private const string BilibiliSdkPlatform = BilibiliSdkDirectory + "BLPlatform64/PCGamePlatform.exe";
+
+    internal static bool IsBilibiliSdkPath(string path) =>
+        path.Replace('\\', '/').TrimStart('/').StartsWith(BilibiliSdkDirectory, StringComparison.OrdinalIgnoreCase);
+
     internal async Task InstallAsync(string root, NteRegionConfig region,
         Action<long, long, int, int>? progress, CancellationToken token)
     {
@@ -22,23 +30,33 @@ internal sealed class NteOfficialLauncherInstaller(HttpClient http)
         string url = NteLauncherManifest.ParseFileListUrl(ini, region.LauncherVersionIniUrl);
         NteLauncherManifest manifest =
             NteLauncherManifest.Parse(await client.ReadTextAsync(url, token).ConfigureAwait(false), url);
-        if (!manifest.Files.Any(file =>
-                file.Path.TrimStart('/').Equals(region.LauncherDirectoryName + "Game.exe",
-                    StringComparison.OrdinalIgnoreCase)))
-            throw new InvalidDataException("The official login platform is missing from its verified inventory.");
-        List<(string Active, string Cached)> prepared = [];
+        string launcherExecutable = NteRegionDefinition.From(region.HostRegion).LauncherExecutable;
+        List<NteLauncherFile> files = manifest.Files.Where(file => region.IsBilibili || !IsBilibiliSdkPath(file.Path)).ToList();
         HashSet<string> paths = new(StringComparer.OrdinalIgnoreCase);
-        long total = manifest.Files.Sum(file => file.Size), done = 0;
-        int count = 0;
-        foreach (NteLauncherFile file in manifest.Files)
+        foreach (NteLauncherFile file in files)
         {
-            token.ThrowIfCancellationRequested();
-            string relative = file.Path.TrimStart('/').Replace('\\', '/');
-            if (relative.Split('/').Any(part => part is "." or "..") ||
+            string relative = file.Path.TrimStart('/');
+            if (relative.Split('/').Any(part => part is "" or "." or "..") ||
                 relative.StartsWith("UserData/", StringComparison.OrdinalIgnoreCase) || !paths.Add(relative))
                 throw new InvalidDataException("Invalid or duplicate path in the official platform inventory.");
+        }
+
+        if (!paths.Contains(launcherExecutable))
+            throw new InvalidDataException("The official login platform is missing from its verified inventory.");
+        if (region.IsBilibili && (!paths.Contains(BilibiliSdkLibrary) || !paths.Contains(BilibiliSdkPlatform)))
+            throw new InvalidDataException("The official platform inventory is missing required Bilibili SDK components.");
+
+        List<(string Active, string Cached)> prepared = [];
+        bool validChannelConfig = !region.IsBilibili;
+        long total = files.Sum(file => file.Size), done = 0;
+        int count = 0;
+        foreach (NteLauncherFile file in files)
+        {
+            token.ThrowIfCancellationRequested();
+            string relative = file.Path.TrimStart('/');
             string destination = region.LauncherDirectoryName + "/" + relative;
             string active = NteSharedInstallation.ManagedPath(root, destination);
+            string verified = active;
             if (!await NteRegionSwitchTransaction.MatchesAsync(active, file.Size, file.Md5, token)
                     .ConfigureAwait(false))
             {
@@ -66,11 +84,18 @@ internal sealed class NteOfficialLauncherInstaller(HttpClient http)
                 }
 
                 prepared.Add((active, cached));
+                verified = cached;
             }
 
+            if (region.IsBilibili && relative.Equals("Config/Config.ini", StringComparison.OrdinalIgnoreCase))
+                validChannelConfig = NteConfigProvider.IsBilibiliLauncherConfig(verified);
+
             done += file.Size;
-            progress?.Invoke(done, total, ++count, manifest.Files.Count);
+            progress?.Invoke(done, total, ++count, files.Count);
         }
+
+        if (!validChannelConfig)
+            throw new InvalidDataException("The official platform inventory has no verified Bilibili launcher configuration.");
 
         NteSharedInstallation.EnsureGamesClosed(root);
         foreach ((string active, string cached) in prepared)

@@ -15,7 +15,10 @@ internal sealed partial class LoginWindow
 {
     private NteHostLaunchOptions? launchOptions;
     private TaskCompletionSource<bool>? noticeCompletion;
-    private readonly NteLoginNotice notice = new(NteLoginNotice.DefaultPath);
+    private NteLoginNotice Notice => IsBilibiliLaunch
+        ? new(NteLoginNotice.BilibiliPath, NteLoginNotice.BilibiliRevision)
+        : new(NteLoginNotice.DefaultPath);
+    private bool IsBilibiliLaunch => launchOptions?.Region == NteHostRegion.Bilibili;
     private readonly Button officialLauncher = new();
     private bool noticeGlobal, noticeConfirmation;
     private Border? confirmationOverlay;
@@ -26,7 +29,7 @@ internal sealed partial class LoginWindow
 
     internal async Task<bool> EnsureNoticeAsync(bool global, CancellationToken token)
     {
-        if (notice.IsAcknowledged()) return true;
+        if (Notice.IsAcknowledged()) return true;
         noticeCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
         Task<bool> answer = noticeCompletion.Task;
         requested = true;
@@ -54,7 +57,7 @@ internal sealed partial class LoginWindow
         helpOpen = true;
         noticeConfirmation = false;
         form.Children.Clear();
-        title.Text = LoginText.Get("SignInHelp");
+        title.Text = LoginText.Get(IsBilibiliLaunch ? "NoticeBilibiliTitle" : "SignInHelp");
         subtitle.IsVisible = modeRail.IsVisible = status.IsVisible = false;
         footer.IsVisible = login.IsVisible = true;
         closeLogin.IsVisible = !(MandatoryNotice);
@@ -64,7 +67,10 @@ internal sealed partial class LoginWindow
         login.IsDefault = true;
         officialLauncher.Content = LoginText.Get("UseOfficialLauncher");
         officialLauncher.IsVisible = true;
-        foreach (string section in new[] { "Purpose", "Risk", "Sharing", "Data", "Storage", "Network", "Retention", "Choice" })
+        string[] sections = IsBilibiliLaunch
+            ? ["BilibiliPurpose", "BilibiliData", "BilibiliNetwork", "BilibiliStorage", "BilibiliRisk", "BilibiliChoice", "Sharing"]
+            : ["Purpose", "Risk", "Sharing", "Data", "Storage", "Network", "Retention", "Choice"];
+        foreach (string section in sections)
         {
             Add(form, new TextBlock { Text = LoginText.Get("Notice" + section + "Title"), FontSize = 14, FontWeight = FontWeight.SemiBold }, 6);
             string body = section == "Sharing"
@@ -88,7 +94,7 @@ internal sealed partial class LoginWindow
         if (noticeConfirmation) { CompleteOfficialChoice(); return; }
         if (MandatoryNotice)
         {
-            try { if (!preview) notice.Acknowledge(); }
+            try { if (!preview) Notice.Acknowledge(); }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException)
             {
                 noticeError = LoginText.Get("NoticeSaveFailed");
@@ -126,7 +132,7 @@ internal sealed partial class LoginWindow
         noticeConfirmation = true;
         StackPanel dialog = new();
         Add(dialog, new TextBlock { Text = LoginText.Get("UseOfficialLauncher"), FontSize = 17, FontWeight = FontWeight.SemiBold });
-        Add(dialog, new TextBlock { Text = LoginText.Get("OfficialLauncherConfirm"), FontSize = 13, TextWrapping = TextWrapping.Wrap });
+        Add(dialog, new TextBlock { Text = LoginText.Get(IsBilibiliLaunch ? "BilibiliOfficialLauncherConfirm" : "OfficialLauncherConfirm"), FontSize = 13, TextWrapping = TextWrapping.Wrap });
         Button confirm = new() { Content = LoginText.Get("ConfirmOfficialLauncher"), MinHeight = 42, Theme = FindStyle("AccentButtonStyle") };
         Button cancel = new() { Content = LoginText.Get("CancelOperation"), MinHeight = 36, Margin = new(0, 8, 0, 0), Theme = FindStyle("SmsButtonStyle") };
         AutomationProperties.SetAutomationId(confirm, "confirm-official-launcher");

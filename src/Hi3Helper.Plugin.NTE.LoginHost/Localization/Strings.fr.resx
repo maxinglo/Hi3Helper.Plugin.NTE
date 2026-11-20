@@ -594,4 +594,64 @@ Download: {3} files ({4:F3} GB)</value></data>
   <data name="CnFilesMissing" xml:space="preserve"><value>Des fichiers nécessaires à la connexion sont absents. Vérifiez ou réparez le jeu.</value></data>
   <data name="CnClientRunning" xml:space="preserve"><value>Le jeu ou le lanceur officiel est encore ouvert. Fermez-le puis réessayez.</value></data>
   <data name="CnLoginHostRunning" xml:space="preserve"><value>Un composant de connexion est déjà ouvert. Revenez à sa fenêtre ou fermez-le puis réessayez.</value></data>
+  <data name="BilibiliSdkMissing" xml:space="preserve">
+    <value>Les composants de connexion Bilibili sont manquants. Réparez le jeu ou mettez à jour le lanceur officiel dans ce dossier de jeu.</value>
+  </data>
+  <data name="BilibiliSdkUnsupported" xml:space="preserve">
+    <value>Cette version du SDK Bilibili n’est pas encore prise en charge. Connectez-vous avec le lanceur officiel.</value>
+  </data>
+  <data name="BilibiliSdkInitFailed" xml:space="preserve">
+    <value>La connexion Bilibili n’a pas pu démarrer. Réparez le jeu ou utilisez le lanceur officiel.</value>
+  </data>
+  <data name="BilibiliSdkLoginFailed" xml:space="preserve">
+    <value>La connexion Bilibili n’a pas abouti. Réessayez depuis le jeu.</value>
+  </data>
+  <data name="BilibiliSdkTimedOut" xml:space="preserve">
+    <value>La connexion Bilibili a expiré. Quittez le jeu et réessayez.</value>
+  </data>
+  <data name="BilibiliServiceLoginFailed" xml:space="preserve">
+    <value>Le service du jeu a refusé la connexion Bilibili. Réessayez ou utilisez le lanceur officiel.</value>
+  </data>
+  <data name="NoticeBilibiliData" xml:space="preserve">
+    <value>Connectez-vous dans la fenêtre officielle de Bilibili. Le plugin utilise l’identifiant de compte et le jeton reçus uniquement pour cette session de jeu.</value>
+  </data>
+  <data name="NoticeBilibiliStorage" xml:space="preserve">
+    <value>Le plugin enregistre la confirmation de cet avis. Le SDK officiel de Bilibili gère son historique de connexion et ses données locales.</value>
+  </data>
+  <data name="NoticeBilibiliNetwork" xml:space="preserve">
+    <value>Le SDK Bilibili communique avec Bilibili. Pour la connexion et les vérifications, le plugin envoie l’identifiant du compte, le jeton et les informations nécessaires sur l’appareil à l’éditeur du jeu via HTTPS.</value>
+  </data>
+  <data name="NoticeBilibiliTitle" xml:space="preserve">
+    <value>Avis de connexion Bilibili</value>
+  </data>
+  <data name="NoticeBilibiliPurposeTitle" xml:space="preserve">
+    <value>Déroulement de la connexion</value>
+  </data>
+  <data name="NoticeBilibiliPurpose" xml:space="preserve">
+    <value>Lorsque le jeu demande une connexion, le plugin ouvre le SDK officiel Bilibili installé avec le jeu. Une fois la connexion effectuée, le plugin transmet le résultat à l’éditeur et attend son approbation avant d’en informer le jeu.</value>
+  </data>
+  <data name="NoticeBilibiliDataTitle" xml:space="preserve">
+    <value>Utilisation des données du compte</value>
+  </data>
+  <data name="NoticeBilibiliNetworkTitle" xml:space="preserve">
+    <value>Vérification par l’éditeur</value>
+  </data>
+  <data name="NoticeBilibiliStorageTitle" xml:space="preserve">
+    <value>Stockage local</value>
+  </data>
+  <data name="NoticeBilibiliRiskTitle" xml:space="preserve">
+    <value>Compatibilité et risques pour le compte</value>
+  </data>
+  <data name="NoticeBilibiliRisk" xml:space="preserve">
+    <value>Le démarrage indépendant utilise un plugin tiers. Les mises à jour du lanceur, les conditions d’utilisation et les restrictions de compte peuvent l’affecter. Vous pouvez choisir le lanceur officiel dans les paramètres de démarrage du jeu.</value>
+  </data>
+  <data name="NoticeBilibiliChoiceTitle" xml:space="preserve">
+    <value>Utiliser le lanceur officiel</value>
+  </data>
+  <data name="NoticeBilibiliChoice" xml:space="preserve">
+    <value>Activez le lanceur officiel dans les paramètres de démarrage du jeu. Il s’exécute en arrière-plan depuis l’installation Bilibili choisie et peut afficher des fenêtres de connexion, de vérification ou de mise à jour.</value>
+  </data>
+  <data name="BilibiliOfficialLauncherConfirm" xml:space="preserve">
+    <value>Utiliser le lanceur officiel Bilibili au prochain démarrage et fermer le jeu maintenant ? Le lanceur doit se trouver dans le dossier NTELauncher de cette installation.</value>
+  </data>
 </root>

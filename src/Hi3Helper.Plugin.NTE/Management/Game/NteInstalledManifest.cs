@@ -15,7 +15,8 @@ namespace Hi3Helper.Plugin.NTE.Management.Game;
 internal static class NteInstalledManifest
 {
     internal static string PathFor(string root, NteRegionConfig region)
-        => NteSharedInstallation.ManagedPath(root, ".collapse-nte/installed/" + region.AppId + "/ResList.xml");
+        => NteSharedInstallation.ManagedPath(root, ".collapse-nte/installed/" +
+            (region.IsBilibili ? region.ProfileName : region.AppId) + "/ResList.xml");
 
     internal static void Save(string root, NteRegionConfig region, byte[] manifest)
         => NteSharedInstallation.WriteAtomic(PathFor(root, region), manifest);

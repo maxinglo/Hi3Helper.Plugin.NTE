@@ -13,6 +13,7 @@ internal static class NteLaunchPreferences
         "CollapseLauncher", "Plugins", "NTE", region switch
         {
             NteHostRegion.CN => "NteCN", NteHostRegion.Global => "NteGlobal", NteHostRegion.Taiwan => "NteTaiwan",
+            NteHostRegion.Bilibili => NteRegionDefinition.BilibiliProfileName,
             _ => throw new ArgumentException("Unknown launch region.", nameof(region))
         }, "launch.json");
 

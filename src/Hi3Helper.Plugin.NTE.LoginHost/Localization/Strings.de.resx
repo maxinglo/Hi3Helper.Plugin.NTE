@@ -594,4 +594,64 @@ Download: {3} files ({4:F3} GB)</value></data>
   <data name="CnFilesMissing" xml:space="preserve"><value>Für die Anmeldung erforderliche Spieldateien fehlen. Überprüfe oder repariere das Spiel.</value></data>
   <data name="CnClientRunning" xml:space="preserve"><value>Das Spiel oder der offizielle Launcher läuft noch. Beende ihn und versuche es erneut.</value></data>
   <data name="CnLoginHostRunning" xml:space="preserve"><value>Die Anmeldekomponente läuft bereits. Kehre zu ihrem Fenster zurück oder schließe sie.</value></data>
+  <data name="BilibiliSdkMissing" xml:space="preserve">
+    <value>Bilibili-Anmeldekomponenten fehlen. Repariere das Spiel oder aktualisiere den offiziellen Launcher in diesem Spielordner.</value>
+  </data>
+  <data name="BilibiliSdkUnsupported" xml:space="preserve">
+    <value>Diese Version des Bilibili-SDK wird noch nicht unterstützt. Melde dich über den offiziellen Launcher an.</value>
+  </data>
+  <data name="BilibiliSdkInitFailed" xml:space="preserve">
+    <value>Die Bilibili-Anmeldung konnte nicht gestartet werden. Repariere das Spiel oder verwende den offiziellen Launcher.</value>
+  </data>
+  <data name="BilibiliSdkLoginFailed" xml:space="preserve">
+    <value>Die Bilibili-Anmeldung wurde nicht abgeschlossen. Versuche es erneut im Spiel.</value>
+  </data>
+  <data name="BilibiliSdkTimedOut" xml:space="preserve">
+    <value>Zeitüberschreitung bei der Bilibili-Anmeldung. Beende das Spiel und versuche es erneut.</value>
+  </data>
+  <data name="BilibiliServiceLoginFailed" xml:space="preserve">
+    <value>Der Spieledienst hat die Bilibili-Anmeldung abgelehnt. Versuche es erneut oder nutze den offiziellen Launcher.</value>
+  </data>
+  <data name="NoticeBilibiliData" xml:space="preserve">
+    <value>Melde dich im offiziellen Bilibili-Fenster an. Das Plugin verwendet die erhaltene Konto-ID und das Token nur für diese Spielsitzung.</value>
+  </data>
+  <data name="NoticeBilibiliStorage" xml:space="preserve">
+    <value>Das Plugin speichert deine Bestätigung dieses Hinweises. Das offizielle Bilibili-SDK verwaltet seinen eigenen Anmeldeverlauf und lokale Daten.</value>
+  </data>
+  <data name="NoticeBilibiliNetwork" xml:space="preserve">
+    <value>Das Bilibili-SDK kommuniziert mit Bilibili. Zur Anmeldung und Prüfung sendet das Plugin die Konto-ID, das Token und erforderliche Geräteinformationen per HTTPS an den Spieleherausgeber.</value>
+  </data>
+  <data name="NoticeBilibiliTitle" xml:space="preserve">
+    <value>Hinweis zur Bilibili-Anmeldung</value>
+  </data>
+  <data name="NoticeBilibiliPurposeTitle" xml:space="preserve">
+    <value>So funktioniert die Anmeldung</value>
+  </data>
+  <data name="NoticeBilibiliPurpose" xml:space="preserve">
+    <value>Fordert das Spiel eine Anmeldung an, öffnet das Plugin das mit dem Spiel installierte offizielle Bilibili-SDK. Nach der Anmeldung übermittelt das Plugin das Ergebnis an den Herausgeber und wartet auf die Freigabe, bevor es das Spiel informiert.</value>
+  </data>
+  <data name="NoticeBilibiliDataTitle" xml:space="preserve">
+    <value>Verwendung der Kontodaten</value>
+  </data>
+  <data name="NoticeBilibiliNetworkTitle" xml:space="preserve">
+    <value>Prüfung durch den Herausgeber</value>
+  </data>
+  <data name="NoticeBilibiliStorageTitle" xml:space="preserve">
+    <value>Lokale Speicherung</value>
+  </data>
+  <data name="NoticeBilibiliRiskTitle" xml:space="preserve">
+    <value>Kompatibilität und Kontorisiken</value>
+  </data>
+  <data name="NoticeBilibiliRisk" xml:space="preserve">
+    <value>Der unabhängige Start verwendet ein Drittanbieter-Plugin. Launcher-Updates, Nutzungsbedingungen und Kontobeschränkungen können sich darauf auswirken. In den Starteinstellungen kannst du zum offiziellen Launcher wechseln.</value>
+  </data>
+  <data name="NoticeBilibiliChoiceTitle" xml:space="preserve">
+    <value>Offiziellen Launcher verwenden</value>
+  </data>
+  <data name="NoticeBilibiliChoice" xml:space="preserve">
+    <value>Aktiviere den offiziellen Launcher in den Starteinstellungen des Spiels. Er läuft im Hintergrund aus dem gewählten Bilibili-Installationsordner und kann Fenster für Anmeldung, Prüfung oder Updates öffnen.</value>
+  </data>
+  <data name="BilibiliOfficialLauncherConfirm" xml:space="preserve">
+    <value>Beim nächsten Start den offiziellen Bilibili-Launcher verwenden und das laufende Spiel schließen? Der Launcher muss im Ordner NTELauncher dieser Spielinstallation liegen.</value>
+  </data>
 </root>

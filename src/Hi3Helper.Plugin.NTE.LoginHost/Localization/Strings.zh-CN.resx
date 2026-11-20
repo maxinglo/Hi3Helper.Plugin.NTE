@@ -596,4 +596,64 @@
   <data name="CnFilesMissing" xml:space="preserve"><value>游戏安装缺少登录所需文件。请校验或修复游戏后重试。</value></data>
   <data name="CnClientRunning" xml:space="preserve"><value>游戏或官方启动器仍在运行。请先退出后重试。</value></data>
   <data name="CnLoginHostRunning" xml:space="preserve"><value>已有登录组件正在运行。请返回现有窗口或关闭后重试。</value></data>
+  <data name="BilibiliSdkMissing" xml:space="preserve">
+    <value>缺少哔哩哔哩登录组件。请修复游戏安装，或更新此游戏目录中的官方启动器。</value>
+  </data>
+  <data name="BilibiliSdkUnsupported" xml:space="preserve">
+    <value>当前哔哩哔哩 SDK 版本尚未适配，请使用官方启动器登录。</value>
+  </data>
+  <data name="BilibiliSdkInitFailed" xml:space="preserve">
+    <value>未能启动哔哩哔哩登录。请修复游戏安装，或使用官方启动器。</value>
+  </data>
+  <data name="BilibiliSdkLoginFailed" xml:space="preserve">
+    <value>哔哩哔哩登录未完成。请在游戏中重新发起登录。</value>
+  </data>
+  <data name="BilibiliSdkTimedOut" xml:space="preserve">
+    <value>哔哩哔哩登录超时。请退出游戏后重试。</value>
+  </data>
+  <data name="BilibiliServiceLoginFailed" xml:space="preserve">
+    <value>游戏服务未接受本次哔哩哔哩登录。请重试，或使用官方启动器。</value>
+  </data>
+  <data name="NoticeBilibiliData" xml:space="preserve">
+    <value>账号登录由哔哩哔哩官方窗口处理。本插件收到的账号 ID 和登录令牌仅用于本次游戏会话。</value>
+  </data>
+  <data name="NoticeBilibiliStorage" xml:space="preserve">
+    <value>本插件保存本说明的知悉记录。登录历史由哔哩哔哩官方 SDK 自行管理。</value>
+  </data>
+  <data name="NoticeBilibiliNetwork" xml:space="preserve">
+    <value>哔哩哔哩 SDK 会连接哔哩哔哩服务。本插件通过 HTTPS 向异环发行方提交账号 ID、令牌和必要的设备信息。实名及防沉迷检查通过后，游戏才能收到登录成功结果。</value>
+  </data>
+  <data name="NoticeBilibiliTitle" xml:space="preserve">
+    <value>Bilibili 服登录说明</value>
+  </data>
+  <data name="NoticeBilibiliPurposeTitle" xml:space="preserve">
+    <value>游戏如何登录</value>
+  </data>
+  <data name="NoticeBilibiliPurpose" xml:space="preserve">
+    <value>游戏发起登录后，本插件会调用游戏目录中的哔哩哔哩官方 SDK，将登录结果交给异环发行方，并在检查通过后通知游戏。</value>
+  </data>
+  <data name="NoticeBilibiliDataTitle" xml:space="preserve">
+    <value>如何使用账号信息</value>
+  </data>
+  <data name="NoticeBilibiliNetworkTitle" xml:space="preserve">
+    <value>发行方检查</value>
+  </data>
+  <data name="NoticeBilibiliStorageTitle" xml:space="preserve">
+    <value>本机保存什么</value>
+  </data>
+  <data name="NoticeBilibiliRiskTitle" xml:space="preserve">
+    <value>兼容性与账号风险</value>
+  </data>
+  <data name="NoticeBilibiliRisk" xml:space="preserve">
+    <value>独立启动可能受启动器更新、游戏服务条款和账号风控影响。</value>
+  </data>
+  <data name="NoticeBilibiliChoiceTitle" xml:space="preserve">
+    <value>改用官方启动器</value>
+  </data>
+  <data name="NoticeBilibiliChoice" xml:space="preserve">
+    <value>在游戏设置 → 启动设置中启用官方启动器后台启动。启动器来自所选 Bilibili 游戏安装目录，需要登录、验证或更新时仍会显示相应窗口。</value>
+  </data>
+  <data name="BilibiliOfficialLauncherConfirm" xml:space="preserve">
+    <value>改用 Bilibili 官方启动器并关闭当前游戏？该设置在下次启动时生效。官方启动器应位于当前游戏安装目录的 NTELauncher 文件夹。</value>
+  </data>
 </root>

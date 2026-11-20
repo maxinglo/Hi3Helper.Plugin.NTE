@@ -1135,7 +1135,19 @@ internal sealed partial class LoginWindow : Window
             Math.Clamp((corner.Value.Y - origin.Value.Y) / Bounds.Height, .0001, 1 - y), RelativeUnit.Relative);
     }
 
-    internal Task ShowFailureAsync(string text)
+    internal nint NativeHandle => handle;
+
+    internal async Task ShowBilibiliFailureAsync(string text, CancellationToken token)
+    {
+        try { await ShowFailureAsync(text, showStartupHint: false).WaitAsync(token); }
+        finally
+        {
+            failureCompletion = null;
+            HidePresented();
+        }
+    }
+
+    internal Task ShowFailureAsync(string text, bool showStartupHint = true)
     {
         requested = false;
         HidePresented();
@@ -1145,9 +1157,10 @@ internal sealed partial class LoginWindow : Window
         modeRail.IsVisible = status.IsVisible = false;
         title.Text = Localization.LoginText.Get("ComponentUnavailable");
         subtitle.Text = Localization.LoginText.Get("CheckStartup");
-        subtitle.IsVisible = true;
+        subtitle.IsVisible = showStartupHint;
         failureCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
         login.Content = Localization.LoginText.Get("Close");
+        footer.IsVisible = login.IsVisible = closeLogin.IsVisible = true;
         otherMainlandAccount.IsVisible = officialLauncher.IsVisible = false;
         login.IsEnabled = true;
         view.Width = SceneWidth;

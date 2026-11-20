@@ -36,7 +36,7 @@ internal partial class NteCNLauncherApiMedia : LauncherApiMediaBase
         : this(versionIniUrl, siteRefererUrl,
             new PluginHttpClientBuilder().AllowRedirections().Create(),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "CollapseLauncher", "Plugins", "NTE", region?.IsOverseas == true ? region.StorageName + "/Media" : "Media"),
+                "CollapseLauncher", "Plugins", "NTE", region?.StorageName ?? "", "Media"),
             appearanceProvider ?? new NteAppearanceStore(NteAppearanceStore.DefaultPath).Load, region)
     {
     }

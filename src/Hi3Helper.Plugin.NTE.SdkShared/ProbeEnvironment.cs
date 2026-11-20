@@ -55,10 +55,11 @@ internal sealed class ProbeEnvironment : IDisposable
     public ProbeEnvironment(string gameRoot, bool supplyHostContext, bool supplyStartupContext = false,
         bool useOwnExecutable = false,
         string? hostExecutable = null, string launcherDirectoryName = NteRegionDefinition.CnLauncherDirectory,
-        string? applicationId = null)
+        string? applicationId = null, NteHostRegion? region = null)
     {
-        NteRegionDefinition definition = NteRegionDefinition.FromLauncherDirectory(launcherDirectoryName);
-        if (applicationId != null && applicationId != definition.AppId)
+        NteRegionDefinition definition = region is NteHostRegion specified
+            ? NteRegionDefinition.From(specified) : NteRegionDefinition.FromLauncherDirectory(launcherDirectoryName);
+        if (launcherDirectoryName != definition.LauncherDirectory || applicationId != null && applicationId != definition.AppId)
             throw new ArgumentException("Application and launcher directory belong to different regions.",
                 nameof(applicationId));
         hostContext = supplyHostContext;

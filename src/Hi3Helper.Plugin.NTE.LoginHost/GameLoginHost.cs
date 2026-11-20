@@ -2,7 +2,9 @@ using System.Buffers.Binary;
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Security.Cryptography;
+using System.Security.Principal;
 using Nte.Login;
+using Nte.LoginHost.Localization;
 
 namespace Nte.LoginHost;
 
@@ -11,6 +13,7 @@ namespace Nte.LoginHost;
 internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow window) : IDisposable
 {
     private readonly string root = Path.GetFullPath(options.GameRoot);
+    private readonly bool isBilibili = options.Region == NteHostRegion.Bilibili;
     private readonly CancellationTokenSource lifetime = new();
     private ProbeAuthenticationClient? authentication;
     private ProbePreLoginClient? preLogin;
@@ -21,34 +24,57 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
     private readonly TaskCompletionSource loginFailure = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private ProbeEnvironment? context;
     private NteCnSdkCompatibility? compatibility;
+    private BilibiliPcSdk? bilibiliSdk;
+    private byte[]? bilibiliInitialization;
+    private int? bilibiliSubchannel;
     private bool disposed;
     private readonly SynchronizationContext ui = SynchronizationContext.Current ?? throw new InvalidOperationException("UI context required.");
 
     internal async Task<bool> RunAsync()
     {
+        if (isBilibili)
+        {
+            using WindowsIdentity identity = WindowsIdentity.GetCurrent();
+            if (!new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator))
+                throw new NteCnLaunchException("ElevationRequired");
+        }
         string executable = Path.Combine(root, NteRegionDefinition.GameExecutableRelativePath);
         if (!File.Exists(executable)) throw new NteCnLaunchException("CnFilesMissing");
+        string workingDirectory = Path.Combine(root, "Client");
+        if (isBilibili && Directory.ResolveLinkTarget(workingDirectory, returnFinalTarget: true) is { } clientTarget)
+        {
+            // Unreal must see the same executable path in its command line
+            // and loaded image when Client is linked from another directory.
+            executable = Path.Combine(clientTarget.FullName, Path.GetRelativePath(workingDirectory, executable));
+            workingDirectory = clientTarget.FullName;
+        }
         foreach (string name in new[] { "HTGame", "NTEGame", "NTEBrowser", "NTEUpdate", "NTELauncher" })
         {
             Process[] running = Process.GetProcessesByName(name);
             try { if (running.Length != 0) throw new NteCnLaunchException("CnClientRunning"); }
             finally { foreach (Process process in running) process.Dispose(); }
         }
-        var validated = await NteCnSdkCompatibility.LoadAsync(root);
+        var validated = await NteCnSdkCompatibility.LoadAsync(root, options.Region);
         compatibility = validated.Profile;
+        string launcherDirectory = compatibility.InstalledLauncherDirectory!;
+        if (isBilibili)
+        {
+            BilibiliPcSdk.RequireInstalledFiles(launcherDirectory);
+            bilibiliSubchannel = NteBilibiliSdkConfiguration.ReadSubchannel(launcherDirectory);
+        }
         NteHostStartupDiagnostics.Phase("compatibility-accepted");
         string sdkPath = validated.BridgePath;
         using Mutex instance = new(false, @"Local\Collapse.NTE.LoginHost." + NteRegionDefinition.CnAppId, out bool created);
         if (!created) throw new NteCnLaunchException("CnLoginHostRunning");
-        context = new(root, true, useOwnExecutable: true, hostExecutable: Environment.ProcessPath!);
+        context = new(root, true, useOwnExecutable: true, hostExecutable: Environment.ProcessPath!, region: options.Region);
         context.GameWindowChanged += window.NotifySdkGeometryChanged;
         context.LoginRequested += window.NotifySdkLoginRequested;
-        context.LogoutRequested += () => ui.Post(_ => window.OnSdkLogout(), null);
+        if (!isBilibili) context.LogoutRequested += () => ui.Post(_ => window.OnSdkLogout(), null);
         string pipeName = "Collapse.NTE.Login." + Guid.NewGuid().ToString("N");
         using NamedPipeServerStream pipe = new(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Message, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         ProcessStartInfo start = new(executable, options.GameArguments)
         {
-            WorkingDirectory = Path.Combine(root, "Client"), UseShellExecute = false,
+            WorkingDirectory = workingDirectory, UseShellExecute = false,
             RedirectStandardOutput = true, RedirectStandardError = true
         };
         start.Environment["ArcGameP"] = pipeName;
@@ -56,12 +82,12 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
         foreach (string absent in new[] { "ArcGameAppId", "GameVersion", "_PATCHER_RES_VERSION_" })
             start.Environment.Remove(absent);
         start.Environment["_PATCHER_RES_PATH_"] = root;
-        start.Environment["_PATCHER_SDK_PATH_"] = Path.Combine(root, NteRegionDefinition.CN.LauncherDirectory, NteRegionDefinition.PatcherSdkRelativePath);
+        start.Environment["_PATCHER_SDK_PATH_"] = Path.Combine(launcherDirectory, NteRegionDefinition.PatcherSdkRelativePath);
         // Only use paths from a matching installed configuration; fall back to
         // the previous two-path launch when it is absent or unrecognized.
         PatcherLaunchEnvironment.TryApply(start.Environment, root, context.ApplicationId);
         foreach (string flag in new[] { "wmgplaunch", "ArcGameMobileSdkType", "ArcGameMsgSkipFlag" }) start.Environment[flag] = "1";
-        start.Environment["GamePlatformPath"] = Path.Combine(root, NteRegionDefinition.CN.LauncherDirectory);
+        start.Environment["GamePlatformPath"] = launcherDirectory;
         // Native SDK logging is isolated and removed after client exit. Raw
         // lines and account payloads never reach host diagnostics.
         string logRoot = Path.Combine(Path.GetTempPath(), "Collapse.NTE.LoginHost", Guid.NewGuid().ToString("N"));
@@ -104,7 +130,9 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
             // Stop any pending login attempt before presenting the visible
             // failure. Dismissing it does not terminate the game or this host.
             window.CancelForGameExit();
-            Task dismissed = window.ShowFailureAsync("登录组件与游戏的通信或窗口初始化失败。游戏仍在运行，请退出游戏后重试。");
+            string message = error is NteCnLaunchException channelFailure ? LoginText.Get(channelFailure.Key)
+                : "登录组件与游戏的通信或窗口初始化失败。游戏仍在运行，请退出游戏后重试。";
+            Task dismissed = window.ShowFailureAsync(message);
             await Task.WhenAny(dismissed, exit);
             if (dismissed.IsCompleted && !exit.IsCompleted) window.Hide();
         }, () => lifetime.IsCancellationRequested, async () =>
@@ -159,10 +187,14 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
                             NteHostStartupDiagnostics.Phase("sdk-registration-received");
                             using NteSdkRegistration registration = compatibility!.Protocol.ReadRegistration(buffer.AsSpan(0, count), clientId);
                             callback = ProbeCallbackTransport.FromRegistration(registration, context!.WindowHandle);
-                            _ = ProbeBootConfig.Inspect(registration, application, root,
+                            _ = ProbeBootConfig.Inspect(compatibility, registration, application,
                                 inspectWithApplicationKey: (configuration, key) =>
                                 {
-                                    authentication = new(configuration, _ => { }, installedVersion: context.InstalledVersion, applicationKeyTail: key.Span);
+                                    if (isBilibili)
+                                        bilibiliInitialization = NteBilibiliSdkConfiguration.Encode(configuration, context.InstalledVersion);
+                                    authentication = new(configuration, _ => { }, installedVersion: context.InstalledVersion,
+                                        applicationKeyTail: key.Span, bilibili: isBilibili,
+                                        bilibiliSubchannelId: bilibiliSubchannel);
                                     return new { captured = true };
                                 });
                             if (authentication == null) throw new InvalidDataException("Authentication context unavailable.");
@@ -191,9 +223,9 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
     {
         try
         {
+            NteHostStartupDiagnostics.Phase("waiting-login-request");
             while (!lifetime.IsCancellationRequested)
             {
-                NteHostStartupDiagnostics.Phase("waiting-login-request");
                 await context!.WaitForNextLoginRequestAsync(lifetime.Token);
                 NteHostStartupDiagnostics.Phase("login-request-received");
                 await admission!.ResetAsync(lifetime.Token);
@@ -201,16 +233,23 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
                 try
                 {
                     if (!await window.EnsureNoticeAsync(false, lifetime.Token)) continue;
-                    NteHostStartupDiagnostics.Phase("opening-login-panel");
-                    await window.RequestAsync(authentication!, async (game, channel, token) =>
+                    if (isBilibili)
                     {
-                        await admission.AuthorizeAndDeliverAsync(game, async () =>
+                        await LoginWithBilibiliAsync();
+                    }
+                    else
+                    {
+                        NteHostStartupDiagnostics.Phase("opening-login-panel");
+                        await window.RequestAsync(authentication!, async (game, channel, token) =>
                         {
-                            using ProbeLoginSequence sequence = ProbeLoginSequence.EncodeCurrentBridge(game, channel, authentication!.Platform, authentication.ChannelId, Environment.ProcessId);
-                            context.CompleteLoginRequest(); consumed = true;
-                            await Task.Run(() => callback!.Send(sequence, token), token);
-                        }, token);
-                    }, lifetime.Token, token => admission.ResetAsync(token));
+                            await admission.AuthorizeAndDeliverAsync(game, async () =>
+                            {
+                                using ProbeLoginSequence sequence = ProbeLoginSequence.EncodeCurrentBridge(game, channel, authentication!.Platform, authentication.ChannelId, Environment.ProcessId);
+                                context.CompleteLoginRequest(); consumed = true;
+                                await Task.Run(() => callback!.Send(sequence, token), token);
+                            }, token);
+                        }, lifetime.Token, token => admission.ResetAsync(token));
+                    }
                 }
                 finally { if (!consumed) context.CompleteLoginRequest(); }
             }
@@ -220,6 +259,63 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
         {
             NteHostStartupDiagnostics.Phase("login-task-failed", error);
             loginFailure.TrySetException(error);
+        }
+    }
+
+    private async Task LoginWithBilibiliAsync()
+    {
+        CancellationToken token = lifetime.Token;
+        if (bilibiliSdk == null)
+        {
+            byte[] configuration = bilibiliInitialization ?? throw new NteCnLaunchException("BilibiliSdkInitFailed");
+            bilibiliInitialization = null;
+            using CancellationTokenSource initialization = CancellationTokenSource.CreateLinkedTokenSource(token);
+            initialization.CancelAfter(TimeSpan.FromSeconds(30));
+            try
+            {
+                NteHostStartupDiagnostics.Phase("bilibili-sdk-initializing");
+                bilibiliSdk = new(compatibility!.InstalledLauncherDirectory!);
+                await bilibiliSdk.InitializeAsync(configuration, window.NativeHandle, initialization.Token);
+                NteHostStartupDiagnostics.Phase("bilibili-sdk-ready");
+            }
+            catch (OperationCanceledException) when (!token.IsCancellationRequested)
+            { throw new NteCnLaunchException("BilibiliSdkInitFailed"); }
+            finally { CryptographicOperations.ZeroMemory(configuration); }
+        }
+
+        try
+        {
+            using CancellationTokenSource signIn = CancellationTokenSource.CreateLinkedTokenSource(token);
+            signIn.CancelAfter(TimeSpan.FromMinutes(15));
+            NteHostStartupDiagnostics.Phase("bilibili-sdk-login-requested");
+            byte[] response = await bilibiliSdk.LoginAsync(signIn.Token);
+            try
+            {
+                using ProbeIdentityEnvelope channel = ProbeIdentityEnvelope.ParseBilibili(response);
+                if (!channel.IdentityAvailable) throw new NteCnLaunchException("BilibiliSdkLoginFailed");
+                NteHostStartupDiagnostics.Phase("bilibili-sdk-login-accepted");
+                using ProbeIdentityEnvelope game = await authentication!.ExchangeBilibiliGameIdentityAsync(channel, token);
+                await admission!.AuthorizeAndDeliverAsync(game, async () =>
+                {
+                    using ProbeLoginSequence sequence = ProbeLoginSequence.EncodeCurrentBridge(game, channel,
+                        authentication.Platform, authentication.ChannelId, Environment.ProcessId);
+                    await Task.Run(() => callback!.Send(sequence, token), token);
+                    NteHostStartupDiagnostics.Phase("bilibili-login-callback-delivered");
+                }, token);
+            }
+            finally { CryptographicOperations.ZeroMemory(response); }
+        }
+        catch (OperationCanceledException) when (!token.IsCancellationRequested)
+        { throw new NteCnLaunchException("BilibiliSdkTimedOut"); }
+        catch (ProbeAuthenticationException error)
+        {
+            NteHostStartupDiagnostics.Phase("bilibili-service-rejected-login", error);
+            await admission!.ResetAsync(token);
+            await window.ShowBilibiliFailureAsync(error.LocalExplanation ?? LoginText.Get("BilibiliServiceLoginFailed"), token);
+        }
+        catch (NteCnLaunchException error) when (error.Key == "BilibiliSdkLoginFailed")
+        {
+            await window.ShowBilibiliFailureAsync(LoginText.Get(error.Key), token);
         }
     }
 
@@ -239,6 +335,9 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
     public void Dispose()
     {
         if (disposed) return; disposed = true;
-        lifetime.Cancel(); admission?.Dispose(); preLogin?.Dispose(); authentication?.Dispose(); context?.Dispose(); lifetime.Dispose();
+        lifetime.Cancel();
+        bilibiliSdk?.Dispose();
+        if (bilibiliInitialization != null) CryptographicOperations.ZeroMemory(bilibiliInitialization);
+        admission?.Dispose(); preLogin?.Dispose(); authentication?.Dispose(); context?.Dispose(); lifetime.Dispose();
     }
 }

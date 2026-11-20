@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.IO;
 using Hi3Helper.Plugin.Core;
+using Nte.Login;
 
 namespace Hi3Helper.Plugin.NTE.Management.PresetConfig;
 
@@ -25,11 +26,12 @@ public partial class NteCNPresetConfig : PluginPresetConfigBase
     public NteCNPresetConfig(NteRegionConfig region)
     {
         Region = region;
-        Appearance = new(region.IsOverseas ? Path.Combine(Path.GetDirectoryName(NteAppearanceStore.DefaultPath)!, region.StorageName, "appearance.json") : NteAppearanceStore.DefaultPath);
-        LaunchSettings = new(NteLaunchSettings.GetPath(region.ProfileName));
-        LoginSettings = new(region.IsTaiwan ? Path.Combine(Path.GetDirectoryName(Nte.Login.NteLoginPreferences.DefaultPath)!, "Taiwan", "login.json") : Nte.Login.NteLoginPreferences.GetPath(region.IsGlobal));
+        Appearance = new(region.StorageName.Length == 0 ? NteAppearanceStore.DefaultPath :
+            Path.Combine(Path.GetDirectoryName(NteAppearanceStore.DefaultPath)!, region.StorageName, "appearance.json"));
+        LaunchSettings = new(NteLaunchPreferences.GetPath(region.HostRegion));
+        if (!region.IsBilibili) LoginSettings = new(NteLoginPreferences.GetPath(region.HostRegion));
     }
-    internal NteLoginSettings LoginSettings { get; }
+    internal NteLoginSettings? LoginSettings { get; }
     private IGameManager? _gameManager;
     private IGameInstaller? _gameInstaller;
     private ILauncherApiNews? _launcherApiNews;
@@ -48,11 +50,13 @@ public partial class NteCNPresetConfig : PluginPresetConfigBase
 
     public override string ProfileName => Region.ProfileName;
 
-    public override string ZoneDescription => NteResourceProvider.GetString(Region.IsTaiwan ? "TaiwanZoneDescription" : Region.IsGlobal ? "GlobalZoneDescription" : "ZoneDescription");
+    public override string ZoneDescription => GetZoneString("ZoneDescription");
 
-    public override string ZoneName => NteResourceProvider.GetString(Region.IsTaiwan ? "TaiwanZoneName" : Region.IsGlobal ? "GlobalZoneName" : "ZoneName");
+    public override string ZoneName => GetZoneString("ZoneName");
 
-    public override string ZoneFullName => NteResourceProvider.GetString(Region.IsTaiwan ? "TaiwanZoneFullName" : Region.IsGlobal ? "GlobalZoneFullName" : "ZoneFullName");
+    public override string ZoneFullName => GetZoneString("ZoneFullName");
+
+    private string GetZoneString(string name) => NteResourceProvider.GetString(Region.StorageName + name);
 
     public override string ZoneLogoUrl => Region.ZoneLogoUrl;
 

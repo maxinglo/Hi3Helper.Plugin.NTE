@@ -129,8 +129,9 @@ public static unsafe class NteNativeSmoke
             }
             int count = 0;
             Marshal.ThrowExceptionForHR(((delegate* unmanaged[MemberFunction]<nint, int*, int>)table[8])(plugin, &count));
-            if (count != 3)
-                throw new InvalidOperationException("Expected separate China, Global and Taiwan NTE presets.");
+            string[] profiles = { "NteCN", "NteGlobal", "NteTaiwan", "NteBilibili" };
+            if (count != profiles.Length)
+                throw new InvalidOperationException("Expected separate China, Global, Taiwan and Bilibili NTE presets.");
             foreach (string locale in new[] { "en-US", "zh-CN" })
             {
                 fixed (char* localePointer = locale)
@@ -147,30 +148,53 @@ public static unsafe class NteNativeSmoke
             }
             for (int presetIndex = 0; presetIndex < count; presetIndex++)
             {
-            nint preset = 0;
-            Check(((delegate* unmanaged[MemberFunction]<nint, int, nint*, int>)table[11])(plugin, presetIndex, &preset),
-                "IPlugin.GetPresetConfig");
-            if (preset == 0)
-                throw new InvalidOperationException("Missing NTE preset COM pointer.");
-            try
-            {
-                MemoryBlock page = default;
-                int result = ((delegate* unmanaged[Cdecl]<nint, MemoryBlock*, int>)Find("GetGameSettingsPage"))(preset, &page);
-                Check(result, "GetGameSettingsPage");
+                nint preset = 0;
+                Check(((delegate* unmanaged[MemberFunction]<nint, int, nint*, int>)table[11])(plugin, presetIndex, &preset),
+                    "IPlugin.GetPresetConfig");
+                if (preset == 0)
+                    throw new InvalidOperationException("Missing NTE preset COM pointer.");
+                nint presetInterface = 0;
                 try
                 {
-                    if (result != 0 || page.Handle == null || page.Length <= 0)
-                        throw new InvalidOperationException("The NTE appearance settings page was not returned.");
-                    string json = Marshal.PtrToStringUTF8((nint)page.Handle, page.Length);
-                    if (json == null || !json.Contains("dynamicBackground") || !json.Contains("overlayEnabled") ||
-                        !json.Contains("launch.graphicsApi") || !json.Contains("dx11") ||
-                        !json.Contains("login.experimentalWindowsHello") ||
-                        (presetIndex > 0 && !json.Contains("server.switchTarget")))
-                        throw new InvalidOperationException("The native appearance settings page is incomplete.");
+                    Guid presetId = new Guid("436f6c6c-6170-7365-727f-000000000011");
+                    Check(Marshal.QueryInterface(preset, in presetId, out presetInterface), "QueryInterface(IPluginPresetConfig)");
+                    void** presetTable = *(void***)presetInterface;
+                    char* name = null;
+                    string profile;
+                    try
+                    {
+                        Check(((delegate* unmanaged[MemberFunction]<nint, char**, int>)presetTable[6])(presetInterface, &name),
+                            "IPluginPresetConfig.comGet_ProfileName");
+                        profile = Marshal.PtrToStringUni((nint)name);
+                        if (profile != profiles[presetIndex])
+                            throw new InvalidOperationException("Unexpected NTE preset profile at index " + presetIndex);
+                    }
+                    finally { Marshal.FreeCoTaskMem((nint)name); }
+
+                    MemoryBlock page = default;
+                    int result = ((delegate* unmanaged[Cdecl]<nint, MemoryBlock*, int>)Find("GetGameSettingsPage"))(preset, &page);
+                    try
+                    {
+                        Check(result, "GetGameSettingsPage");
+                        if (result != 0 || page.Handle == null || page.Length <= 0)
+                            throw new InvalidOperationException("The NTE settings page was not returned for " + profile);
+                        string json = Marshal.PtrToStringUTF8((nint)page.Handle, page.Length);
+                        bool hasLoginSettings = profile != "NteBilibili";
+                        bool hasServerSettings = profile is "NteGlobal" or "NteTaiwan";
+                        if (json == null || !json.Contains("dynamicBackground") || !json.Contains("overlayEnabled") ||
+                            !json.Contains("launch.graphicsApi") || !json.Contains("dx11") ||
+                            !json.Contains("launch.officialLauncher") ||
+                            json.Contains("login.experimentalWindowsHello") != hasLoginSettings ||
+                            json.Contains("server.switchTarget") != hasServerSettings)
+                            throw new InvalidOperationException("Unexpected settings page for " + profile);
+                    }
+                    finally { if (page.IsDisposable != 0) NativeMemory.Free(page.Handle); }
                 }
-                finally { if (page.IsDisposable != 0) NativeMemory.Free(page.Handle); }
-            }
-            finally { Marshal.Release(preset); }
+                finally
+                {
+                    if (presetInterface != 0) Marshal.Release(presetInterface);
+                    Marshal.Release(preset);
+                }
             }
         }
         finally
@@ -178,7 +202,7 @@ public static unsafe class NteNativeSmoke
             if (plugin != 0) Marshal.Release(plugin);
             Marshal.Release(unknown);
         }
-        return "Native ABI, update sources, region preview/rejection, en/zh metadata and appearance UI OK; Core " + standard + "; NTE " + version;
+        return "Native ABI, update sources, region preview/rejection, en/zh metadata and regional settings OK; Core " + standard + "; NTE " + version;
     }
 
     private static void Check(int result, string operation)
