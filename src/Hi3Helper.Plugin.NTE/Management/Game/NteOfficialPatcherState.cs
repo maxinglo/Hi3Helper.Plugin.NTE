@@ -189,8 +189,13 @@ internal static class NteOfficialPatcherState
 
     internal static void Commit(string gameRoot, string branch, string appId, string releaseXml,
         byte[] originalRemoteManifest, byte[] selectedManifest, CancellationToken token, string? backupDirectory = null)
+        => Commit(gameRoot, branch, NteConfigProvider.GetRegion(appId), releaseXml, originalRemoteManifest,
+            selectedManifest, token, backupDirectory);
+
+    internal static void Commit(string gameRoot, string branch, NteRegionConfig region, string releaseXml,
+        byte[] originalRemoteManifest, byte[] selectedManifest, CancellationToken token, string? backupDirectory = null)
     {
-        NteRegionConfig region = NteConfigProvider.GetRegion(appId);
+        string appId = region.AppId;
         string directory = Path.Combine(gameRoot, region.SdkDirectory);
         string configPath = Path.Combine(directory, "config.xml");
         EnsureOfficialLauncherClosed(gameRoot, region);

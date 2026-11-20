@@ -596,4 +596,64 @@ Download: {3} files ({4:F3} GB)</value></data>
   <data name="CnFilesMissing" xml:space="preserve"><value>Game files required for sign-in are missing. Verify or repair the game and try again.</value></data>
   <data name="CnClientRunning" xml:space="preserve"><value>The game or official launcher is still running. Close it and try again.</value></data>
   <data name="CnLoginHostRunning" xml:space="preserve"><value>A sign-in component is already running. Return to its window or close it and try again.</value></data>
+  <data name="BilibiliSdkMissing" xml:space="preserve">
+    <value>The Bilibili sign-in components are missing. Repair the installation or update the official launcher for this game folder.</value>
+  </data>
+  <data name="BilibiliSdkUnsupported" xml:space="preserve">
+    <value>This Bilibili SDK version is not supported yet. Use the official launcher to sign in.</value>
+  </data>
+  <data name="BilibiliSdkInitFailed" xml:space="preserve">
+    <value>Bilibili sign-in could not start. Repair the installation or use the official launcher.</value>
+  </data>
+  <data name="BilibiliSdkLoginFailed" xml:space="preserve">
+    <value>Bilibili sign-in did not complete. Try signing in again from the game.</value>
+  </data>
+  <data name="BilibiliSdkTimedOut" xml:space="preserve">
+    <value>Bilibili sign-in timed out. Exit the game and try again.</value>
+  </data>
+  <data name="BilibiliServiceLoginFailed" xml:space="preserve">
+    <value>The game service did not accept the Bilibili sign-in. Try again or use the official launcher.</value>
+  </data>
+  <data name="NoticeBilibiliData" xml:space="preserve">
+    <value>Sign in in the official Bilibili window. The plugin uses the account ID and token it receives only for this game session.</value>
+  </data>
+  <data name="NoticeBilibiliStorage" xml:space="preserve">
+    <value>The plugin saves your notice acknowledgment. The official Bilibili SDK manages its own sign-in history and local storage.</value>
+  </data>
+  <data name="NoticeBilibiliNetwork" xml:space="preserve">
+    <value>The Bilibili SDK communicates with Bilibili. The plugin sends the account ID, token, and required device information to the game publisher over HTTPS for sign-in and checks.</value>
+  </data>
+  <data name="NoticeBilibiliTitle" xml:space="preserve">
+    <value>Bilibili sign-in notice</value>
+  </data>
+  <data name="NoticeBilibiliPurposeTitle" xml:space="preserve">
+    <value>How sign-in works</value>
+  </data>
+  <data name="NoticeBilibiliPurpose" xml:space="preserve">
+    <value>When the game requests sign-in, the plugin opens the official Bilibili SDK installed with this game. After you sign in, the plugin sends the result to the game publisher and waits for approval before signing you into the game.</value>
+  </data>
+  <data name="NoticeBilibiliDataTitle" xml:space="preserve">
+    <value>Account information</value>
+  </data>
+  <data name="NoticeBilibiliNetworkTitle" xml:space="preserve">
+    <value>Publisher verification</value>
+  </data>
+  <data name="NoticeBilibiliStorageTitle" xml:space="preserve">
+    <value>Local storage</value>
+  </data>
+  <data name="NoticeBilibiliRiskTitle" xml:space="preserve">
+    <value>Compatibility and account risk</value>
+  </data>
+  <data name="NoticeBilibiliRisk" xml:space="preserve">
+    <value>Independent launch uses a third-party integration and may be affected by launcher updates, service terms, and account restrictions. The official launcher is available from the game’s launch settings.</value>
+  </data>
+  <data name="NoticeBilibiliChoiceTitle" xml:space="preserve">
+    <value>Use the official launcher</value>
+  </data>
+  <data name="NoticeBilibiliChoice" xml:space="preserve">
+    <value>Enable the official launcher in the game’s launch settings. It runs from the selected Bilibili installation and can still show sign-in or update windows when needed.</value>
+  </data>
+  <data name="BilibiliOfficialLauncherConfirm" xml:space="preserve">
+    <value>Switch to the official Bilibili launcher for the next launch and close the current game? The launcher must be installed in the NTELauncher folder of this game installation.</value>
+  </data>
 </root>

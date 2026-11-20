@@ -14,14 +14,17 @@ internal sealed class ProbeIdentityEnvelope : IDisposable
     private bool disposed;
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
-    private ProbeIdentityEnvelope(ProbeIdentityStage stage, int httpStatus)
+    private ProbeIdentityEnvelope(ProbeIdentityStage stage, int? httpStatus, bool isBilibiliSdkIdentity = false)
     {
         Stage = stage;
         HttpStatus = httpStatus;
+        IsBilibiliSdkIdentity = isBilibiliSdkIdentity;
     }
 
     internal ProbeIdentityStage Stage { get; }
-    internal int HttpStatus { get; }
+    internal int? HttpStatus { get; }
+    internal bool IsBilibiliSdkIdentity { get; }
+    internal bool IsBilibiliGameIdentity { get; private set; }
     internal int? ServerCode { get; private set; }
     internal bool IdentityAvailable => !disposed && uid.Length != 0 && token.Length != 0;
     internal string Disposition { get; private set; } = "invalid-response";
@@ -72,24 +75,9 @@ internal sealed class ProbeIdentityEnvelope : IDisposable
                 if (parsedInformation.Length > 65536 - 17) return envelope;
             }
             if (!identity.TryGetProperty(uidName, out JsonElement id) || !identity.TryGetProperty("token", out JsonElement secret)) return envelope;
-            string? idText = id.ValueKind switch
-            {
-                JsonValueKind.String => id.GetString(),
-                JsonValueKind.Number when id.TryGetUInt64(out ulong number) && number != 0 => number.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                _ => null
-            };
-            string? tokenText = secret.ValueKind == JsonValueKind.String ? secret.GetString() : null;
-            // Native operation 2 uses byte buffers of 64 and 128 bytes including
-            // terminators, rather than the registration frame's wide strings.
-            byte[] parsedUid = EncodeField(idText, 63);
-            byte[] parsedToken;
-            try { parsedToken = EncodeField(tokenText, 127); }
-            catch { CryptographicOperations.ZeroMemory(parsedUid); throw; }
-            envelope.uid = parsedUid;
-            envelope.token = parsedToken;
+            envelope.SetIdentity(id, secret);
             envelope.extraInformation = parsedInformation;
             parsedInformation = [];
-            envelope.Disposition = "identity-present";
             return envelope;
         }
         catch (Exception ex) when (ex is JsonException or ArgumentException or InvalidDataException)
@@ -97,6 +85,36 @@ internal sealed class ProbeIdentityEnvelope : IDisposable
             return envelope;
         }
         finally { CryptographicOperations.ZeroMemory(owned); CryptographicOperations.ZeroMemory(parsedInformation); }
+    }
+
+    internal static ProbeIdentityEnvelope ParseBilibili(ReadOnlyMemory<byte> bytes)
+    {
+        ProbeIdentityEnvelope envelope = new(ProbeIdentityStage.Channel, null, isBilibiliSdkIdentity: true);
+        if (bytes.Length is 0 or > 65536) return envelope;
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 16 });
+            JsonElement root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || Count(root, "code") != 1 ||
+                !root.TryGetProperty("code", out JsonElement code) ||
+                code.ValueKind != JsonValueKind.Number || !code.TryGetInt32(out int value)) return envelope;
+            envelope.ServerCode = value;
+            if (value != 0)
+            {
+                envelope.Disposition = value == -2 ? "sdk-login-cancelled" : "sdk-login-rejected";
+                return envelope;
+            }
+
+            if (Count(root, "data") != 1 || !root.TryGetProperty("data", out JsonElement identity) ||
+                identity.ValueKind != JsonValueKind.Object || Count(identity, "uid") != 1 ||
+                !identity.TryGetProperty("uid", out JsonElement id)) return envelope;
+            string tokenField = identity.TryGetProperty("accessToken", out _) ? "accessToken" : "access_key";
+            if (Count(identity, tokenField) != 1 || !identity.TryGetProperty(tokenField, out JsonElement secret))
+                return envelope;
+            envelope.SetIdentity(id, secret);
+        }
+        catch (Exception ex) when (ex is JsonException or ArgumentException or InvalidDataException) { }
+        return envelope;
     }
 
     // Copies are explicit and remain the caller's responsibility. Nothing in
@@ -108,12 +126,37 @@ internal sealed class ProbeIdentityEnvelope : IDisposable
         return (uid.ToArray(), token.ToArray());
     }
 
+    internal void MarkBilibiliGameExchange()
+    {
+        if (Stage != ProbeIdentityStage.Game || !IdentityAvailable)
+            throw new InvalidOperationException("A validated game response is required.");
+        IsBilibiliGameIdentity = true;
+    }
+
     internal byte[] CopyExtraInformation()
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         if (Stage != ProbeIdentityStage.Game || !IdentityAvailable)
             throw new InvalidOperationException("Game identity is required for its extra information.");
         return extraInformation.ToArray();
+    }
+
+    private void SetIdentity(JsonElement id, JsonElement secret)
+    {
+        string? idText = id.ValueKind switch
+        {
+            JsonValueKind.String => id.GetString(),
+            JsonValueKind.Number when id.TryGetUInt64(out ulong number) && number != 0 =>
+                number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            _ => null
+        };
+        string? tokenText = secret.ValueKind == JsonValueKind.String ? secret.GetString() : null;
+        // Native operation 2 uses byte buffers of 64 and 128 bytes, including terminators.
+        byte[] parsedUid = EncodeField(idText, 63);
+        try { token = EncodeField(tokenText, 127); }
+        catch { CryptographicOperations.ZeroMemory(parsedUid); throw; }
+        uid = parsedUid;
+        Disposition = "identity-present";
     }
 
     private static byte[] EncodeField(string? text, int maximum)

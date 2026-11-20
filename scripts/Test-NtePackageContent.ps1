@@ -59,6 +59,12 @@ $forbidden = @($entries | Where-Object {
 if ($forbidden.Count) {
     throw ('Release content contains an official launcher, research executable, debug symbols or temporary diagnostic: ' + ($forbidden -join ', '))
 }
+$bilibiliSdk = @($entries | Where-Object {
+    $_.Replace('\','/') -match '(^|/)(channelSdk/bilibili/|BLPlatform64/|(PCGameSDK\.dll|PCGamePlatform\.exe)(?:\.br)?$)'
+})
+if ($bilibiliSdk.Count) {
+    throw ('Release content contains Bilibili SDK files distributed by the official launcher: ' + ($bilibiliSdk -join ', '))
+}
 function Find-PackageEntry([string] $RelativePath) {
     @($entries | Where-Object {
         $name = $_.Replace('\','/')

@@ -9,21 +9,57 @@ namespace Hi3Helper.Plugin.NTE.Management.Config;
 
 public static class NteConfigProvider
 {
+    private const string BilibiliLauncherVersionPath = "/hd/publish_ob_B/launcher/Version.ini";
+
     internal static NteRegionConfig? DetectInstalledRegion(string root)
     {
+        string launcherConfig = Path.Combine(root, NteRegionDefinition.CnLauncherDirectory, "Config", "Config.ini");
         string marker = Path.Combine(root, ".collapse_nte_config");
         if (File.Exists(marker))
         {
+            string? appId = null;
+            string? region = null;
             foreach (string line in File.ReadLines(marker))
+            {
                 if (line.StartsWith("AppId=", StringComparison.Ordinal))
-                    return GetRegion(line[6..].Trim());
-            return CN; // Existing China installations predate the application identifier.
+                    appId ??= line[6..].Trim();
+                if (line.StartsWith("Region=", StringComparison.Ordinal))
+                    region ??= line[7..].Trim();
+            }
+            if (region != null)
+                return region == nameof(NteHostRegion.Bilibili) && appId == Bilibili.AppId
+                    ? Bilibili : throw new InvalidDataException("Unknown installed NTE region.");
+
+            // Legacy mainland markers had no independent region identifier.
+            NteRegionConfig legacy = appId == null ? CN : GetRegion(appId);
+            return legacy == CN && IsBilibiliLauncherConfig(launcherConfig) ? Bilibili : legacy;
         }
 
         if (File.Exists(Path.Combine(root, Global.SdkDirectory, "config.xml"))) return Global;
         if (File.Exists(Path.Combine(root, Taiwan.SdkDirectory, "config.xml"))) return Taiwan;
+        if (File.Exists(launcherConfig)) return IsBilibiliLauncherConfig(launcherConfig) ? Bilibili : CN;
         if (File.Exists(Path.Combine(root, CN.SdkDirectory, "config.xml"))) return CN;
         return null;
+    }
+
+    internal static bool IsBilibiliLauncherConfig(string config)
+    {
+        if (!File.Exists(config)) return false;
+
+        foreach (string line in File.ReadLines(config))
+        {
+            int separator = line.IndexOf('=');
+            if (separator < 0) continue;
+            string key = line[..separator].Trim();
+            if (!key.Equals("VersionInfoFileURL", StringComparison.OrdinalIgnoreCase) &&
+                !key.Equals("BackupVersionURL", StringComparison.OrdinalIgnoreCase)) continue;
+            if (Uri.TryCreate(line[(separator + 1)..].Trim().Trim('"'), UriKind.Absolute, out Uri? url) &&
+                url.Scheme == Uri.UriSchemeHttps && url.IsDefaultPort && url.UserInfo.Length == 0 &&
+                url.Host is "yhcdn1.wmupd.com" or "yhcdn2.wmupd.com" &&
+                url.AbsolutePath == BilibiliLauncherVersionPath) return true;
+        }
+
+        return false;
     }
 
     internal static NteRegionConfig GetRegion(string appId) => appId switch
@@ -91,7 +127,7 @@ public static class NteConfigProvider
 
     public static NteRegionConfig CN { get; } = new(
         ProfileName: "NteCN",
-        ZoneName: "中国大陆",
+        ZoneName: "中国大陆官服",
         ZoneLogoUrl: "https://cdn.collapselauncher.com/cl-cdn/inhouse-plugin/nte/logo.png",
         ZonePosterUrl: "https://cdn.collapselauncher.com/cl-cdn/inhouse-plugin/nte/poster.png",
         ZoneHomePageUrl: "https://yh.wanmei.com/",
@@ -105,6 +141,17 @@ public static class NteConfigProvider
         ReleaseChannel: GameReleaseChannel.Public,
         SupportedLanguages: ["zh-CN"]
     );
+
+    public static NteRegionConfig Bilibili { get; } = CN with
+    {
+        HostRegion = NteHostRegion.Bilibili,
+        ProfileName = NteRegionDefinition.BilibiliProfileName,
+        ZoneName = "Bilibili 服",
+        LauncherGameDirectoryName = "Neverness to Everness (Bilibili)",
+        AppId = NteRegionDefinition.Bilibili.AppId,
+        LauncherDirectoryName = NteRegionDefinition.CnLauncherDirectory,
+        LauncherVersionIniUrl = "https://yhcdn1.wmupd.com" + BilibiliLauncherVersionPath
+    };
 
     public static NteRegionConfig Global { get; } = new(
         ProfileName: "NteGlobal",
@@ -122,6 +169,7 @@ public static class NteConfigProvider
         ReleaseChannel: GameReleaseChannel.Public,
         SupportedLanguages: ["zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR", "de-DE", "fr-FR", "ru-RU", "es-ES"])
     {
+        HostRegion = NteHostRegion.Global,
         AppId = NteRegionDefinition.Global.AppId,
         LauncherVersionIniUrl = "https://ntecdn1.perfectworld.com/hd/publish_PC/launcher/Version.ini",
         LauncherDirectoryName = NteRegionDefinition.Global.LauncherDirectory,
@@ -145,6 +193,7 @@ public static class NteConfigProvider
         ReleaseChannel: GameReleaseChannel.Public,
         SupportedLanguages: ["zh-TW"])
     {
+        HostRegion = NteHostRegion.Taiwan,
         AppId = NteRegionDefinition.Taiwan.AppId,
         LauncherVersionIniUrl = "https://patchnte1.iwplay.com.tw/hd/OBpublish_PC/launcher/Version.ini",
         LauncherDirectoryName = NteRegionDefinition.Taiwan.LauncherDirectory,
@@ -153,5 +202,5 @@ public static class NteConfigProvider
         ResourceUrls = ["https://patchnte1.iwplay.com.tw/clientRes", "https://patchnte2.iwplay.com.tw/clientRes"]
     };
 
-    internal static IReadOnlyList<NteRegionConfig> AllRegions { get; } = [CN, Global, Taiwan];
+    internal static IReadOnlyList<NteRegionConfig> AllRegions { get; } = [CN, Global, Taiwan, Bilibili];
 }

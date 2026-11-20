@@ -72,10 +72,10 @@
     <value>异环</value>
   </data>
     <data name="ZoneDescription" xml:space="preserve">
-    <value>NTE 国服配置。</value>
+    <value>异环中国大陆官服。</value>
   </data>
     <data name="ZoneFullName" xml:space="preserve">
-    <value>异环（中国大陆）</value>
+    <value>异环（中国大陆官服）</value>
   </data>
     <data name="AppearanceTitle" xml:space="preserve">
     <value>异环 · 外观</value>
@@ -132,7 +132,10 @@
     <data name="LoginSettingsSection" xml:space="preserve"><value>账号与登录</value></data>
     <data name="LoginExperimentalHello" xml:space="preserve"><value>Windows Hello 账号保护（实验性）</value></data>
     <data name="LoginExperimentalHelloHint" xml:space="preserve"><value>保存和恢复账号时使用 Windows Hello 验证。默认关闭，使用当前 Windows 用户加密保护。关闭 Hello 保护时，每个已有的受保护账号仍需解锁一次；账号记录保留至手动移除。</value></data>
-    <data name="ZoneName" xml:space="preserve"><value>中国大陆</value></data>
+    <data name="ZoneName" xml:space="preserve"><value>中国大陆官服</value></data>
+    <data name="BilibiliZoneName" xml:space="preserve"><value>Bilibili 服</value></data>
+    <data name="BilibiliZoneFullName" xml:space="preserve"><value>异环（Bilibili 服）</value></data>
+    <data name="BilibiliZoneDescription" xml:space="preserve"><value>游戏发起登录时，由官方 Bilibili SDK 处理账号认证。</value></data>
     <data name="GlobalZoneName" xml:space="preserve"><value>国际服</value></data>
     <data name="GlobalZoneFullName" xml:space="preserve"><value>异环（国际服）</value></data>
     <data name="GlobalZoneDescription" xml:space="preserve"><value>国际服，支持下载、更新、修复及账号登录。</value></data>
@@ -141,10 +144,10 @@
     <data name="LaunchGraphicsApi" xml:space="preserve"><value>图形接口</value></data>
     <data name="LaunchGraphicsDefault" xml:space="preserve"><value>游戏默认</value></data>
   <data name="LaunchOfficialLauncher" xml:space="preserve">
-    <value>使用官方启动器</value>
+    <value>在后台运行官方启动器</value>
   </data>
   <data name="LaunchOfficialLauncherHint" xml:space="preserve">
-    <value>下次启动时使用当前游戏目录内的官方启动器。登录、验证或更新窗口仍可能显示。</value>
+    <value>下次启动时使用所选游戏目录内的官方启动器。登录、验证或更新窗口仍可能显示。关闭此选项可使用独立启动。</value>
   </data>
   <data name="TaiwanZoneName" xml:space="preserve"><value>台港澳</value></data>
   <data name="TaiwanZoneFullName" xml:space="preserve"><value>异环（台港澳）</value></data>

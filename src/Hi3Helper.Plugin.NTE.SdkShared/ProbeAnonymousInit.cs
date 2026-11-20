@@ -69,33 +69,40 @@ internal static class ProbeAnonymousInit
 
     internal static SortedDictionary<string, string> BuildParameters(JsonElement config, DateTimeOffset time, string deviceId)
     {
-        JsonElement channel = config.GetProperty("init").GetProperty("channel");
         JsonElement meta = config.GetProperty("meta");
+        if (StringValue(meta, "channelId") != "9") throw new InvalidDataException("CN anonymous initialization requires channel 9.");
+        JsonElement channel = config.GetProperty("init").GetProperty("channel");
         string appId = StringValue(channel, "channelAppId");
         string appKey = StringValue(channel, "channelAppKey");
-        if (!Regex.IsMatch(appId, @"\A[0-9]{1,10}\z") || !Regex.IsMatch(appKey, @"\A[A-Za-z0-9]{32}\z") ||
-            !Regex.IsMatch(deviceId, @"\A[0-9a-f]{32}\z"))
+        if (!Regex.IsMatch(appId, @"\A[0-9]{1,10}\z") || !Regex.IsMatch(appKey, @"\A[A-Za-z0-9]{32}\z"))
             throw new InvalidDataException("Unexpected static channel metadata.");
-        // Names and backend version match the fixed PC request builder at
-        // NTEGame RVA 0x3E90B0. The probe owns a fresh anonymous device ID;
-        // it does not copy the official launcher's device or account identity.
-        SortedDictionary<string, string> values = new(StringComparer.Ordinal)
-        {
-            ["appId"] = appId,
-            ["appVersion"] = StringValue(meta, "version"),
-            ["packageName"] = StringValue(meta, "packageName"),
-            ["channelId"] = StringValue(meta, "channelId"),
-            ["deviceId"] = deviceId,
-            ["deviceModel"] = "WindowsPc",
-            ["deviceSys"] = "WindowsPc",
-            ["deviceType"] = Environment.OSVersion.VersionString + " 64bit",
-            ["sdkVersion"] = Nte.Login.NteCnSdkCompatibility.ServiceSdkVersion,
-            ["t"] = time.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture)
-        };
+        SortedDictionary<string, string> values = BuildGameDevice(meta, deviceId);
+        values["appId"] = appId;
+        values["channelId"] = "9";
+        values["t"] = time.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
         byte[] input = Encoding.UTF8.GetBytes(string.Concat(values.Values) + appKey);
         try { values["sign"] = Convert.ToHexStringLower(MD5.HashData(input)); }
         finally { CryptographicOperations.ZeroMemory(input); }
         return values;
+    }
+
+    internal static SortedDictionary<string, string> BuildGameDevice(JsonElement meta, string deviceId)
+    {
+        if (!Regex.IsMatch(deviceId, @"\A[0-9a-f]{32}\z"))
+            throw new InvalidDataException("Invalid device identifier.");
+        // Names and backend version match the fixed PC request builder at
+        // NTEGame RVA 0x3E90B0. The probe owns a fresh anonymous device ID;
+        // it does not copy the official launcher's device or account identity.
+        return new(StringComparer.Ordinal)
+        {
+            ["appVersion"] = StringValue(meta, "version"),
+            ["packageName"] = StringValue(meta, "packageName"),
+            ["deviceId"] = deviceId,
+            ["deviceModel"] = "WindowsPc",
+            ["deviceSys"] = "WindowsPc",
+            ["deviceType"] = Environment.OSVersion.VersionString + " 64bit",
+            ["sdkVersion"] = Nte.Login.NteCnSdkCompatibility.ServiceSdkVersion
+        };
     }
 
     private static string StringValue(JsonElement parent, string name)

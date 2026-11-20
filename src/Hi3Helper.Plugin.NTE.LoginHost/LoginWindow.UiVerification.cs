@@ -131,6 +131,29 @@ internal sealed partial class LoginWindow
                     Check(window.content.IsEnabled && window.confirmationOverlay == null, "cancel-restores-notice");
                     if (language == "zh-CN") await Capture("notice");
 
+                    if (region == NteHostRegion.CN)
+                    {
+                        currentCase = "Bilibili/" + language;
+                        window.ConfigureLaunch(new(directory, Region: NteHostRegion.Bilibili, Language: language));
+                        window.noticeCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                        window.ShowLoginNotice();
+                        await Layout();
+                        Check(window.title.Text == LoginText.Get("NoticeBilibiliTitle") && Visible("submit") &&
+                              Visible("official-launcher") && !window.closeLogin.IsVisible, "notice-title-and-actions");
+                        var paragraphs = window.form.Children.OfType<TextBlock>().Select(block => block.Text).ToArray();
+                        Check(paragraphs.Contains(LoginText.Get("NoticeBilibiliPurpose")) &&
+                              paragraphs.Contains(LoginText.Get("NoticeBilibiliStorage")) &&
+                              !paragraphs.Contains(LoginText.Get("NoticeData")), "notice-uses-bilibili-copy");
+                        Check(!paragraphs.Any(text => text?.Contains("LoginHost", StringComparison.OrdinalIgnoreCase) == true),
+                            "notice-uses-public-plugin-name");
+                        window.ChooseOfficialLauncher();
+                        await Layout();
+                        Check(Nodes().OfType<TextBlock>().Any(block => block.Text == LoginText.Get("BilibiliOfficialLauncherConfirm")),
+                            "bilibili-official-confirmation");
+                        await Click("cancel-official-launcher");
+                        if (language == "zh-CN") await Capture("bilibili-notice");
+                    }
+
                     void Check(bool passed, string name)
                     {
                         if (!passed) throw new InvalidDataException(currentCase + "/" + name);

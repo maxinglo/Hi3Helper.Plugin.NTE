@@ -14,6 +14,24 @@ internal static class ProbeBootConfig
     public static object Inspect(NteSdkRegistration registration, string? application, string root,
         Func<JsonElement, object>? inspectConfiguration = null,
         Func<JsonElement, ReadOnlyMemory<byte>, object>? inspectWithApplicationKey = null)
+        => InspectCore(registration, application, Path.Combine(root, NteRegionDefinition.CN.LauncherDirectory),
+            NteSdkRegistration.CnConfigurationName, exactResourcePath: false, inspectConfiguration, inspectWithApplicationKey);
+
+    internal static object Inspect(NteCnSdkCompatibility compatibility, NteSdkRegistration registration, string? application,
+        Func<JsonElement, object>? inspectConfiguration = null,
+        Func<JsonElement, ReadOnlyMemory<byte>, object>? inspectWithApplicationKey = null)
+    {
+        if (compatibility.InstalledLauncherDirectory is not string launcherDirectory ||
+            compatibility.Protocol != registration.Protocol)
+            throw new InvalidDataException("Registration does not match a validated launcher installation.");
+
+        return InspectCore(registration, application, launcherDirectory, compatibility.ConfigurationName,
+            exactResourcePath: compatibility.Region == NteHostRegion.Bilibili, inspectConfiguration, inspectWithApplicationKey);
+    }
+
+    private static object InspectCore(NteSdkRegistration registration, string? application, string launcherDirectory,
+        string config, bool exactResourcePath, Func<JsonElement, object>? inspectConfiguration,
+        Func<JsonElement, ReadOnlyMemory<byte>, object>? inspectWithApplicationKey)
     {
         byte[] key = [];
         byte[] applicationKey = [];
@@ -24,12 +42,12 @@ internal static class ProbeBootConfig
                 throw new InvalidDataException("Not a validated client registration.");
             applicationKey = registration.ReadCnApplicationKey();
             key = applicationKey.AsSpan(16, 16).ToArray();
-            string config = NteSdkRegistration.CnConfigurationName;
             // Fixed-image static path: AES wrapper RVA 0x47C010 takes the
             // application's slice starting at character 16, decodes Base64, then decrypts
             // each 16-byte block with the AES wrapper at RVA 0x47BEB0.
-            string resource = Path.Combine(root, NteRegionDefinition.CN.LauncherDirectory, "ResData", application + ".dat");
-            byte[] encoded = ReadStaticResource(resource, "/" + application + "/main/" + config);
+            string resource = Path.Combine(launcherDirectory, "ResData", application + ".dat");
+            string resourcePath = (exactResourcePath ? "/res/" : "/") + application + "/main/" + config;
+            byte[] encoded = ReadStaticResource(resource, resourcePath, exactResourcePath);
             byte[] ciphertext = Convert.FromBase64String(Encoding.ASCII.GetString(encoded));
             using Aes aes = Aes.Create();
             aes.Key = key;
@@ -95,6 +113,9 @@ internal static class ProbeBootConfig
     }
 
     internal static byte[] ReadStaticResource(string file, string suffix)
+        => ReadStaticResource(file, suffix, exactPath: false);
+
+    private static byte[] ReadStaticResource(string file, string resourcePath, bool exactPath)
     {
         if (new FileInfo(file).Length > 64 * 1024 * 1024) throw new InvalidDataException("Static resource size bound.");
         byte[] data = File.ReadAllBytes(file);
@@ -122,7 +143,8 @@ internal static class ProbeBootConfig
             string component = Encoding.BigEndianUnicode.GetString(Slice(checked(name + 6), checked(characters * 2)));
             if (component is "." or ".." || component.IndexOfAny(['/', '\\', '\0', ':']) >= 0)
                 throw new InvalidDataException("Unsafe Qt RCC path component.");
-            string path = entry.Parent + "/" + component;
+            // The RCC root is virtual and its name field is not part of the resource path.
+            string path = exactPath && entry.Index == 0 ? "" : entry.Parent + "/" + component;
             int flags = Big16(node + 4);
             if ((flags & 2) != 0)
             {
@@ -132,7 +154,9 @@ internal static class ProbeBootConfig
                 for (int i = 0; i < children; i++) pending.Push((first + i, path));
                 continue;
             }
-            if (!path.EndsWith(suffix, StringComparison.Ordinal)) continue;
+            bool matches = exactPath ? path.Equals(resourcePath, StringComparison.Ordinal)
+                : path.EndsWith(resourcePath, StringComparison.Ordinal);
+            if (!matches) continue;
             if (match != null) throw new InvalidDataException("Ambiguous static SDK configuration.");
             int blob = checked(payload + Big32(node + 10));
             int size = Big32(blob);

@@ -199,18 +199,21 @@ internal sealed class ProbePreLoginClient : IDisposable
     private readonly byte[] key;
     private readonly string deviceId, installedVersion;
     private readonly Func<string>? deviceProvider;
+    private readonly int channelId;
     private readonly HttpClient http;
     private readonly bool ownsHttp;
     private readonly Action<object> observe;
     private byte[] uid = [];
     private bool disposed;
 
-    internal ProbePreLoginClient(ReadOnlySpan<byte> key, string deviceId, string installedVersion, Action<object> observe, HttpClient? http = null, Func<string>? deviceProvider = null)
+    internal ProbePreLoginClient(ReadOnlySpan<byte> key, string deviceId, string installedVersion, Action<object> observe,
+        HttpClient? http = null, Func<string>? deviceProvider = null, int channelId = 9)
     {
-        if (key.Length != 16 || !Regex.IsMatch(deviceId, @"\A[0-9a-f]{32}\z") ||
+        if (channelId is not (9 or 123) || key.Length != 16 || !Regex.IsMatch(deviceId, @"\A[0-9a-f]{32}\z") ||
             !Regex.IsMatch(installedVersion, @"\A[0-9]+(?:\.[0-9]+){1,3}\z")) throw new InvalidDataException("Unverified pre-login context.");
         this.key = key.ToArray(); this.deviceId = deviceId; this.installedVersion = installedVersion; this.observe = observe;
         this.deviceProvider = deviceProvider;
+        this.channelId = channelId;
         ownsHttp = http == null;
         this.http = http ?? new HttpClient(new HttpClientHandler
         { AllowAutoRedirect = false, UseCookies = false, AutomaticDecompression = DecompressionMethods.All }) { Timeout = TimeSpan.FromSeconds(20) };
@@ -225,6 +228,8 @@ internal sealed class ProbePreLoginClient : IDisposable
     internal void SetIdentity(ProbeIdentityEnvelope identity)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+        if (identity.IsBilibiliGameIdentity != (channelId == 123))
+            throw new InvalidDataException("The game identity does not match this pre-login channel.");
         if (identity.Stage != ProbeIdentityStage.Game || !identity.IdentityAvailable) throw new InvalidDataException("Game identity required for pre-login.");
         (byte[] id, byte[] token) = identity.CopyIdentity();
         CryptographicOperations.ZeroMemory(token); CryptographicOperations.ZeroMemory(uid); uid = id;
@@ -240,7 +245,8 @@ internal sealed class ProbePreLoginClient : IDisposable
         // fields use this host's own persisted identifier, never vendor data.
         SortedDictionary<string, string> fields = new(StringComparer.Ordinal)
         {
-            ["appId"] = NteRegionDefinition.CnAppId, ["channelId"] = "9", ["platformId"] = "4", ["userId"] = Encoding.UTF8.GetString(uid),
+            ["appId"] = NteRegionDefinition.CnAppId, ["channelId"] = channelId.ToString(CultureInfo.InvariantCulture),
+            ["platformId"] = "4", ["userId"] = Encoding.UTF8.GetString(uid),
             ["udid"] = currentDevice, ["ndid"] = currentDevice, ["deviceName"] = "WindowsPc",
             ["version"] = "2", ["appVersion"] = installedVersion, ["sdkVersion"] = NteCnSdkCompatibility.ServiceSdkVersion,
             ["timestamp"] = time.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture)

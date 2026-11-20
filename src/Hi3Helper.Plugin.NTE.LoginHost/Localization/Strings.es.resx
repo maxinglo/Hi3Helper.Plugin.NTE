@@ -594,4 +594,64 @@ Download: {3} files ({4:F3} GB)</value></data>
   <data name="CnFilesMissing" xml:space="preserve"><value>Faltan archivos del juego necesarios para iniciar sesión. Verifica o repara el juego.</value></data>
   <data name="CnClientRunning" xml:space="preserve"><value>El juego o el iniciador oficial sigue abierto. Ciérralo y vuelve a intentarlo.</value></data>
   <data name="CnLoginHostRunning" xml:space="preserve"><value>Ya hay un componente de inicio de sesión abierto. Vuelve a su ventana o ciérralo e inténtalo de nuevo.</value></data>
+  <data name="BilibiliSdkMissing" xml:space="preserve">
+    <value>Faltan los componentes de inicio de sesión de Bilibili. Repara el juego o actualiza el lanzador oficial en esta carpeta del juego.</value>
+  </data>
+  <data name="BilibiliSdkUnsupported" xml:space="preserve">
+    <value>Esta versión del SDK de Bilibili aún no es compatible. Inicia sesión con el lanzador oficial.</value>
+  </data>
+  <data name="BilibiliSdkInitFailed" xml:space="preserve">
+    <value>No se pudo iniciar el acceso a Bilibili. Repara el juego o usa el lanzador oficial.</value>
+  </data>
+  <data name="BilibiliSdkLoginFailed" xml:space="preserve">
+    <value>No se completó el inicio de sesión en Bilibili. Vuelve a intentarlo desde el juego.</value>
+  </data>
+  <data name="BilibiliSdkTimedOut" xml:space="preserve">
+    <value>Se agotó el tiempo de inicio de sesión en Bilibili. Sal del juego y vuelve a intentarlo.</value>
+  </data>
+  <data name="BilibiliServiceLoginFailed" xml:space="preserve">
+    <value>El servicio del juego rechazó el inicio de sesión en Bilibili. Vuelve a intentarlo o usa el lanzador oficial.</value>
+  </data>
+  <data name="NoticeBilibiliData" xml:space="preserve">
+    <value>Inicia sesión en la ventana oficial de Bilibili. El complemento solo usa el ID de cuenta y el token recibidos durante esta sesión de juego.</value>
+  </data>
+  <data name="NoticeBilibiliStorage" xml:space="preserve">
+    <value>El complemento guarda la confirmación de este aviso. El SDK oficial de Bilibili administra su historial de inicio de sesión y sus datos locales.</value>
+  </data>
+  <data name="NoticeBilibiliNetwork" xml:space="preserve">
+    <value>El SDK de Bilibili se comunica con Bilibili. Para el acceso y las comprobaciones, el complemento envía al editor del juego el ID de cuenta, el token y los datos necesarios del dispositivo mediante HTTPS.</value>
+  </data>
+  <data name="NoticeBilibiliTitle" xml:space="preserve">
+    <value>Aviso de inicio de sesión en Bilibili</value>
+  </data>
+  <data name="NoticeBilibiliPurposeTitle" xml:space="preserve">
+    <value>Cómo se inicia sesión</value>
+  </data>
+  <data name="NoticeBilibiliPurpose" xml:space="preserve">
+    <value>Cuando el juego solicita el inicio de sesión, el complemento abre el SDK oficial de Bilibili instalado con el juego. Después de iniciar sesión, el complemento envía el resultado al editor y espera su aprobación antes de avisar al juego.</value>
+  </data>
+  <data name="NoticeBilibiliDataTitle" xml:space="preserve">
+    <value>Uso de los datos de la cuenta</value>
+  </data>
+  <data name="NoticeBilibiliNetworkTitle" xml:space="preserve">
+    <value>Comprobaciones del editor</value>
+  </data>
+  <data name="NoticeBilibiliStorageTitle" xml:space="preserve">
+    <value>Almacenamiento local</value>
+  </data>
+  <data name="NoticeBilibiliRiskTitle" xml:space="preserve">
+    <value>Compatibilidad y riesgos para la cuenta</value>
+  </data>
+  <data name="NoticeBilibiliRisk" xml:space="preserve">
+    <value>El inicio independiente usa un complemento de terceros. Las actualizaciones del lanzador, las condiciones del servicio y las restricciones de cuenta pueden afectarlo. Puedes elegir el lanzador oficial en los ajustes de inicio del juego.</value>
+  </data>
+  <data name="NoticeBilibiliChoiceTitle" xml:space="preserve">
+    <value>Usar el lanzador oficial</value>
+  </data>
+  <data name="NoticeBilibiliChoice" xml:space="preserve">
+    <value>Activa el lanzador oficial en los ajustes de inicio del juego. Se ejecutará en segundo plano desde la instalación de Bilibili seleccionada y puede mostrar ventanas de acceso, verificación o actualización.</value>
+  </data>
+  <data name="BilibiliOfficialLauncherConfirm" xml:space="preserve">
+    <value>¿Usar el lanzador oficial de Bilibili la próxima vez y cerrar el juego actual? El lanzador debe estar en la carpeta NTELauncher de esta instalación.</value>
+  </data>
 </root>

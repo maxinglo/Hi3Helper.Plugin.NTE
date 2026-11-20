@@ -63,7 +63,7 @@ internal partial class NteGameInstaller
         }
 
         NteRegionConfig? installedRegion = NteConfigProvider.DetectInstalledRegion(gamePath);
-        if (installedRegion != null && installedRegion.AppId != mgr.AppId)
+        if (installedRegion != null && installedRegion.HostRegion != mgr.Region.HostRegion)
             throw new InvalidDataException(
                 "This game directory belongs to a different NTE region. Select a separate installation directory.");
         if (preload == null)
@@ -389,7 +389,7 @@ internal partial class NteGameInstaller
             return;
         }
 
-        if (mgr.Region.IsTaiwan)
+        if (mgr.Region.IsTaiwan || mgr.Region.IsBilibili)
         {
             progressStateDelegate?.Invoke(InstallProgressState.Download);
             await new NteOfficialLauncherInstaller(_downloadHttpClient).InstallAsync(gamePath, mgr.Region,
@@ -406,7 +406,7 @@ internal partial class NteGameInstaller
 
         // 保存版本信息
         if (originalManifest != null && selectedManifest != null && releaseXml != null)
-            NteOfficialPatcherState.Commit(gamePath, branchName, mgr.AppId, releaseXml,
+            NteOfficialPatcherState.Commit(gamePath, branchName, mgr.Region, releaseXml,
                 originalManifest, selectedManifest, token);
         if (selectedManifest != null) NteInstalledManifest.Save(gamePath, mgr.Region, selectedManifest);
         GameManager.SetCurrentGameVersion(in targetVersion);
