@@ -652,6 +652,6 @@ Download: {3} files ({4:F3} GB)</value></data>
     <value>ゲームの起動設定で公式ランチャーのバックグラウンド起動を有効にできます。選択した Bilibili 版のインストール先から起動し、ログイン、確認、更新が必要な場合は画面が表示されます。</value>
   </data>
   <data name="BilibiliOfficialLauncherConfirm" xml:space="preserve">
-    <value>次回から公式 Bilibili ランチャーを使用し、現在のゲームを終了しますか？ランチャーはゲームのインストール先の NTELauncher フォルダーに必要です。</value>
+    <value>次回から公式 Bilibili ランチャーを使用し、現在のゲームを終了しますか？</value>
   </data>
 </root>

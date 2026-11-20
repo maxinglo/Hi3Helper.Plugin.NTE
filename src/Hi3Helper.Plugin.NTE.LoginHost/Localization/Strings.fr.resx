@@ -652,6 +652,6 @@ Download: {3} files ({4:F3} GB)</value></data>
     <value>Activez le lanceur officiel dans les paramètres de démarrage du jeu. Il s’exécute en arrière-plan depuis l’installation Bilibili choisie et peut afficher des fenêtres de connexion, de vérification ou de mise à jour.</value>
   </data>
   <data name="BilibiliOfficialLauncherConfirm" xml:space="preserve">
-    <value>Utiliser le lanceur officiel Bilibili au prochain démarrage et fermer le jeu maintenant ? Le lanceur doit se trouver dans le dossier NTELauncher de cette installation.</value>
+    <value>Utiliser le lanceur officiel Bilibili au prochain démarrage et fermer le jeu maintenant ?</value>
   </data>
 </root>

@@ -652,6 +652,6 @@ Download: {3} files ({4:F3} GB)</value></data>
     <value>Activa el lanzador oficial en los ajustes de inicio del juego. Se ejecutará en segundo plano desde la instalación de Bilibili seleccionada y puede mostrar ventanas de acceso, verificación o actualización.</value>
   </data>
   <data name="BilibiliOfficialLauncherConfirm" xml:space="preserve">
-    <value>¿Usar el lanzador oficial de Bilibili la próxima vez y cerrar el juego actual? El lanzador debe estar en la carpeta NTELauncher de esta instalación.</value>
+    <value>¿Usar el lanzador oficial de Bilibili la próxima vez y cerrar el juego actual?</value>
   </data>
 </root>

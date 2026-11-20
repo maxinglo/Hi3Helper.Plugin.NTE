@@ -654,6 +654,6 @@
     <value>在游戏设置 → 启动设置中启用官方启动器后台启动。启动器来自所选 Bilibili 游戏安装目录，需要登录、验证或更新时仍会显示相应窗口。</value>
   </data>
   <data name="BilibiliOfficialLauncherConfirm" xml:space="preserve">
-    <value>改用 Bilibili 官方启动器并关闭当前游戏？该设置在下次启动时生效。官方启动器应位于当前游戏安装目录的 NTELauncher 文件夹。</value>
+    <value>改用 Bilibili 官方启动器并关闭当前游戏？该设置在下次启动时生效。</value>
   </data>
 </root>

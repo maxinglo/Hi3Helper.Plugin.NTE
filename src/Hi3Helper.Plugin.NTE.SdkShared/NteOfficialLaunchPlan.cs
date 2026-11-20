@@ -13,7 +13,7 @@ internal sealed record NteOfficialLaunchPlan(string Executable, string GameExecu
     {
         string root = Path.GetFullPath(gameRoot);
         NteRegionDefinition definition = NteRegionDefinition.From(region);
-        string executable = Path.Combine(root, definition.LauncherDirectory, definition.LauncherExecutable);
+        string executable = Path.Combine(root, definition.LauncherDirectoryFor(root), definition.LauncherExecutable);
         if (!File.Exists(executable))
             throw new FileNotFoundException(
                 "The official launcher must be installed inside the game installation directory.", executable);

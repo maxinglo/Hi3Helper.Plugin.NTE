@@ -8,10 +8,12 @@ internal static class NteInstalledVersion
     {
         if (Valid(officialVersion, out string version)) return version;
 
-        string profile = region.Region == NteHostRegion.Bilibili ? NteRegionDefinition.BilibiliProfileName : region.AppId;
-        string manifest = Path.Combine(gameRoot, ".collapse-nte", "installed", profile, "ResList.xml");
+        string installed = Path.Combine(gameRoot, ".collapse-nte", "installed");
+        string[] profiles = region.IsOverseas ? [region.AppId] : [region.AppId, NteRegionDefinition.BilibiliProfileName];
+        foreach (string profile in profiles)
         try
         {
+            string manifest = Path.Combine(installed, profile, "ResList.xml");
             if (File.Exists(manifest))
             {
                 using XmlReader reader = XmlReader.Create(manifest, new XmlReaderSettings
@@ -41,11 +43,11 @@ internal static class NteInstalledVersion
                 else if (key == "Region") recordedRegion = value;
             }
 
-            // Older China installations have no AppId in this plugin-owned marker.
-            bool matches = recordedRegion == nameof(NteHostRegion.Bilibili)
-                ? region.Region == NteHostRegion.Bilibili && recordedAppId == region.AppId
-                : region.Region != NteHostRegion.Bilibili && (recordedAppId == region.AppId ||
-                    recordedAppId == null && region.Region == NteHostRegion.CN);
+            // Mainland channels share the same Client and installed version.
+            bool matches = region.IsOverseas
+                ? recordedRegion == null && recordedAppId == region.AppId
+                : recordedRegion == null && (recordedAppId == null || recordedAppId == region.AppId) ||
+                    recordedRegion == nameof(NteHostRegion.Bilibili) && recordedAppId == region.AppId;
             if (matches && Valid(recordedVersion, out version)) return version;
         }
 

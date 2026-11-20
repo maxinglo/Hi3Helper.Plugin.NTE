@@ -203,7 +203,8 @@ public partial class Exports
         gamePath?.NormalizePathInplace();
         executablePath.NormalizePathInplace();
 
-        if (string.IsNullOrEmpty(gamePath) || !nteGameManager.IsGamePathCompatible(gamePath))
+        if (string.IsNullOrEmpty(gamePath) || !nteGameManager.IsGamePathCompatible(gamePath) ||
+            nteGameManager.NeedsMainlandLauncher(gamePath))
         {
             return false;
         }

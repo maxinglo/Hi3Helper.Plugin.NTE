@@ -2,6 +2,7 @@ using Hi3Helper.Plugin.Core;
 using Hi3Helper.Plugin.Core.Management;
 using Hi3Helper.Plugin.Core.Utility;
 using Hi3Helper.Plugin.NTE.Management.Config;
+using Nte.Login;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -51,7 +52,7 @@ internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? do
     {
         GameManager.GetApiGameVersion(out GameVersion api);
         if (_cachedResList == null || api != GameVersion.Empty && _cachedResList.Version != api.ToString())
-            if (await InitAsync(token).ConfigureAwait(false) != 0)
+            if (await InitGameResourcesAsync(token).ConfigureAwait(false) != 0)
                 throw new InvalidOperationException("Cannot resolve the official resource manifest.");
     }
 
@@ -72,7 +73,11 @@ internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? do
     /// 2. 下载并解密 ResList.bin.zip
     /// 3. 解析资源清单
     /// </summary>
-    protected override async Task<int> InitAsync(CancellationToken token)
+    protected override Task<int> InitAsync(CancellationToken token) =>
+        ((NteGameManager)GameManager).TryGetLauncherOnlyPath(out _)
+            ? Task.FromResult(0) : InitGameResourcesAsync(token);
+
+    private async Task<int> InitGameResourcesAsync(CancellationToken token)
     {
         _cachedResList = null;
         _preloadPlan = null;
@@ -165,6 +170,10 @@ internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? do
     {
         if (gameInstallerKind == GameInstallerKind.Preload)
             return await GetPreloadSizeAsync(false, token).ConfigureAwait(false);
+        NteGameManager manager = (NteGameManager)GameManager;
+        if (manager.TryGetLauncherOnlyPath(out string? launcherOnlyPath))
+            return await new NteOfficialLauncherInstaller(_downloadHttpClient)
+                .GetRemainingSizeAsync(launcherOnlyPath, manager.Region, token).ConfigureAwait(false);
         await EnsureActiveManifestAsync(token).ConfigureAwait(false);
 
         if (_cachedResList == null)
@@ -197,6 +206,7 @@ internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? do
     {
         if (gameInstallerKind == GameInstallerKind.Preload)
             return await GetPreloadSizeAsync(true, token).ConfigureAwait(false);
+        if (((NteGameManager)GameManager).TryGetLauncherOnlyPath(out _)) return 0L;
         await EnsureActiveManifestAsync(token).ConfigureAwait(false);
 
         if (_cachedResList == null)
@@ -232,8 +242,10 @@ internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? do
         InstallProgressStateDelegate? progressStateDelegate,
         CancellationToken token)
     {
+        if (await TryInstallMainlandLauncherAsync(progressDelegate, progressStateDelegate, token).ConfigureAwait(false))
+            return;
         if (_cachedResList == null)
-            await InitAsync(token).ConfigureAwait(false);
+            await InitGameResourcesAsync(token).ConfigureAwait(false);
 
         await RunInstallAsync(progressDelegate, progressStateDelegate, GameInstallerKind.Install, token)
             .ConfigureAwait(false);
@@ -247,12 +259,14 @@ internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? do
         InstallProgressStateDelegate? progressStateDelegate,
         CancellationToken token)
     {
+        if (await TryInstallMainlandLauncherAsync(progressDelegate, progressStateDelegate, token).ConfigureAwait(false))
+            return;
         progressStateDelegate?.Invoke(InstallProgressState.Preparing);
         InstallProgress preparing = new();
         progressDelegate?.Invoke(in preparing);
         SharedStatic.InstanceLogger.LogInformation(
             "[NTE Update] Refreshing release metadata before building the update plan.");
-        if (await InitAsync(token).ConfigureAwait(false) != 0)
+        if (await InitGameResourcesAsync(token).ConfigureAwait(false) != 0)
             throw new InvalidOperationException("Cannot refresh the official game release before updating.");
 
         await RunInstallAsync(progressDelegate, progressStateDelegate, GameInstallerKind.Update, token)
@@ -281,8 +295,17 @@ internal partial class NteGameInstaller(IGameManager gameManager, HttpClient? do
         if (string.IsNullOrEmpty(installPath))
             return;
 
+        NteGameManager active = (NteGameManager)GameManager;
         NteSharedInstallationState? shared = NteSharedInstallation.Load(installPath);
-        using FileStream? sharedOperation = shared != null ? NteGameOperation.Acquire(installPath) : null;
+        using FileStream? sharedOperation = shared != null || !active.Region.IsOverseas
+            ? NteGameOperation.Acquire(installPath) : null;
+        if (!active.Region.IsOverseas &&
+            NteOfficialLauncherInstaller.IsReady(installPath, NteConfigProvider.CN,
+                NteRegionDefinition.CN.LauncherDirectoryFor(installPath)) &&
+            NteOfficialLauncherInstaller.IsReady(installPath, NteConfigProvider.Bilibili,
+                NteRegionDefinition.Bilibili.LauncherDirectoryFor(installPath)))
+            throw new IOException("The mainland and Bilibili profiles share this game directory. Uninstalling the entire directory would remove both.");
+
         if (shared != null)
         {
             NteSharedInstallation.EnsureGamesClosed(installPath);

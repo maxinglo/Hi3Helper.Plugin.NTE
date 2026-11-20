@@ -47,7 +47,7 @@ internal sealed record NteCnSdkCompatibility(string LauncherSha256, string Bridg
 
         NteRegionDefinition definition = NteRegionDefinition.From(region);
         string executable = Path.Combine(gameRoot, NteRegionDefinition.GameExecutableRelativePath);
-        string launcherDirectory = Path.GetFullPath(installedLauncherDirectory ?? definition.LauncherDirectory,
+        string launcherDirectory = Path.GetFullPath(installedLauncherDirectory ?? definition.LauncherDirectoryFor(gameRoot),
             Path.GetFullPath(gameRoot));
         string launcher = Path.Combine(launcherDirectory, definition.LauncherExecutable);
         foreach (string file in new[] { executable, launcher })
@@ -55,7 +55,7 @@ internal sealed record NteCnSdkCompatibility(string LauncherSha256, string Bridg
 
         const string bridgeName = "WPGameClientSDK_64.dll";
         string bridge = Path.Combine(launcherDirectory, bridgeName);
-        if (region == NteHostRegion.CN)
+        if (region == NteHostRegion.CN && !File.Exists(bridge))
         {
             string pointer = Path.Combine(Path.GetDirectoryName(executable)!, "GameLauncher.config");
             if (!File.Exists(pointer) || new FileInfo(pointer).Length > 32768)

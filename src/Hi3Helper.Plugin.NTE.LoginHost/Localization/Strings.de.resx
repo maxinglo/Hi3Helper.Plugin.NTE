@@ -652,6 +652,6 @@ Download: {3} files ({4:F3} GB)</value></data>
     <value>Aktiviere den offiziellen Launcher in den Starteinstellungen des Spiels. Er läuft im Hintergrund aus dem gewählten Bilibili-Installationsordner und kann Fenster für Anmeldung, Prüfung oder Updates öffnen.</value>
   </data>
   <data name="BilibiliOfficialLauncherConfirm" xml:space="preserve">
-    <value>Beim nächsten Start den offiziellen Bilibili-Launcher verwenden und das laufende Spiel schließen? Der Launcher muss im Ordner NTELauncher dieser Spielinstallation liegen.</value>
+    <value>Beim nächsten Start den offiziellen Bilibili-Launcher verwenden und das laufende Spiel schließen?</value>
   </data>
 </root>

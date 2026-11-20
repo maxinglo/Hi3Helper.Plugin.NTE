@@ -654,6 +654,6 @@ Download: {3} files ({4:F3} GB)</value></data>
     <value>Enable the official launcher in the game’s launch settings. It runs from the selected Bilibili installation and can still show sign-in or update windows when needed.</value>
   </data>
   <data name="BilibiliOfficialLauncherConfirm" xml:space="preserve">
-    <value>Switch to the official Bilibili launcher for the next launch and close the current game? The launcher must be installed in the NTELauncher folder of this game installation.</value>
+    <value>Switch to the official Bilibili launcher for the next launch and close the current game?</value>
   </data>
 </root>

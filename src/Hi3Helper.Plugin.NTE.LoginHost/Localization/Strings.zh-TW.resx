@@ -652,6 +652,6 @@
     <value>在遊戲啟動設定中啟用官方啟動器背景啟動。啟動器來自所選 Bilibili 遊戲安裝目錄，需要登入、驗證或更新時仍會顯示視窗。</value>
   </data>
   <data name="BilibiliOfficialLauncherConfirm" xml:space="preserve">
-    <value>改用 Bilibili 官方啟動器並關閉目前的遊戲？設定會在下次啟動時生效。官方啟動器應放在目前遊戲安裝目錄的 NTELauncher 資料夾。</value>
+    <value>改用 Bilibili 官方啟動器並關閉目前的遊戲？設定會在下次啟動時生效。</value>
   </data>
 </root>

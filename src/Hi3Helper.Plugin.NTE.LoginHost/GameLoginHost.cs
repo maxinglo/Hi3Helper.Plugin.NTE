@@ -66,7 +66,8 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
         string sdkPath = validated.BridgePath;
         using Mutex instance = new(false, @"Local\Collapse.NTE.LoginHost." + NteRegionDefinition.CnAppId, out bool created);
         if (!created) throw new NteCnLaunchException("CnLoginHostRunning");
-        context = new(root, true, useOwnExecutable: true, hostExecutable: Environment.ProcessPath!, region: options.Region);
+        context = new(root, true, useOwnExecutable: true, hostExecutable: Environment.ProcessPath!,
+            launcherDirectoryName: Path.GetFileName(launcherDirectory), region: options.Region);
         context.GameWindowChanged += window.NotifySdkGeometryChanged;
         context.LoginRequested += window.NotifySdkLoginRequested;
         if (!isBilibili) context.LogoutRequested += () => ui.Post(_ => window.OnSdkLogout(), null);
@@ -82,7 +83,7 @@ internal sealed class GameLoginHost(NteHostLaunchOptions options, LoginWindow wi
         foreach (string absent in new[] { "ArcGameAppId", "GameVersion", "_PATCHER_RES_VERSION_" })
             start.Environment.Remove(absent);
         start.Environment["_PATCHER_RES_PATH_"] = root;
-        start.Environment["_PATCHER_SDK_PATH_"] = Path.Combine(launcherDirectory, NteRegionDefinition.PatcherSdkRelativePath);
+        start.Environment["_PATCHER_SDK_PATH_"] = Path.Combine(root, NteRegionDefinition.CnLauncherDirectory, NteRegionDefinition.PatcherSdkRelativePath);
         // Only use paths from a matching installed configuration; fall back to
         // the previous two-path launch when it is absent or unrecognized.
         PatcherLaunchEnvironment.TryApply(start.Environment, root, context.ApplicationId);

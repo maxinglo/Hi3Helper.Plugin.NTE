@@ -15,8 +15,7 @@ namespace Hi3Helper.Plugin.NTE.Management.Game;
 internal static class NteInstalledManifest
 {
     internal static string PathFor(string root, NteRegionConfig region)
-        => NteSharedInstallation.ManagedPath(root, ".collapse-nte/installed/" +
-            (region.IsBilibili ? region.ProfileName : region.AppId) + "/ResList.xml");
+        => NteSharedInstallation.ManagedPath(root, ".collapse-nte/installed/" + region.AppId + "/ResList.xml");
 
     internal static void Save(string root, NteRegionConfig region, byte[] manifest)
         => NteSharedInstallation.WriteAtomic(PathFor(root, region), manifest);
@@ -26,7 +25,13 @@ internal static class NteInstalledManifest
     {
         NteResListParser? selected = null;
         GameVersion selectedVersion = GameVersion.Empty;
-        foreach (string path in new[] { Path.Combine(root, region.SdkDirectory, "ResList.xml"), PathFor(root, region) })
+        string[] paths = [Path.Combine(root, region.SdkDirectory, "ResList.xml"), PathFor(root, region)];
+        if (!region.IsOverseas)
+            paths = [NteSharedInstallation.ManagedPath(root, ".collapse-nte/installed/NteBilibili/ResList.xml"),
+                .. Array.ConvertAll(Nte.Login.NteRegionDefinition.MainlandLauncherDirectories,
+                    directory => Path.Combine(root, directory, Nte.Login.NteRegionDefinition.PatcherSdkRelativePath, "ResList.xml")),
+                PathFor(root, region)];
+        foreach (string path in paths)
         {
             token.ThrowIfCancellationRequested();
             if (!File.Exists(path)) continue;

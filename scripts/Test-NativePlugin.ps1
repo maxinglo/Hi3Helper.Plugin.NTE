@@ -189,6 +189,7 @@ public static unsafe class NteNativeSmoke
                             throw new InvalidOperationException("Unexpected settings page for " + profile);
                     }
                     finally { if (page.IsDisposable != 0) NativeMemory.Free(page.Handle); }
+                    if (profile == "NteBilibili") CheckSharedMainlandPath(presetInterface);
                 }
                 finally
                 {
@@ -203,6 +204,41 @@ public static unsafe class NteNativeSmoke
             Marshal.Release(unknown);
         }
         return "Native ABI, update sources, region preview/rejection, en/zh metadata and regional settings OK; Core " + standard + "; NTE " + version;
+    }
+
+    private static void CheckSharedMainlandPath(nint preset)
+    {
+        DirectoryInfo fixture = Directory.CreateTempSubdirectory("nte-shared-mainland-");
+        nint unknown = 0, manager = 0;
+        char* selected = null;
+        try
+        {
+            string root = fixture.FullName;
+            string executable = Path.Combine(root, "Client/WindowsNoEditor/HT/Binaries/Win64/HTGame.exe");
+            Directory.CreateDirectory(Path.GetDirectoryName(executable));
+            File.WriteAllBytes(executable, []);
+            File.WriteAllText(Path.Combine(root, ".collapse_nte_config"), "GameVersion=1.5.4\n");
+            void** presetTable = *(void***)preset;
+            Check(((delegate* unmanaged[MemberFunction]<nint, nint*, int>)presetTable[25])(preset, &unknown), "GetGameManager");
+            Guid managerId = new Guid("436f6c6c-6170-7365-727f-000000000012");
+            Check(Marshal.QueryInterface(unknown, in managerId, out manager), "QueryInterface(IGameManager)");
+            void** table = *(void***)manager;
+            fixed (char* path = root)
+                Check(((delegate* unmanaged[MemberFunction]<nint, char*, int>)table[6])(manager, path), "SetGamePath");
+            Check(((delegate* unmanaged[MemberFunction]<nint, int>)table[14])(manager), "LoadConfig");
+            Check(((delegate* unmanaged[MemberFunction]<nint, char**, int>)table[5])(manager, &selected), "GetGamePath");
+            int installed = 0;
+            Check(((delegate* unmanaged[MemberFunction]<nint, int*, int>)table[11])(manager, &installed), "IsGameInstalled");
+            if (Marshal.PtrToStringUni((nint)selected) != root || installed != 0)
+                throw new InvalidOperationException("Bilibili must retain the mainland game path and request its launcher setup.");
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem((nint)selected);
+            if (manager != 0) Marshal.Release(manager);
+            if (unknown != 0) Marshal.Release(unknown);
+            fixture.Delete(true);
+        }
     }
 
     private static void Check(int result, string operation)
