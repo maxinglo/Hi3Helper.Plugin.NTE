@@ -6,19 +6,26 @@ namespace Nte.Login;
 
 internal sealed record NteOfficialLaunchPlan(string Executable, string GameExecutable)
 {
+    internal const string PendingShortcutOffer = ".collapse-launcher-shortcuts";
+
     internal static NteOfficialLaunchPlan Create(string gameRoot, bool global)
         => Create(gameRoot, global ? NteHostRegion.Global : NteHostRegion.CN);
 
     internal static NteOfficialLaunchPlan Create(string gameRoot, NteHostRegion region)
     {
         string root = Path.GetFullPath(gameRoot);
-        NteRegionDefinition definition = NteRegionDefinition.From(region);
-        string executable = Path.Combine(root, definition.LauncherDirectory, definition.LauncherExecutable);
+        string executable = LauncherPath(root, region);
         if (!File.Exists(executable))
             throw new FileNotFoundException(
                 "The official launcher must be installed inside the game installation directory.", executable);
         return new(executable,
             Path.Combine(root, NteRegionDefinition.GameExecutableRelativePath));
+    }
+
+    internal static string LauncherPath(string gameRoot, NteHostRegion region)
+    {
+        NteRegionDefinition definition = NteRegionDefinition.From(region);
+        return Path.Combine(gameRoot, definition.LauncherDirectoryFor(gameRoot), definition.LauncherExecutable);
     }
 
     internal ProcessStartInfo CreateStartInfo(string? additionalArguments, bool requestElevation = false)

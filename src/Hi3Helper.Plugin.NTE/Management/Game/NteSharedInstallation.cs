@@ -151,10 +151,13 @@ internal static class NteSharedInstallation
             {
                 foreach (Process process in running)
                 {
-                    string candidate = name == "HTGame" ? NteConfigProvider.GameExecutableRelativePath :
-                        (name.StartsWith("NTETW", StringComparison.Ordinal) ? "NTETW/" : "NTEGlobal/") + name + ".exe";
-                    string expected = Path.Combine(root, candidate);
-                    if (NteProcessImage.Matches(process.Id, expected))
+                    Nte.Login.NteRegionDefinition region = name.StartsWith("NTETW", StringComparison.Ordinal)
+                        ? Nte.Login.NteRegionDefinition.Taiwan : Nte.Login.NteRegionDefinition.Global;
+                    bool active = name == "HTGame"
+                        ? NteProcessImage.Matches(process.Id, Path.Combine(root, NteConfigProvider.GameExecutableRelativePath))
+                        : NteProcessImage.Matches(process.Id, Path.Combine(root, region.LauncherDirectory, name + ".exe")) ||
+                            NteProcessImage.Matches(process.Id, Path.Combine(root, region.LauncherDirectoryFor(root), name + ".exe"));
+                    if (active)
                         throw new IOException("Close this installation's game and both official launchers before switching servers.");
                 }
             }

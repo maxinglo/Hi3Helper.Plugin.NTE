@@ -654,6 +654,16 @@
     <value>在游戏设置 → 启动设置中启用官方启动器后台启动。启动器来自所选 Bilibili 游戏安装目录，需要登录、验证或更新时仍会显示相应窗口。</value>
   </data>
   <data name="BilibiliOfficialLauncherConfirm" xml:space="preserve">
-    <value>改用 Bilibili 官方启动器并关闭当前游戏？该设置在下次启动时生效。官方启动器应位于当前游戏安装目录的 NTELauncher 文件夹。</value>
+    <value>改用 Bilibili 官方启动器并关闭当前游戏？该设置在下次启动时生效。</value>
   </data>
+  <data name="OfficialShortcutTitle" xml:space="preserve"><value>创建官方启动器快捷方式</value></data>
+  <data name="OfficialShortcutDescription" xml:space="preserve"><value>本插件已安装官方启动器。请选择要创建快捷方式的位置，然后继续启动。</value></data>
+  <data name="OfficialShortcutStartMenu" xml:space="preserve"><value>创建开始菜单快捷方式</value></data>
+  <data name="OfficialShortcutDesktop" xml:space="preserve"><value>创建桌面快捷方式</value></data>
+  <data name="OfficialShortcutContinue" xml:space="preserve"><value>继续启动</value></data>
+  <data name="OfficialShortcutFailed" xml:space="preserve"><value>无法在以下位置创建快捷方式。你仍可继续启动。</value></data>
+  <data name="OfficialShortcutNameMainland" xml:space="preserve"><value>异环官方启动器（中国大陆服）</value></data>
+  <data name="OfficialShortcutNameBilibili" xml:space="preserve"><value>异环官方启动器（哔哩哔哩服）</value></data>
+  <data name="OfficialShortcutNameGlobal" xml:space="preserve"><value>异环官方启动器（国际服）</value></data>
+  <data name="OfficialShortcutNameTaiwan" xml:space="preserve"><value>异环官方启动器（台港澳服）</value></data>
 </root>

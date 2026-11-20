@@ -654,6 +654,16 @@ Download: {3} files ({4:F3} GB)</value></data>
     <value>Enable the official launcher in the game’s launch settings. It runs from the selected Bilibili installation and can still show sign-in or update windows when needed.</value>
   </data>
   <data name="BilibiliOfficialLauncherConfirm" xml:space="preserve">
-    <value>Switch to the official Bilibili launcher for the next launch and close the current game? The launcher must be installed in the NTELauncher folder of this game installation.</value>
+    <value>Switch to the official Bilibili launcher for the next launch and close the current game?</value>
   </data>
+  <data name="OfficialShortcutTitle" xml:space="preserve"><value>Create official launcher shortcuts</value></data>
+  <data name="OfficialShortcutDescription" xml:space="preserve"><value>This plugin has installed the official launcher. Choose where to create shortcuts before continuing.</value></data>
+  <data name="OfficialShortcutStartMenu" xml:space="preserve"><value>Create a Start menu shortcut</value></data>
+  <data name="OfficialShortcutDesktop" xml:space="preserve"><value>Create a desktop shortcut</value></data>
+  <data name="OfficialShortcutContinue" xml:space="preserve"><value>Continue launching</value></data>
+  <data name="OfficialShortcutFailed" xml:space="preserve"><value>Could not create the selected shortcuts below. You can still continue launching.</value></data>
+  <data name="OfficialShortcutNameMainland" xml:space="preserve"><value>Neverness to Everness Official Launcher (Mainland China)</value></data>
+  <data name="OfficialShortcutNameBilibili" xml:space="preserve"><value>Neverness to Everness Official Launcher (Bilibili)</value></data>
+  <data name="OfficialShortcutNameGlobal" xml:space="preserve"><value>Neverness to Everness Official Launcher (Global)</value></data>
+  <data name="OfficialShortcutNameTaiwan" xml:space="preserve"><value>Neverness to Everness Official Launcher (Taiwan, Hong Kong and Macao)</value></data>
 </root>

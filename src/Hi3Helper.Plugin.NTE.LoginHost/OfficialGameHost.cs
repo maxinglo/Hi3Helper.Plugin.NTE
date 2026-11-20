@@ -9,6 +9,14 @@ internal static class OfficialGameHost
     internal static async Task<bool> RunAsync(NteHostLaunchOptions options)
     {
         NteOfficialLaunchPlan plan = NteOfficialLaunchPlan.Create(options.GameRoot, options.Region);
+        if (options.OfferLauncherShortcuts)
+        {
+            await OfficialLauncherShortcutPrompt.ShowAsync(plan, options.Region);
+            string marker = Path.Combine(Path.GetDirectoryName(plan.Executable)!, NteOfficialLaunchPlan.PendingShortcutOffer);
+            try { File.Delete(marker); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            { NteHostStartupDiagnostics.Phase("shortcut-preference-not-cleared", error); }
+        }
         using Process platform = StartPlatform(plan, options.AdditionalArguments)
                                  ?? throw new InvalidOperationException("Official launcher could not start.");
         // The official platform owns authentication and the game. Observe the

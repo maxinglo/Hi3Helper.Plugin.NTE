@@ -189,7 +189,7 @@ internal sealed class NteRegionSwitchService(HttpClient http, Action<string>? en
             }
 
             // Generate official timestamps only after the target files are active.
-            string sdk = target.SdkDirectory;
+            string sdk = target.SdkDirectoryFor(root);
             string configPath = NteSharedInstallation.ManagedPath(root, sdk + "/config.xml");
             string release = context.Manager.ReleaseConfigXml!;
             string current = File.Exists(configPath)
@@ -283,14 +283,16 @@ internal sealed class NteRegionSwitchService(HttpClient http, Action<string>? en
                     launcherUrl);
             if (launcher.Files.Count == 0)
                 throw new InvalidDataException("The target launcher has no verified file inventory.");
+            string targetLauncher = target.LauncherDirectoryFor(root);
+            string sourceLauncher = source.LauncherDirectoryFor(root);
             foreach (NteLauncherFile file in launcher.Files)
             {
                 if (NteOfficialLauncherInstaller.IsBilibiliSdkPath(file.Path)) continue;
                 string relative = file.Path.TrimStart('/');
                 if (relative.Replace('\\', '/').StartsWith("UserData/", StringComparison.OrdinalIgnoreCase))
                     throw new InvalidDataException("Launcher updates cannot overwrite account data.");
-                string destination = target.LauncherDirectoryName + "/" + relative;
-                string other = source.LauncherDirectoryName + "/" + relative
+                string destination = targetLauncher + "/" + relative;
+                string other = sourceLauncher + "/" + relative
                     .Replace(target.AppId, source.AppId, StringComparison.Ordinal)
                     .Replace(target.LauncherDirectoryName, source.LauncherDirectoryName, StringComparison.Ordinal);
                 items.Add(new(destination, file.Size, file.Md5, null, launcher.GetArchiveUrl(file.Path),
@@ -365,14 +367,16 @@ internal sealed class NteRegionSwitchService(HttpClient http, Action<string>? en
 
     private async Task<NteSharedProfile> ReadSourceAsync(string root, NteRegionConfig region, CancellationToken token)
     {
-        string config = Path.Combine(root, region.SdkDirectory, "config.xml");
-        string manifest = Path.Combine(root, region.SdkDirectory, "ResList.xml");
-        if (!File.Exists(config) || !File.Exists(manifest))
+        string? directory = region.PatcherDirectoriesFor(root)
+            .Select(candidate => Path.Combine(root, candidate))
+            .FirstOrDefault(candidate => File.Exists(Path.Combine(candidate, "config.xml")) &&
+                                         File.Exists(Path.Combine(candidate, "ResList.xml")));
+        if (directory == null)
             throw new InvalidDataException(
                 "Complete an official installation or repair before enabling shared servers.");
-        byte[] bytes = NteResListDecryptor.Decrypt(await File.ReadAllBytesAsync(manifest, token).ConfigureAwait(false),
-            region.AppId);
-        string xml = await File.ReadAllTextAsync(config, token).ConfigureAwait(false);
+        byte[] bytes = NteResListDecryptor.Decrypt(
+            await File.ReadAllBytesAsync(Path.Combine(directory, "ResList.xml"), token).ConfigureAwait(false), region.AppId);
+        string xml = await File.ReadAllTextAsync(Path.Combine(directory, "config.xml"), token).ConfigureAwait(false);
         _ = NteRegionSwitchManifest.Read(bytes);
         string branch = NteOfficialPatcherState.ParseXml(xml).DocumentElement?["LocalBranch"]?.InnerText.Trim() ?? "";
         return NteSharedProfile.Create(xml, bytes, branch);

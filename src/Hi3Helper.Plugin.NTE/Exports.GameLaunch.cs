@@ -11,6 +11,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.ComponentModel;
 using System.IO;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -37,12 +38,25 @@ public partial class Exports
             }
             string root = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(executable)!, "../../../../.."));
             NteHostRegion region = NteHostRegion.CN;
+            bool? officialLauncher = null;
+            bool offerShortcuts = false;
             if (context.PresetConfig is NteCNPresetConfig preset)
             {
                 region = preset.Region.HostRegion;
                 startArgument = preset.LaunchSettings.BuildArguments(startArgument);
+                officialLauncher = preset.LaunchSettings.UseOfficialLauncher;
+                if (officialLauncher == true)
+                {
+                    using HttpClient http = new();
+                    offerShortcuts = await new NteOfficialLauncherInstaller(http)
+                        .EnsurePresentForLaunchAsync(root, preset.Region, token).ConfigureAwait(false);
+                }
+                if (officialLauncher != true && context.GameManager is NteGameManager manager &&
+                    manager.NeedsMainlandLauncher(root))
+                    return false;
             }
-            int hostPid = NteLoginHostLaunch.Start(new(root, startArgument, isRunBoosted, processPriority, region, SharedStatic.PluginLocaleCode ?? "en-US"));
+            int hostPid = NteLoginHostLaunch.Start(new(root, startArgument, isRunBoosted, processPriority, region,
+                SharedStatic.PluginLocaleCode ?? "en-US", officialLauncher, offerShortcuts));
             InstanceLogger.LogInformation("[NTE::LaunchGameFromGameManagerCoreAsync] Independent login host started: {HostPid}", hostPid);
             try
             {

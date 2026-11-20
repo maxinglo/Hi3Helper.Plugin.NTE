@@ -9,8 +9,6 @@ namespace Hi3Helper.Plugin.NTE.Management.Config;
 
 public static class NteConfigProvider
 {
-    private const string BilibiliLauncherVersionPath = "/hd/publish_ob_B/launcher/Version.ini";
-
     internal static NteRegionConfig? DetectInstalledRegion(string root)
     {
         string launcherConfig = Path.Combine(root, NteRegionDefinition.CnLauncherDirectory, "Config", "Config.ini");
@@ -35,32 +33,16 @@ public static class NteConfigProvider
             return legacy == CN && IsBilibiliLauncherConfig(launcherConfig) ? Bilibili : legacy;
         }
 
-        if (File.Exists(Path.Combine(root, Global.SdkDirectory, "config.xml"))) return Global;
-        if (File.Exists(Path.Combine(root, Taiwan.SdkDirectory, "config.xml"))) return Taiwan;
+        if (Global.PatcherDirectoriesFor(root).Any(directory => File.Exists(Path.Combine(root, directory, "config.xml")))) return Global;
+        if (Taiwan.PatcherDirectoriesFor(root).Any(directory => File.Exists(Path.Combine(root, directory, "config.xml")))) return Taiwan;
         if (File.Exists(launcherConfig)) return IsBilibiliLauncherConfig(launcherConfig) ? Bilibili : CN;
-        if (File.Exists(Path.Combine(root, CN.SdkDirectory, "config.xml"))) return CN;
+        if (IsBilibiliLauncherConfig(Path.Combine(root, Bilibili.LauncherDirectoryFor(root),
+                NteRegionDefinition.LauncherConfigPath))) return Bilibili;
+        if (CN.PatcherDirectoriesFor(root).Any(directory => File.Exists(Path.Combine(root, directory, "config.xml")))) return CN;
         return null;
     }
 
-    internal static bool IsBilibiliLauncherConfig(string config)
-    {
-        if (!File.Exists(config)) return false;
-
-        foreach (string line in File.ReadLines(config))
-        {
-            int separator = line.IndexOf('=');
-            if (separator < 0) continue;
-            string key = line[..separator].Trim();
-            if (!key.Equals("VersionInfoFileURL", StringComparison.OrdinalIgnoreCase) &&
-                !key.Equals("BackupVersionURL", StringComparison.OrdinalIgnoreCase)) continue;
-            if (Uri.TryCreate(line[(separator + 1)..].Trim().Trim('"'), UriKind.Absolute, out Uri? url) &&
-                url.Scheme == Uri.UriSchemeHttps && url.IsDefaultPort && url.UserInfo.Length == 0 &&
-                url.Host is "yhcdn1.wmupd.com" or "yhcdn2.wmupd.com" &&
-                url.AbsolutePath == BilibiliLauncherVersionPath) return true;
-        }
-
-        return false;
-    }
+    internal static bool IsBilibiliLauncherConfig(string config) => NteRegionDefinition.IsBilibiliConfiguration(config);
 
     internal static NteRegionConfig GetRegion(string appId) => appId switch
     {
@@ -150,7 +132,7 @@ public static class NteConfigProvider
         LauncherGameDirectoryName = "Neverness to Everness (Bilibili)",
         AppId = NteRegionDefinition.Bilibili.AppId,
         LauncherDirectoryName = NteRegionDefinition.CnLauncherDirectory,
-        LauncherVersionIniUrl = "https://yhcdn1.wmupd.com" + BilibiliLauncherVersionPath
+        LauncherVersionIniUrl = "https://yhcdn1.wmupd.com" + NteRegionDefinition.BilibiliLauncherVersionPath
     };
 
     public static NteRegionConfig Global { get; } = new(

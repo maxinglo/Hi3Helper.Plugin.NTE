@@ -652,6 +652,16 @@
     <value>在遊戲啟動設定中啟用官方啟動器背景啟動。啟動器來自所選 Bilibili 遊戲安裝目錄，需要登入、驗證或更新時仍會顯示視窗。</value>
   </data>
   <data name="BilibiliOfficialLauncherConfirm" xml:space="preserve">
-    <value>改用 Bilibili 官方啟動器並關閉目前的遊戲？設定會在下次啟動時生效。官方啟動器應放在目前遊戲安裝目錄的 NTELauncher 資料夾。</value>
+    <value>改用 Bilibili 官方啟動器並關閉目前的遊戲？設定會在下次啟動時生效。</value>
   </data>
+  <data name="OfficialShortcutTitle" xml:space="preserve"><value>建立官方啟動器捷徑</value></data>
+  <data name="OfficialShortcutDescription" xml:space="preserve"><value>本外掛程式已安裝官方啟動器。請選擇要建立捷徑的位置，然後繼續啟動。</value></data>
+  <data name="OfficialShortcutStartMenu" xml:space="preserve"><value>建立開始功能表捷徑</value></data>
+  <data name="OfficialShortcutDesktop" xml:space="preserve"><value>建立桌面捷徑</value></data>
+  <data name="OfficialShortcutContinue" xml:space="preserve"><value>繼續啟動</value></data>
+  <data name="OfficialShortcutFailed" xml:space="preserve"><value>無法在以下位置建立捷徑。你仍可繼續啟動。</value></data>
+  <data name="OfficialShortcutNameMainland" xml:space="preserve"><value>異環官方啟動器（中國大陸服）</value></data>
+  <data name="OfficialShortcutNameBilibili" xml:space="preserve"><value>異環官方啟動器（嗶哩嗶哩服）</value></data>
+  <data name="OfficialShortcutNameGlobal" xml:space="preserve"><value>異環官方啟動器（國際服）</value></data>
+  <data name="OfficialShortcutNameTaiwan" xml:space="preserve"><value>異環官方啟動器（台港澳服）</value></data>
 </root>

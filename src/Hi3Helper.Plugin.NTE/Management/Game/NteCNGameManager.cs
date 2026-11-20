@@ -13,6 +13,7 @@ using System.Runtime.Versioning;
 using System.Threading;
 using System.Threading.Tasks;
 using Hi3Helper.Plugin.Core;
+using Nte.Login;
 
 namespace Hi3Helper.Plugin.NTE.Management.Game;
 
@@ -32,12 +33,38 @@ internal partial class NteGameManager : GameManagerBase
     internal string? ReleaseConfigXml { get; private set; }
     internal NtePreloadRelease? PreloadRelease { get; private set; }
     private string? _lastSelectedPath;
+    private GameVersion? _launcherOnlyVersion;
 
     internal bool IsGamePathCompatible(string gamePath)
     {
         NteRegionConfig? installedRegion = NteConfigProvider.DetectInstalledRegion(gamePath);
         return installedRegion == null || installedRegion.HostRegion == Region.HostRegion ||
+            !installedRegion.IsOverseas && !Region.IsOverseas ||
             installedRegion.IsOverseas && Region.IsOverseas && NteSharedInstallation.Contains(gamePath, Region);
+    }
+
+    internal bool NeedsMainlandLauncher(string path)
+    {
+        if (Region.IsOverseas) return false;
+        string directory = NteRegionDefinition.From(Region.HostRegion).LauncherDirectoryFor(path);
+        return (Region.IsBilibili || NteRegionDefinition.IsStockBilibili(path)) &&
+            !NteOfficialLauncherInstaller.IsReady(path, Region, directory);
+    }
+
+    internal bool TryGetLauncherOnlyPath([NotNullWhen(true)] out string? path)
+    {
+        path = CurrentGameInstallPath;
+        return !string.IsNullOrEmpty(path) && !Region.IsOverseas && CurrentGameVersion != GameVersion.Empty &&
+            IsGamePathCompatible(path) && File.Exists(Path.Combine(path, Region.GameExecutableName)) &&
+            NeedsMainlandLauncher(path);
+    }
+
+    internal void PreserveVersionAfterLauncherInstall() => _launcherOnlyVersion = CurrentGameVersion;
+
+    internal void RecordInstalledVersion(in GameVersion version)
+    {
+        _launcherOnlyVersion = null;
+        SetCurrentGameVersion(in version);
     }
 
     private bool AcceptCurrentGamePath()
@@ -93,20 +120,27 @@ internal partial class NteGameManager : GameManagerBase
             // 检查游戏主可执行文件是否存在
             string exePath = Path.Combine(CurrentGameInstallPath, Region.GameExecutableName);
 
-            return File.Exists(exePath) && IsGamePathCompatible(CurrentGameInstallPath);
+            return File.Exists(exePath) && IsGamePathCompatible(CurrentGameInstallPath) &&
+                !NeedsMainlandLauncher(CurrentGameInstallPath);
         }
     }
 
     protected override void SetCurrentGameVersionInner(in GameVersion gameVersion)
     {
-        // 版本在 SaveConfig 时持久化
+        // Collapse also applies the API version after installation. Adding a
+        // launcher leaves the shared Client at its previously installed version.
+        if (_launcherOnlyVersion is { } installed) CurrentGameVersion = installed;
     }
 
     protected override void SetGamePathInner(string gamePath)
     {
         string? normalized = string.IsNullOrWhiteSpace(gamePath) ? null : Path.GetFullPath(gamePath);
         if (!string.Equals(_lastSelectedPath, normalized, StringComparison.OrdinalIgnoreCase))
+        {
             CurrentGameVersion = GameVersion.Empty;
+            _launcherOnlyVersion = null;
+        }
+        CurrentGameInstallPath = normalized;
         _lastSelectedPath = normalized;
         AcceptCurrentGamePath();
     }
@@ -124,20 +158,21 @@ internal partial class NteGameManager : GameManagerBase
             CurrentGameVersion = sharedVersion;
             return;
         }
-        string officialConfigPath = Path.Combine(CurrentGameInstallPath, Region.SdkDirectory, "config.xml");
-        if (File.Exists(officialConfigPath))
+        foreach (string directory in Region.PatcherDirectoriesFor(CurrentGameInstallPath))
         {
+            string officialConfigPath = Path.Combine(CurrentGameInstallPath, directory, "config.xml");
+            if (!File.Exists(officialConfigPath)) continue;
             try
             {
-                CurrentGameVersion = ParseReleaseVersion(File.ReadAllText(officialConfigPath));
-                SharedStatic.InstanceLogger.LogInformation("[NteCNGameManager::LoadConfig] Official installed version={V}", CurrentGameVersion);
-                return;
+                GameVersion version = ParseReleaseVersion(File.ReadAllText(officialConfigPath));
+                if (version > CurrentGameVersion) CurrentGameVersion = version;
             }
             catch (Exception ex) when (ex is IOException or XmlException or InvalidDataException)
             {
                 SharedStatic.InstanceLogger.LogWarning(ex, "[NteCNGameManager::LoadConfig] Cannot read official version");
             }
         }
+        if (CurrentGameVersion != GameVersion.Empty) return;
 
         string configPath = Path.Combine(CurrentGameInstallPath, ".collapse_nte_config");
         if (!File.Exists(configPath))
@@ -184,7 +219,8 @@ internal partial class NteGameManager : GameManagerBase
             if (NteSharedInstallation.HasPendingSwitch(CurrentGameInstallPath)) return;
             if (NteSharedInstallation.Load(CurrentGameInstallPath) is { } shared && shared.ActiveAppId != Region.AppId) return;
             string configPath = Path.Combine(CurrentGameInstallPath, ".collapse_nte_config");
-            string identity = Region.IsBilibili ? $"AppId={Region.AppId}\nRegion={Region.HostRegion}\n" :
+            string identity = !Region.IsOverseas && NteRegionDefinition.IsStockBilibili(CurrentGameInstallPath)
+                ? $"AppId={Region.AppId}\nRegion={NteHostRegion.Bilibili}\n" :
                 Region.IsOverseas ? $"AppId={Region.AppId}\n" : "";
             NteSharedInstallation.WriteAtomic(configPath, Encoding.UTF8.GetBytes($"GameVersion={CurrentGameVersion}\n" + identity));
 

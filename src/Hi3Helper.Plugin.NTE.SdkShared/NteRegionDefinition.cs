@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 
 namespace Nte.Login;
 
@@ -11,6 +12,11 @@ internal sealed class NteRegionDefinition
     internal const string CnAppId = "1289", GlobalAppId = "3000001", TaiwanAppId = "2000013";
     internal const string BilibiliProfileName = "NteBilibili";
     internal const string CnLauncherDirectory = "NTELauncher", GlobalLauncherDirectory = "NTEGlobal", TaiwanLauncherDirectory = "NTETW";
+    internal const string BilibiliLauncherDirectory = "NTELauncherBilibili", MainlandLauncherDirectory = "NTELauncherMainland";
+    internal const string ManagedGlobalLauncherDirectory = "NTELauncherGlobal", ManagedTaiwanLauncherDirectory = "NTELauncherTaiwan";
+    private const string LegacyBilibiliLauncherDirectory = "NTELauncherBili", LegacyCnLauncherDirectory = "NTELauncherCN";
+    internal const string LauncherConfigPath = "Config/Config.ini";
+    internal const string BilibiliLauncherVersionPath = "/hd/publish_ob_B/launcher/Version.ini";
     internal const string RequiredGameArguments = "/Game/LoginAndCreate/Map/Updater/Updater_P -SAVEWINPOS=1";
     internal const string PatcherSdkRelativePath = "UserData/Patcher/PatcherSDK";
     internal static string GameExecutableRelativePath { get; } =
@@ -28,6 +34,51 @@ internal sealed class NteRegionDefinition
     internal string LauncherExecutable { get; }
     internal uint LoginNotification { get; }
     internal bool IsOverseas => Region is NteHostRegion.Global or NteHostRegion.Taiwan;
+    internal static readonly string[] MainlandLauncherDirectories =
+        [CnLauncherDirectory, BilibiliLauncherDirectory, MainlandLauncherDirectory, LegacyBilibiliLauncherDirectory, LegacyCnLauncherDirectory];
+
+    internal string LauncherDirectoryFor(string root)
+    {
+        bool Installed(string directory) => File.Exists(Path.Combine(root, directory, LauncherExecutable));
+        if (Installed(LauncherDirectory) && (IsOverseas || IsStockBilibili(root) == (Region == NteHostRegion.Bilibili)))
+            return LauncherDirectory;
+        return Region switch
+        {
+            NteHostRegion.CN when Installed(LegacyCnLauncherDirectory) => LegacyCnLauncherDirectory,
+            NteHostRegion.Bilibili when Installed(LegacyBilibiliLauncherDirectory) => LegacyBilibiliLauncherDirectory,
+            NteHostRegion.CN => MainlandLauncherDirectory,
+            NteHostRegion.Bilibili => BilibiliLauncherDirectory,
+            NteHostRegion.Global => ManagedGlobalLauncherDirectory,
+            NteHostRegion.Taiwan => ManagedTaiwanLauncherDirectory,
+            _ => throw new ArgumentException("Unknown NTE region.", nameof(Region))
+        };
+    }
+
+    internal static bool IsStockBilibili(string root)
+    {
+        string config = Path.Combine(root, CnLauncherDirectory, LauncherConfigPath);
+        return File.Exists(config) ? IsBilibiliConfiguration(config) :
+            File.Exists(Path.Combine(root, ".collapse_nte_config")) &&
+            File.ReadLines(Path.Combine(root, ".collapse_nte_config")).Contains("Region=Bilibili", StringComparer.Ordinal);
+    }
+
+    internal static bool IsBilibiliConfiguration(string config)
+    {
+        if (!File.Exists(config)) return false;
+        foreach (string line in File.ReadLines(config))
+        {
+            int separator = line.IndexOf('=');
+            if (separator < 0) continue;
+            string key = line[..separator].Trim();
+            if (!key.Equals("VersionInfoFileURL", StringComparison.OrdinalIgnoreCase) &&
+                !key.Equals("BackupVersionURL", StringComparison.OrdinalIgnoreCase)) continue;
+            if (Uri.TryCreate(line[(separator + 1)..].Trim().Trim('"'), UriKind.Absolute, out Uri? url) &&
+                url.Scheme == Uri.UriSchemeHttps && url.IsDefaultPort && url.UserInfo.Length == 0 &&
+                url.Host is "yhcdn1.wmupd.com" or "yhcdn2.wmupd.com" &&
+                url.AbsolutePath == BilibiliLauncherVersionPath) return true;
+        }
+        return false;
+    }
 
     private NteRegionDefinition(NteHostRegion region, string appId, string launcher, string executable, uint notification)
     { Region = region; AppId = appId; LauncherDirectory = launcher; LauncherExecutable = executable; LoginNotification = notification; }
@@ -40,7 +91,10 @@ internal sealed class NteRegionDefinition
     };
     internal static NteRegionDefinition FromLauncherDirectory(string directory) => directory switch
     {
-        CnLauncherDirectory => CN, GlobalLauncherDirectory => Global, TaiwanLauncherDirectory => Taiwan,
+        CnLauncherDirectory or MainlandLauncherDirectory or LegacyCnLauncherDirectory => CN,
+        BilibiliLauncherDirectory or LegacyBilibiliLauncherDirectory => Bilibili,
+        GlobalLauncherDirectory or ManagedGlobalLauncherDirectory => Global,
+        TaiwanLauncherDirectory or ManagedTaiwanLauncherDirectory => Taiwan,
         _ => throw new ArgumentException("Unknown NTE launcher directory.", nameof(directory))
     };
     internal static bool IsSupportedAppId(string appId) => appId is CnAppId or GlobalAppId or TaiwanAppId;

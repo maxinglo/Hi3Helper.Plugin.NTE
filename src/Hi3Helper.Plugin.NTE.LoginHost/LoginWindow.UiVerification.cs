@@ -25,7 +25,62 @@ internal sealed partial class LoginWindow
         string currentCase = "startup";
         try
         {
-            foreach (string language in new[] { "zh-CN", "zh-TW", "en", "de", "fr", "es", "ru", "ja", "ko" })
+            currentCase = "official-shortcuts";
+            LoginText.UseLanguage("zh-CN");
+            List<Environment.SpecialFolder> writtenShortcuts = [];
+            OfficialLauncherShortcutPrompt shortcuts = new(writtenShortcuts.Add)
+            {
+                Position = new(-20000, -20000), WindowStartupLocation = WindowStartupLocation.Manual
+            };
+            shortcuts.Show();
+            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+            shortcuts.UpdateLayout();
+            CheckBox FindShortcut(string id) => shortcuts.GetVisualDescendants().OfType<CheckBox>()
+                .Single(control => AutomationProperties.GetAutomationId(control) == id);
+            CheckBox menu = FindShortcut("shortcut-start-menu"), desktop = FindShortcut("shortcut-desktop");
+            if (menu.IsChecked != false || desktop.IsChecked != false || writtenShortcuts.Count != 0)
+                throw new InvalidDataException("Shortcut options must require selection.");
+            if (shortcuts.Content is Control card)
+            {
+                using RenderTargetBitmap screenshot = new(new PixelSize((int)Math.Ceiling(card.Bounds.Width),
+                    (int)Math.Ceiling(card.Bounds.Height)));
+                screenshot.Render(card);
+                screenshot.Save(Path.Combine(directory, "official-launcher-shortcuts.png"));
+            }
+            menu.IsChecked = true;
+            shortcuts.GetVisualDescendants().OfType<Button>()
+                .Single(control => AutomationProperties.GetAutomationId(control) == "shortcut-continue")
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            if (!writtenShortcuts.SequenceEqual([Environment.SpecialFolder.Programs]))
+                throw new InvalidDataException("Only the selected shortcut should be written.");
+            checks.Add("official-shortcuts/defaults-and-single-selection");
+
+            string[] languages = ["zh-CN", "zh-TW", "en", "de", "fr", "es", "ru", "ja", "ko"];
+            string linkFixture = Path.Combine(directory, "shortcut-fixture", Guid.NewGuid().ToString("N"));
+            NteOfficialLaunchPlan fixturePlan = new(Environment.ProcessPath!, Environment.ProcessPath!);
+            foreach (string language in languages)
+            {
+                LoginText.UseLanguage(language);
+                string location = Path.Combine(linkFixture, language);
+                foreach (NteHostRegion region in Enum.GetValues<NteHostRegion>())
+                    OfficialLauncherShortcutPromptWriter.CreateInDirectory(fixturePlan, region, location);
+                FileInfo[] links = new DirectoryInfo(location).GetFiles("*.lnk");
+                if (links.Length != 4 || links.Any(link => link.Length <= 76) ||
+                    links.Any(link => link.Name.Contains(" (2)", StringComparison.Ordinal)))
+                    throw new InvalidDataException("Expected four distinct localized launcher shortcuts for " + language);
+            }
+            const string BilibiliShortcut = "异环官方启动器（哔哩哔哩服）";
+            LoginText.UseLanguage("zh-CN");
+            string chineseShortcuts = Path.Combine(linkFixture, "zh-CN");
+            string originalLink = Path.Combine(chineseShortcuts, BilibiliShortcut + ".lnk");
+            byte[] originalLinkBytes = File.ReadAllBytes(originalLink);
+            OfficialLauncherShortcutPromptWriter.CreateInDirectory(fixturePlan, NteHostRegion.Bilibili, chineseShortcuts);
+            if (!File.Exists(Path.Combine(chineseShortcuts, BilibiliShortcut + " (2).lnk")) ||
+                !File.ReadAllBytes(originalLink).SequenceEqual(originalLinkBytes))
+                throw new InvalidDataException("The localized shortcut name must preserve existing files.");
+            checks.Add("official-shortcuts/localized-names-and-collisions");
+
+            foreach (string language in languages)
             foreach (NteHostRegion region in new[] { NteHostRegion.CN, NteHostRegion.Global, NteHostRegion.Taiwan })
             {
                 currentCase = region + "/" + language;

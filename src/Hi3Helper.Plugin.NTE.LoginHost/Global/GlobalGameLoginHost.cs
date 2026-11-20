@@ -41,13 +41,14 @@ internal sealed class OverseasGameLoginHost(NteHostLaunchOptions options, LoginW
 
         NteOverseasLaunchPlan plan = NteOverseasLaunchPlan.Create(options);
         string root = Path.GetFullPath(options.GameRoot);
-        await using (FileStream bridge = File.OpenRead(Path.Combine(root, region.LauncherDirectory, "WPGameClientSDK_64.dll")))
+        string launcher = region.Installation.LauncherDirectoryFor(root);
+        await using (FileStream bridge = File.OpenRead(Path.Combine(root, launcher, "WPGameClientSDK_64.dll")))
             if (Convert.ToHexString(await SHA256.HashDataAsync(bridge)) !=
                 region.BridgeSha256)
                 throw new NteGlobalLaunchException("GlobalSdkUnsupported");
         configuration = NteOverseasApplicationConfiguration.Load(root, options.Region);
         context = new(root, true, useOwnExecutable: true, hostExecutable: Environment.ProcessPath!,
-            launcherDirectoryName: region.LauncherDirectory, applicationId: region.AppId);
+            launcherDirectoryName: launcher, applicationId: region.AppId);
         context.GameWindowChanged += window.NotifySdkGeometryChanged;
         context.LoginRequested += window.NotifySdkLoginRequested;
         // The global SDK uses 101 for logout and 102 for account switching.

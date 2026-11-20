@@ -652,6 +652,16 @@ Download: {3} files ({4:F3} GB)</value></data>
     <value>Включите официальный лаунчер в настройках запуска игры. Он запускается в фоне из выбранной папки Bilibili и при необходимости показывает окна входа, проверки или обновления.</value>
   </data>
   <data name="BilibiliOfficialLauncherConfirm" xml:space="preserve">
-    <value>Использовать официальный лаунчер Bilibili при следующем запуске и закрыть текущую игру? Лаунчер должен находиться в папке NTELauncher этой установки.</value>
+    <value>Использовать официальный лаунчер Bilibili при следующем запуске и закрыть текущую игру?</value>
   </data>
+  <data name="OfficialShortcutTitle" xml:space="preserve"><value>Создание ярлыков официального лаунчера</value></data>
+  <data name="OfficialShortcutDescription" xml:space="preserve"><value>Этот плагин установил официальный лаунчер. Перед запуском можно выбрать, где создать ярлыки.</value></data>
+  <data name="OfficialShortcutStartMenu" xml:space="preserve"><value>Создать ярлык в меню «Пуск»</value></data>
+  <data name="OfficialShortcutDesktop" xml:space="preserve"><value>Создать ярлык на рабочем столе</value></data>
+  <data name="OfficialShortcutContinue" xml:space="preserve"><value>Продолжить запуск</value></data>
+  <data name="OfficialShortcutFailed" xml:space="preserve"><value>Не удалось создать ярлыки в указанных ниже местах. Вы можете продолжить запуск.</value></data>
+  <data name="OfficialShortcutNameMainland" xml:space="preserve"><value>Neverness to Everness - Официальный лаунчер (материковый Китай)</value></data>
+  <data name="OfficialShortcutNameBilibili" xml:space="preserve"><value>Neverness to Everness - Официальный лаунчер (Bilibili)</value></data>
+  <data name="OfficialShortcutNameGlobal" xml:space="preserve"><value>Neverness to Everness - Официальный лаунчер (Глобальный)</value></data>
+  <data name="OfficialShortcutNameTaiwan" xml:space="preserve"><value>Neverness to Everness - Официальный лаунчер (Тайвань, Гонконг и Макао)</value></data>
 </root>

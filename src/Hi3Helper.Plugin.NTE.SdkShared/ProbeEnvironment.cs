@@ -59,7 +59,9 @@ internal sealed class ProbeEnvironment : IDisposable
     {
         NteRegionDefinition definition = region is NteHostRegion specified
             ? NteRegionDefinition.From(specified) : NteRegionDefinition.FromLauncherDirectory(launcherDirectoryName);
-        if (launcherDirectoryName != definition.LauncherDirectory || applicationId != null && applicationId != definition.AppId)
+        if (launcherDirectoryName != definition.LauncherDirectory &&
+            launcherDirectoryName != definition.LauncherDirectoryFor(gameRoot) ||
+            applicationId != null && applicationId != definition.AppId)
             throw new ArgumentException("Application and launcher directory belong to different regions.",
                 nameof(applicationId));
         hostContext = supplyHostContext;
@@ -78,12 +80,20 @@ internal sealed class ProbeEnvironment : IDisposable
             ];
         string configuration = File.ReadAllText(Path.Combine(launcher, "Config/Config.ini"));
         appId = applicationId ?? Regex.Match(configuration, @"(?m)^OneAppId=(\d+)\s*$").Groups[1].Value;
-        string patcherPath = Path.Combine(launcher, NteRegionDefinition.PatcherSdkRelativePath, "config.xml");
-        string patcher = File.Exists(patcherPath) ? File.ReadAllText(patcherPath) : "";
         if (appId != definition.AppId)
             throw new InvalidDataException("Official public application metadata is missing.");
-        version = NteInstalledVersion.Resolve(gameRoot, definition,
-            Regex.Match(patcher, @"<ResVersion>(\d+(?:\.\d+)+)</ResVersion>").Groups[1].Value);
+        Version? officialVersion = null;
+        string[] patcherDirectories = definition.IsOverseas ? [definition.LauncherDirectory, launcherDirectoryName] :
+            NteRegionDefinition.MainlandLauncherDirectories;
+        foreach (string directory in patcherDirectories)
+        {
+            string patcherPath = Path.Combine(gameRoot, directory, NteRegionDefinition.PatcherSdkRelativePath, "config.xml");
+            if (!File.Exists(patcherPath)) continue;
+            string value = Regex.Match(File.ReadAllText(patcherPath), @"<ResVersion>(\d+(?:\.\d+)+)</ResVersion>").Groups[1].Value;
+            if (Version.TryParse(value, out Version? installed) && (officialVersion == null || installed > officialVersion))
+                officialVersion = installed;
+        }
+        version = NteInstalledVersion.Resolve(gameRoot, definition, officialVersion?.ToString() ?? "");
         window = new(definition.LoginNotification);
         // The probe owns these objects exclusively. The baseline table is empty;
         // host-context mode supplies public application metadata below. Neither

@@ -9,6 +9,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
+using Nte.Login;
 
 namespace Hi3Helper.Plugin.NTE.Management.Game;
 
@@ -20,6 +21,39 @@ internal partial class NteGameInstaller
 {
     /// <summary>并行下载数</summary>
     private const int MaxParallelDownloads = 4;
+
+    private async Task<bool> TryInstallMainlandLauncherAsync(InstallProgressDelegate? progress,
+        InstallProgressStateDelegate? state, CancellationToken token)
+    {
+        NteGameManager manager = (NteGameManager)GameManager;
+        if (!manager.TryGetLauncherOnlyPath(out string? root)) return false;
+        using FileStream operation = NteGameOperation.Acquire(root);
+        NteOfficialPatcherState.EnsureOfficialLauncherClosed(root, manager.Region);
+        NteSharedInstallation.EnsureGamesClosed(root);
+        await InstallOfficialLauncherAsync(root, manager.Region, progress, state, token).ConfigureAwait(false);
+        if (manager.NeedsMainlandLauncher(root))
+            throw new InvalidDataException("The official inventory did not install all required channel launcher files.");
+        manager.LoadConfig();
+        manager.PreserveVersionAfterLauncherInstall();
+        state?.Invoke(InstallProgressState.Completed);
+        return true;
+    }
+
+    private Task InstallOfficialLauncherAsync(string root, NteRegionConfig region, InstallProgressDelegate? progress,
+        InstallProgressStateDelegate? state, CancellationToken token)
+    {
+        state?.Invoke(InstallProgressState.Download);
+        return new NteOfficialLauncherInstaller(_downloadHttpClient).InstallAsync(root, region,
+            (done, total, count, all) =>
+            {
+                InstallProgress value = new()
+                {
+                    DownloadedBytes = done, TotalBytesToDownload = total, DownloadedCount = count,
+                    TotalCountToDownload = all
+                };
+                progress?.Invoke(in value);
+            }, token);
+    }
 
     /// <summary>
     /// 执行完整的安装流程。
@@ -62,14 +96,14 @@ internal partial class NteGameInstaller
             return;
         }
 
-        NteRegionConfig? installedRegion = NteConfigProvider.DetectInstalledRegion(gamePath);
-        if (installedRegion != null && installedRegion.HostRegion != mgr.Region.HostRegion)
+        if (!mgr.IsGamePathCompatible(gamePath))
             throw new InvalidDataException(
                 "This game directory belongs to a different NTE region. Select a separate installation directory.");
         if (preload == null)
         {
             NteOfficialPatcherState.EnsureOfficialLauncherClosed(gamePath, mgr.Region);
-            if (NteSharedInstallation.Load(gamePath) != null) NteSharedInstallation.EnsureGamesClosed(gamePath);
+            if (!mgr.Region.IsOverseas || NteSharedInstallation.Load(gamePath) != null)
+                NteSharedInstallation.EnsureGamesClosed(gamePath);
         }
 
         string[] cdnBaseUrls = mgr.GameResBaseUrls;
@@ -389,27 +423,17 @@ internal partial class NteGameInstaller
             return;
         }
 
-        if (mgr.Region.IsTaiwan || mgr.Region.IsBilibili)
-        {
-            progressStateDelegate?.Invoke(InstallProgressState.Download);
-            await new NteOfficialLauncherInstaller(_downloadHttpClient).InstallAsync(gamePath, mgr.Region,
-                (done, total, count, all) =>
-                {
-                    InstallProgress value = new()
-                    {
-                        DownloadedBytes = done, TotalBytesToDownload = total, DownloadedCount = count,
-                        TotalCountToDownload = all
-                    };
-                    progressDelegate?.Invoke(in value);
-                }, token).ConfigureAwait(false);
-        }
+        if (mgr.Region.IsTaiwan || mgr.Region.IsBilibili ||
+            mgr.Region.HostRegion == NteHostRegion.CN && NteRegionDefinition.IsStockBilibili(gamePath))
+            await InstallOfficialLauncherAsync(gamePath, mgr.Region, progressDelegate, progressStateDelegate, token)
+                .ConfigureAwait(false);
 
         // 保存版本信息
         if (originalManifest != null && selectedManifest != null && releaseXml != null)
             NteOfficialPatcherState.Commit(gamePath, branchName, mgr.Region, releaseXml,
                 originalManifest, selectedManifest, token);
         if (selectedManifest != null) NteInstalledManifest.Save(gamePath, mgr.Region, selectedManifest);
-        GameManager.SetCurrentGameVersion(in targetVersion);
+        mgr.RecordInstalledVersion(in targetVersion);
         GameManager.SaveConfig();
         if (selectedManifest != null && releaseXml != null)
             NteSharedInstallation.RecordUpdate(gamePath, mgr.Region, branchName, releaseXml,

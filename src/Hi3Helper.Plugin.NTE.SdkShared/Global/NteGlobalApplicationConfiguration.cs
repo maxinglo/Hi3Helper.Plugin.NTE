@@ -29,7 +29,7 @@ internal sealed class NteOverseasApplicationConfiguration : IDisposable
     internal static NteOverseasApplicationConfiguration Load(string root, NteHostRegion hostRegion = NteHostRegion.Global)
     {
         NteOverseasRegion region = NteOverseasRegion.From(hostRegion);
-        string platform = Path.Combine(root, region.LauncherDirectory);
+        string platform = Path.Combine(root, region.Installation.LauncherDirectoryFor(root));
         byte[] image = File.ReadAllBytes(Path.Combine(platform, region.Installation.LauncherExecutable));
         byte[]? key = null, appKey = null, resource = null;
         try

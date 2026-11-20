@@ -34,5 +34,26 @@ public sealed record NteRegionConfig(
     public string LauncherPageUrl { get; init; } = NteConfigProvider.LauncherHtmlUrl;
     public string StorageName => HostRegion == NteHostRegion.CN ? "" : HostRegion.ToString();
     public string SdkDirectory => LauncherDirectoryName + "/" + NteRegionDefinition.PatcherSdkRelativePath;
+
+    internal string LauncherDirectoryFor(string root) => NteRegionDefinition.From(HostRegion).LauncherDirectoryFor(root);
+
+    internal string SdkDirectoryFor(string root) => LauncherDirectoryFor(root) + "/" + NteRegionDefinition.PatcherSdkRelativePath;
+
+    internal IEnumerable<string> PatcherDirectoriesFor(string root)
+    {
+        string active = SdkDirectoryFor(root);
+        yield return active;
+        if (IsOverseas)
+        {
+            if (active != SdkDirectory) yield return SdkDirectory;
+            yield break;
+        }
+
+        foreach (string launcher in NteRegionDefinition.MainlandLauncherDirectories)
+        {
+            string sdk = launcher + "/" + NteRegionDefinition.PatcherSdkRelativePath;
+            if (sdk != active) yield return sdk;
+        }
+    }
 }
 
