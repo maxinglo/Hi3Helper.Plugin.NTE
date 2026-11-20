@@ -71,6 +71,7 @@ internal sealed class NteLauncherResourceClient(HttpClient httpClient, string re
                     HttpCompletionOption.ResponseHeadersRead, attempt).ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
                 await using Stream body = await response.Content.ReadAsStreamAsync(attempt).ConfigureAwait(false);
+                string[] query = candidate.Query.TrimStart('?').Split('&');
 
                 if (candidate.AbsolutePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
                 {
@@ -82,7 +83,10 @@ internal sealed class NteLauncherResourceClient(HttpClient httpClient, string re
                     archiveStream.Position = 0;
                     using ZipArchive archive = new(archiveStream, ZipArchiveMode.Read, leaveOpen: true);
                     string expectedName = Uri.UnescapeDataString(Path.GetFileName(candidate.AbsolutePath)[..^4]);
-                    ZipArchiveEntry entry = FindEntry(archive, expectedName);
+                    // Some official inventories contain intentionally empty files with a known MD5.
+                    bool allowEmpty = query.Any(parameter => parameter.StartsWith("nte_md5=", StringComparison.Ordinal) &&
+                        parameter.AsSpan(8).Equals(NteLauncherManifest.EmptyFileMd5, StringComparison.OrdinalIgnoreCase));
+                    ZipArchiveEntry entry = FindEntry(archive, expectedName, allowEmpty);
                     await using Stream payload = entry.Open();
                     await payload.CopyToAsync(output, attempt).ConfigureAwait(false);
                 }
@@ -92,7 +96,7 @@ internal sealed class NteLauncherResourceClient(HttpClient httpClient, string re
                 }
 
                 await output.FlushAsync(attempt).ConfigureAwait(false);
-                foreach (string parameter in candidate.Query.TrimStart('?').Split('&'))
+                foreach (string parameter in query)
                 {
                     if (!parameter.StartsWith("nte_md5=", StringComparison.Ordinal)) continue;
                     string expected = parameter[8..];
@@ -123,15 +127,15 @@ internal sealed class NteLauncherResourceClient(HttpClient httpClient, string re
         throw lastError ?? new HttpRequestException("Unable to load the launcher resource from any endpoint.");
     }
 
-    private static ZipArchiveEntry FindEntry(ZipArchive archive, string expectedName)
+    private static ZipArchiveEntry FindEntry(ZipArchive archive, string expectedName, bool allowEmpty)
     {
         foreach (ZipArchiveEntry entry in archive.Entries)
         {
-            if (entry.Length > 0 && entry.Name.Equals(expectedName, StringComparison.OrdinalIgnoreCase))
+            if ((entry.Length > 0 || allowEmpty) && entry.Name.Equals(expectedName, StringComparison.OrdinalIgnoreCase))
                 return entry;
         }
 
-        throw new InvalidDataException($"ZIP does not contain the expected non-empty resource '{expectedName}'.");
+        throw new InvalidDataException($"ZIP does not contain the expected resource '{expectedName}'.");
     }
 
     private static IEnumerable<Uri> GetCandidates(Uri url)

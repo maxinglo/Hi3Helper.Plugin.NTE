@@ -11,6 +11,9 @@ internal sealed record NteLauncherFile(string Path, long Size, string Md5);
 
 internal sealed class NteLauncherManifest
 {
+    internal const string EmptyFileMd5 = "d41d8cd98f00b204e9800998ecf8427e";
+    private const string OfficialEmptyFileChecksum = "85f70fb2b5d1f801e29d07be949e6d5c";
+
     private readonly Uri _baseUri;
     private readonly HashSet<string> _paths;
     private readonly Dictionary<string, string> _checksums;
@@ -69,9 +72,16 @@ internal sealed class NteLauncherManifest
                 string? checksum = file.Attributes?["Checksum"]?.Value;
                 if (checksum != null && Regex.IsMatch(checksum, "\\A[0-9A-Fa-f]{32}\\z"))
                 {
-                    checksums[path] = checksum.ToLowerInvariant();
+                    checksum = checksum.ToLowerInvariant();
+                    checksums[path] = checksum;
                     if (long.TryParse(file.Attributes?["Size"]?.Value, out long size) && size >= 0)
-                        entries.Add(new(path, size, checksum.ToLowerInvariant()));
+                    {
+                        // Official inventories use this placeholder for a zero-byte Qt resource.
+                        // The actual ZIP member is empty, so verify it against the empty-file MD5.
+                        if (size == 0 && checksum == OfficialEmptyFileChecksum)
+                            checksums[path] = checksum = EmptyFileMd5;
+                        entries.Add(new(path, size, checksum));
+                    }
                 }
             }
         }
