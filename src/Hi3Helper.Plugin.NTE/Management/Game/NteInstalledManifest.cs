@@ -4,6 +4,7 @@ using Hi3Helper.Plugin.NTE.Management.Config;
 using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
@@ -25,12 +26,10 @@ internal static class NteInstalledManifest
     {
         NteResListParser? selected = null;
         GameVersion selectedVersion = GameVersion.Empty;
-        string[] paths = [Path.Combine(root, region.SdkDirectory, "ResList.xml"), PathFor(root, region)];
+        string[] paths = [.. region.PatcherDirectoriesFor(root)
+            .Select(directory => Path.Combine(root, directory, "ResList.xml")), PathFor(root, region)];
         if (!region.IsOverseas)
-            paths = [NteSharedInstallation.ManagedPath(root, ".collapse-nte/installed/NteBilibili/ResList.xml"),
-                .. Array.ConvertAll(Nte.Login.NteRegionDefinition.MainlandLauncherDirectories,
-                    directory => Path.Combine(root, directory, Nte.Login.NteRegionDefinition.PatcherSdkRelativePath, "ResList.xml")),
-                PathFor(root, region)];
+            paths = [NteSharedInstallation.ManagedPath(root, ".collapse-nte/installed/NteBilibili/ResList.xml"), .. paths];
         foreach (string path in paths)
         {
             token.ThrowIfCancellationRequested();

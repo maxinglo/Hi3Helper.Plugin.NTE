@@ -83,7 +83,8 @@ internal sealed class ProbeEnvironment : IDisposable
         if (appId != definition.AppId)
             throw new InvalidDataException("Official public application metadata is missing.");
         Version? officialVersion = null;
-        string[] patcherDirectories = definition.IsOverseas ? [launcherDirectoryName] : NteRegionDefinition.MainlandLauncherDirectories;
+        string[] patcherDirectories = definition.IsOverseas ? [definition.LauncherDirectory, launcherDirectoryName] :
+            NteRegionDefinition.MainlandLauncherDirectories;
         foreach (string directory in patcherDirectories)
         {
             string patcherPath = Path.Combine(gameRoot, directory, NteRegionDefinition.PatcherSdkRelativePath, "config.xml");

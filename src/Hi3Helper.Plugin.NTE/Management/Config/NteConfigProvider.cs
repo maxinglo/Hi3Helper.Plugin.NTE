@@ -33,10 +33,12 @@ public static class NteConfigProvider
             return legacy == CN && IsBilibiliLauncherConfig(launcherConfig) ? Bilibili : legacy;
         }
 
-        if (File.Exists(Path.Combine(root, Global.SdkDirectory, "config.xml"))) return Global;
-        if (File.Exists(Path.Combine(root, Taiwan.SdkDirectory, "config.xml"))) return Taiwan;
+        if (Global.PatcherDirectoriesFor(root).Any(directory => File.Exists(Path.Combine(root, directory, "config.xml")))) return Global;
+        if (Taiwan.PatcherDirectoriesFor(root).Any(directory => File.Exists(Path.Combine(root, directory, "config.xml")))) return Taiwan;
         if (File.Exists(launcherConfig)) return IsBilibiliLauncherConfig(launcherConfig) ? Bilibili : CN;
-        if (File.Exists(Path.Combine(root, CN.SdkDirectory, "config.xml"))) return CN;
+        if (IsBilibiliLauncherConfig(Path.Combine(root, Bilibili.LauncherDirectoryFor(root),
+                NteRegionDefinition.LauncherConfigPath))) return Bilibili;
+        if (CN.PatcherDirectoriesFor(root).Any(directory => File.Exists(Path.Combine(root, directory, "config.xml")))) return CN;
         return null;
     }
 

@@ -210,7 +210,7 @@ internal sealed class NteRegionSwitchTransaction
         if (Path.IsPathRooted(normalized) || normalized.Contains(':') || normalized.Split('/').Any(part => part is "." or ".."))
             throw new InvalidDataException("Invalid active switch path.");
         if (normalized.Equals(".collapse_nte_config", StringComparison.Ordinal) || normalized.StartsWith("Client/", StringComparison.OrdinalIgnoreCase)) return;
-        foreach (string launcher in new[] { "NTETW/", "NTEGlobal/" })
+        foreach (string launcher in new[] { "NTETW/", "NTEGlobal/", "NTELauncherTaiwan/", "NTELauncherGlobal/" })
         {
             if (!normalized.StartsWith(launcher, StringComparison.OrdinalIgnoreCase)) continue;
             string relative = normalized[launcher.Length..];

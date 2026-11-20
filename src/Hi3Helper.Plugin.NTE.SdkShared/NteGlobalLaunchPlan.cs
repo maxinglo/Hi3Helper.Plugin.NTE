@@ -15,7 +15,7 @@ internal sealed record NteOverseasLaunchPlan(string GameRoot, string GameExecuta
     {
         NteOverseasRegion region = NteOverseasRegion.From(options.Region);
         string root = Path.GetFullPath(options.GameRoot);
-        string platform = Path.Combine(root, region.LauncherDirectory);
+        string platform = Path.Combine(root, region.Installation.LauncherDirectoryFor(root));
         string config = Path.Combine(platform, "Config", "Config.ini");
         foreach (string file in new[]
                  {
@@ -75,7 +75,7 @@ internal sealed record NteOverseasLaunchPlan(string GameRoot, string GameExecuta
             pipeName.AsSpan().ContainsAnyExcept("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_"))
             throw new ArgumentException("Invalid game pipe name.", nameof(pipeName));
         NteOverseasRegion region = NteOverseasRegion.From(Region);
-        string platform = Path.Combine(GameRoot, region.LauncherDirectory);
+        string platform = Path.Combine(GameRoot, region.Installation.LauncherDirectoryFor(GameRoot));
         ProcessStartInfo start = new(GameExecutable, GameArguments)
         {
             WorkingDirectory = Path.Combine(GameRoot, "Client"), UseShellExecute = false, RedirectStandardOutput = true,
@@ -109,7 +109,7 @@ internal sealed record NteOverseasLaunchPlan(string GameRoot, string GameExecuta
         start.Environment["ArcGameSDKSharePath"] = Path.Combine(platform, "WPGameClientSDK");
         start.Environment["GamePlatformPath"] = platform;
         start.Environment["_PATCHER_RES_PATH_"] = GameRoot;
-        start.Environment["_PATCHER_SDK_PATH_"] = Path.Combine(platform, "UserData", "Patcher", "PatcherSDK");
+        start.Environment["_PATCHER_SDK_PATH_"] = Path.Combine(GameRoot, region.LauncherDirectory, NteRegionDefinition.PatcherSdkRelativePath);
         // The game reads these public selectors during its first SDK calls,
         // before the pipe has delivered the channel configuration.
         start.Environment["channelId"] = "4";

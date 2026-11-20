@@ -21,6 +21,25 @@ internal sealed class NteOfficialLauncherInstaller(HttpClient http)
     internal static bool IsBilibiliSdkPath(string path) =>
         path.Replace('\\', '/').TrimStart('/').StartsWith(BilibiliSdkDirectory, StringComparison.OrdinalIgnoreCase);
 
+    internal async Task<bool> EnsurePresentForLaunchAsync(string root, NteRegionConfig region, CancellationToken token)
+    {
+        bool TryUseInstalled(out bool offerShortcuts)
+        {
+            string directory = region.LauncherDirectoryFor(root);
+            string path = Path.Combine(root, directory, NteRegionDefinition.From(region.HostRegion).LauncherExecutable);
+            offerShortcuts = File.Exists(Path.Combine(root, directory, NteOfficialLaunchPlan.PendingShortcutOffer));
+            return File.Exists(path) && (!offerShortcuts || IsReady(root, region, directory));
+        }
+
+        if (TryUseInstalled(out bool existingOffer)) return existingOffer;
+        using FileStream operation = NteGameOperation.Acquire(root);
+        if (TryUseInstalled(out existingOffer)) return existingOffer;
+        NteOfficialPatcherState.EnsureOfficialLauncherClosed(root, region);
+        await InstallAsync(root, region, null, token).ConfigureAwait(false);
+        if (!TryUseInstalled(out bool newOffer)) throw new InvalidDataException("The official launcher installation is incomplete.");
+        return newOffer;
+    }
+
     internal static bool IsReady(string root, NteRegionConfig region, string directory)
     {
         string launcher = Path.Combine(root, directory);
@@ -60,7 +79,7 @@ internal sealed class NteOfficialLauncherInstaller(HttpClient http)
     internal async Task<long> GetRemainingSizeAsync(string root, NteRegionConfig region, CancellationToken token)
     {
         NteLauncherManifest manifest = await ReadInventoryAsync(region, token).ConfigureAwait(false);
-        string launcher = NteRegionDefinition.From(region.HostRegion).LauncherDirectoryFor(root);
+        string launcher = region.LauncherDirectoryFor(root);
         long remaining = 0;
         foreach (NteLauncherFile file in manifest.Files)
         {
@@ -81,7 +100,9 @@ internal sealed class NteOfficialLauncherInstaller(HttpClient http)
         NteSharedInstallation.EnsureGamesClosed(root);
         NteLauncherManifest manifest = await ReadInventoryAsync(region, token).ConfigureAwait(false);
         NteLauncherResourceClient client = new(http, region.ZoneHomePageUrl);
-        string launcher = NteRegionDefinition.From(region.HostRegion).LauncherDirectoryFor(root);
+        string launcher = region.LauncherDirectoryFor(root);
+        string executable = Path.Combine(root, launcher, NteRegionDefinition.From(region.HostRegion).LauncherExecutable);
+        bool newLauncher = !File.Exists(executable);
         bool alternate = !region.IsOverseas && launcher != NteRegionDefinition.CnLauncherDirectory;
         List<NteLauncherFile> files = manifest.Files;
 
@@ -150,9 +171,17 @@ internal sealed class NteOfficialLauncherInstaller(HttpClient http)
             throw new InvalidDataException("The official platform inventory has no verified channel launcher configuration.");
 
         NteSharedInstallation.EnsureGamesClosed(root);
-        // Publish the channel's configuration last, after its SDK and binaries.
+        if (newLauncher)
+        {
+            NteOfficialPatcherState.SeedLauncherMetadata(root, region);
+            NteSharedInstallation.WriteAtomic(NteSharedInstallation.ManagedPath(root,
+                launcher + "/" + NteOfficialLaunchPlan.PendingShortcutOffer), []);
+        }
+        // Publish the configuration after the SDK and the entry point last, so a new launcher is
+        // only discoverable once its files are installed.
         foreach ((string active, string cached) in prepared.OrderBy(file =>
-                     file.Active.EndsWith(Path.Combine("Config", "Config.ini"), StringComparison.OrdinalIgnoreCase)))
+                     file.Active.Equals(executable, StringComparison.OrdinalIgnoreCase) ? 2 :
+                     file.Active.EndsWith(Path.Combine("Config", "Config.ini"), StringComparison.OrdinalIgnoreCase) ? 1 : 0))
         {
             token.ThrowIfCancellationRequested();
             Directory.CreateDirectory(Path.GetDirectoryName(active)!);

@@ -654,4 +654,14 @@ Download: {3} files ({4:F3} GB)</value></data>
   <data name="BilibiliOfficialLauncherConfirm" xml:space="preserve">
     <value>¿Usar el lanzador oficial de Bilibili la próxima vez y cerrar el juego actual?</value>
   </data>
+  <data name="OfficialShortcutTitle" xml:space="preserve"><value>Crear accesos directos para el lanzador oficial</value></data>
+  <data name="OfficialShortcutDescription" xml:space="preserve"><value>Este complemento ha instalado el lanzador oficial. Elige dónde crear los accesos directos antes de continuar.</value></data>
+  <data name="OfficialShortcutStartMenu" xml:space="preserve"><value>Crear un acceso directo en el menú Inicio</value></data>
+  <data name="OfficialShortcutDesktop" xml:space="preserve"><value>Crear un acceso directo en el escritorio</value></data>
+  <data name="OfficialShortcutContinue" xml:space="preserve"><value>Continuar el inicio</value></data>
+  <data name="OfficialShortcutFailed" xml:space="preserve"><value>No se pudieron crear los accesos directos en las siguientes ubicaciones. Puedes continuar el inicio.</value></data>
+  <data name="OfficialShortcutNameMainland" xml:space="preserve"><value>Neverness to Everness - Lanzador oficial (China continental)</value></data>
+  <data name="OfficialShortcutNameBilibili" xml:space="preserve"><value>Neverness to Everness - Lanzador oficial (Bilibili)</value></data>
+  <data name="OfficialShortcutNameGlobal" xml:space="preserve"><value>Neverness to Everness - Lanzador oficial (Global)</value></data>
+  <data name="OfficialShortcutNameTaiwan" xml:space="preserve"><value>Neverness to Everness - Lanzador oficial (Taiwán, Hong Kong y Macao)</value></data>
 </root>

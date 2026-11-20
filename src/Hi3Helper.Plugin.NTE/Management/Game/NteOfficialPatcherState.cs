@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.IO.Compression;
 using System.Diagnostics;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -39,11 +40,9 @@ internal static class NteOfficialPatcherState
         region ??= NteConfigProvider.CN;
         if (gameRoot != null)
         {
-            foreach (string localPath in new[]
-                     {
-                         Path.Combine(gameRoot, region.SdkDirectory, "ResList.xml"),
-                         NteInstalledManifest.PathFor(gameRoot, region)
-                     })
+            foreach (string localPath in region.PatcherDirectoriesFor(gameRoot)
+                         .Select(directory => Path.Combine(gameRoot, directory, "ResList.xml"))
+                         .Append(NteInstalledManifest.PathFor(gameRoot, region)))
             {
                 if (!File.Exists(localPath)) continue;
                 try
@@ -187,6 +186,26 @@ internal static class NteOfficialPatcherState
         return local.OuterXml;
     }
 
+    internal static void SeedLauncherMetadata(string root, NteRegionConfig region)
+    {
+        // The launcher's inventory excludes the local record of the installed Client.
+        string active = region.SdkDirectoryFor(root);
+        string config = NteSharedInstallation.ManagedPath(root, active + "/config.xml");
+        if (File.Exists(config)) return;
+        foreach (string directory in region.PatcherDirectoriesFor(root))
+        {
+            if (directory == active) continue;
+            string sourceConfig = NteSharedInstallation.ManagedPath(root, directory + "/config.xml");
+            string sourceManifest = NteSharedInstallation.ManagedPath(root, directory + "/ResList.xml");
+            if (!File.Exists(sourceConfig) || !File.Exists(sourceManifest)) continue;
+
+            string manifest = NteSharedInstallation.ManagedPath(root, active + "/ResList.xml");
+            NteSharedInstallation.WriteAtomic(manifest, File.ReadAllBytes(sourceManifest));
+            NteSharedInstallation.WriteAtomic(config, File.ReadAllBytes(sourceConfig));
+            return;
+        }
+    }
+
     internal static void Commit(string gameRoot, string branch, string appId, string releaseXml,
         byte[] originalRemoteManifest, byte[] selectedManifest, CancellationToken token, string? backupDirectory = null)
         => Commit(gameRoot, branch, NteConfigProvider.GetRegion(appId), releaseXml, originalRemoteManifest,
@@ -196,7 +215,7 @@ internal static class NteOfficialPatcherState
         byte[] originalRemoteManifest, byte[] selectedManifest, CancellationToken token, string? backupDirectory = null)
     {
         string appId = region.AppId;
-        string directory = Path.Combine(gameRoot, region.SdkDirectory);
+        string directory = NteSharedInstallation.ManagedPath(gameRoot, region.SdkDirectoryFor(gameRoot));
         string configPath = Path.Combine(directory, "config.xml");
         EnsureOfficialLauncherClosed(gameRoot, region);
         XmlDocument release = ParseXml(releaseXml);

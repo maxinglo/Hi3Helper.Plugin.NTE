@@ -654,4 +654,14 @@ Download: {3} files ({4:F3} GB)</value></data>
   <data name="BilibiliOfficialLauncherConfirm" xml:space="preserve">
     <value>Beim nächsten Start den offiziellen Bilibili-Launcher verwenden und das laufende Spiel schließen?</value>
   </data>
+  <data name="OfficialShortcutTitle" xml:space="preserve"><value>Verknüpfungen für den offiziellen Launcher erstellen</value></data>
+  <data name="OfficialShortcutDescription" xml:space="preserve"><value>Dieses Plugin hat den offiziellen Launcher installiert. Wähle vor dem Start aus, wo Verknüpfungen erstellt werden sollen.</value></data>
+  <data name="OfficialShortcutStartMenu" xml:space="preserve"><value>Verknüpfung im Startmenü erstellen</value></data>
+  <data name="OfficialShortcutDesktop" xml:space="preserve"><value>Verknüpfung auf dem Desktop erstellen</value></data>
+  <data name="OfficialShortcutContinue" xml:space="preserve"><value>Start fortsetzen</value></data>
+  <data name="OfficialShortcutFailed" xml:space="preserve"><value>An den folgenden Orten konnten keine Verknüpfungen erstellt werden. Du kannst den Start fortsetzen.</value></data>
+  <data name="OfficialShortcutNameMainland" xml:space="preserve"><value>Neverness to Everness - offizieller Launcher (Festlandchina)</value></data>
+  <data name="OfficialShortcutNameBilibili" xml:space="preserve"><value>Neverness to Everness - offizieller Launcher (Bilibili)</value></data>
+  <data name="OfficialShortcutNameGlobal" xml:space="preserve"><value>Neverness to Everness - offizieller Launcher (Global)</value></data>
+  <data name="OfficialShortcutNameTaiwan" xml:space="preserve"><value>Neverness to Everness - offizieller Launcher (Taiwan, Hongkong und Macau)</value></data>
 </root>

@@ -9,7 +9,8 @@ internal enum NteHostRegion { CN, Global, Taiwan, Bilibili }
 
 internal sealed record NteHostLaunchOptions(string GameRoot, string? AdditionalArguments = null,
     bool PriorityBoost = false, ProcessPriorityClass Priority = ProcessPriorityClass.Normal,
-    NteHostRegion Region = NteHostRegion.CN, string Language = "zh-CN")
+    NteHostRegion Region = NteHostRegion.CN, string Language = "zh-CN", bool? OfficialLauncher = null,
+    bool OfferLauncherShortcuts = false)
 {
     internal const string RequiredGameArguments = NteRegionDefinition.RequiredGameArguments;
     internal string GameArguments => string.IsNullOrWhiteSpace(AdditionalArguments) ? RequiredGameArguments : RequiredGameArguments + " " + AdditionalArguments;
@@ -17,8 +18,11 @@ internal sealed record NteHostLaunchOptions(string GameRoot, string? AdditionalA
     internal string[] ToArguments()
     {
         Validate();
-        return ["--game-root", Path.GetFullPath(GameRoot), "--game-arguments", AdditionalArguments ?? "",
+        List<string> arguments = ["--game-root", Path.GetFullPath(GameRoot), "--game-arguments", AdditionalArguments ?? "",
             "--priority", Priority.ToString(), "--priority-boost", PriorityBoost.ToString(), "--region", Region.ToString(), "--language", Language];
+        if (OfficialLauncher is bool official) arguments.AddRange(["--official-launcher", official.ToString()]);
+        if (OfferLauncherShortcuts) arguments.AddRange(["--launcher-shortcuts", "true"]);
+        return arguments.ToArray();
     }
 
     internal static NteHostLaunchOptions Parse(IReadOnlyList<string> arguments)
@@ -27,7 +31,8 @@ internal sealed record NteHostLaunchOptions(string GameRoot, string? AdditionalA
         if (arguments.Count % 2 != 0) throw new ArgumentException("Login host arguments must be option/value pairs.");
         for (int i = 0; i < arguments.Count; i += 2)
         {
-            if (arguments[i] is not ("--game-root" or "--game-arguments" or "--priority" or "--priority-boost" or "--region" or "--language") || !fields.TryAdd(arguments[i], arguments[i + 1]))
+            if (arguments[i] is not ("--game-root" or "--game-arguments" or "--priority" or "--priority-boost" or "--region" or "--language" or
+                "--official-launcher" or "--launcher-shortcuts") || !fields.TryAdd(arguments[i], arguments[i + 1]))
                 throw new ArgumentException("Unknown or duplicate login host option.");
         }
         if (!fields.TryGetValue("--game-root", out string? root)) throw new ArgumentException("Game root is required.");
@@ -40,7 +45,10 @@ internal sealed record NteHostLaunchOptions(string GameRoot, string? AdditionalA
         if (fields.TryGetValue("--region", out string? regionText) &&
             (regionText is not ("CN" or "Global" or "Taiwan" or "Bilibili") || !Enum.TryParse(regionText, out region)))
             throw new ArgumentException("Invalid game region.");
-        NteHostLaunchOptions options = new(root, fields.GetValueOrDefault("--game-arguments"), boost, priority, region, fields.GetValueOrDefault("--language") ?? "zh-CN");
+        bool? BooleanOption(string option) => !fields.TryGetValue(option, out string? text) ? null :
+            bool.TryParse(text, out bool value) ? value : throw new ArgumentException("Invalid launcher option " + option);
+        NteHostLaunchOptions options = new(root, fields.GetValueOrDefault("--game-arguments"), boost, priority, region,
+            fields.GetValueOrDefault("--language") ?? "zh-CN", BooleanOption("--official-launcher"), BooleanOption("--launcher-shortcuts") == true);
         options.Validate(); return options;
     }
 
@@ -48,7 +56,8 @@ internal sealed record NteHostLaunchOptions(string GameRoot, string? AdditionalA
     {
         if (string.IsNullOrWhiteSpace(GameRoot) || !Path.IsPathFullyQualified(GameRoot) || GameRoot.Contains('\0') ||
             (AdditionalArguments?.Length ?? 0) > 8192 || AdditionalArguments?.Contains('\0') == true || !Enum.IsDefined(Priority) || !Enum.IsDefined(Region) ||
-            string.IsNullOrWhiteSpace(Language) || Language.Length > 35 || !System.Linq.Enumerable.All(Language, c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_'))
+            string.IsNullOrWhiteSpace(Language) || Language.Length > 35 || !System.Linq.Enumerable.All(Language, c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_') ||
+            OfferLauncherShortcuts && OfficialLauncher != true)
             throw new ArgumentException("Invalid login host launch context.");
     }
 }

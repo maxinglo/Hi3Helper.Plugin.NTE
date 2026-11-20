@@ -47,7 +47,7 @@ internal partial class NteGameManager : GameManagerBase
     {
         if (Region.IsOverseas) return false;
         string directory = NteRegionDefinition.From(Region.HostRegion).LauncherDirectoryFor(path);
-        return (Region.IsBilibili || directory != NteRegionDefinition.CnLauncherDirectory) &&
+        return (Region.IsBilibili || NteRegionDefinition.IsStockBilibili(path)) &&
             !NteOfficialLauncherInstaller.IsReady(path, Region, directory);
     }
 
@@ -158,10 +158,7 @@ internal partial class NteGameManager : GameManagerBase
             CurrentGameVersion = sharedVersion;
             return;
         }
-        string[] patcherDirectories = Region.IsOverseas ? [Region.SdkDirectory] :
-            Array.ConvertAll(NteRegionDefinition.MainlandLauncherDirectories,
-                directory => Path.Combine(directory, NteRegionDefinition.PatcherSdkRelativePath));
-        foreach (string directory in patcherDirectories)
+        foreach (string directory in Region.PatcherDirectoriesFor(CurrentGameInstallPath))
         {
             string officialConfigPath = Path.Combine(CurrentGameInstallPath, directory, "config.xml");
             if (!File.Exists(officialConfigPath)) continue;

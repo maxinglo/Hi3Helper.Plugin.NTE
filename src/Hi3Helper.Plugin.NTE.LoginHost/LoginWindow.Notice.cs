@@ -171,7 +171,6 @@ internal sealed partial class LoginWindow
                 ShowLoginNotice();
                 return;
             }
-            _ = NteOfficialLaunchPlan.Create(launchOptions.GameRoot, launchOptions.Region);
             // Persist first. A failed write leaves this owned game running and
             // the notice unacknowledged. Never terminate another installation.
             NteLaunchPreferences.Update(NteLaunchPreferences.GetPath(launchOptions.Region), officialLauncher: true);

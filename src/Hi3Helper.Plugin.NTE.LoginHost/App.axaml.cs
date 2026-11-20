@@ -141,7 +141,8 @@ public partial class App : Application
             }
 
             window!.ConfigureLaunch(options);
-            officialLaunch = NteLaunchPreferences.Read(NteLaunchPreferences.GetPath(options.Region)).OfficialLauncher;
+            officialLaunch = options.OfficialLauncher ??
+                NteLaunchPreferences.Read(NteLaunchPreferences.GetPath(options.Region)).OfficialLauncher;
             if (officialLaunch)
             {
                 if (!await OfficialGameHost.RunAsync(options)) exitCode = 1;

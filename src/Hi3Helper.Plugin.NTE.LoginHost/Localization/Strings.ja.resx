@@ -654,4 +654,14 @@ Download: {3} files ({4:F3} GB)</value></data>
   <data name="BilibiliOfficialLauncherConfirm" xml:space="preserve">
     <value>次回から公式 Bilibili ランチャーを使用し、現在のゲームを終了しますか？</value>
   </data>
+  <data name="OfficialShortcutTitle" xml:space="preserve"><value>公式ランチャーのショートカットを作成</value></data>
+  <data name="OfficialShortcutDescription" xml:space="preserve"><value>このプラグインが公式ランチャーをインストールしました。起動を続ける前に、ショートカットを作成する場所を選択できます。</value></data>
+  <data name="OfficialShortcutStartMenu" xml:space="preserve"><value>スタートメニューにショートカットを作成</value></data>
+  <data name="OfficialShortcutDesktop" xml:space="preserve"><value>デスクトップにショートカットを作成</value></data>
+  <data name="OfficialShortcutContinue" xml:space="preserve"><value>起動を続ける</value></data>
+  <data name="OfficialShortcutFailed" xml:space="preserve"><value>次の場所にショートカットを作成できませんでした。起動は続けられます。</value></data>
+  <data name="OfficialShortcutNameMainland" xml:space="preserve"><value>異環 公式ランチャー（中国本土）</value></data>
+  <data name="OfficialShortcutNameBilibili" xml:space="preserve"><value>異環 公式ランチャー（ビリビリ）</value></data>
+  <data name="OfficialShortcutNameGlobal" xml:space="preserve"><value>異環 公式ランチャー（グローバル）</value></data>
+  <data name="OfficialShortcutNameTaiwan" xml:space="preserve"><value>異環 公式ランチャー（台湾・香港・マカオ）</value></data>
 </root>
