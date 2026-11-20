@@ -285,6 +285,7 @@ internal sealed class NteRegionSwitchService(HttpClient http, Action<string>? en
                 throw new InvalidDataException("The target launcher has no verified file inventory.");
             foreach (NteLauncherFile file in launcher.Files)
             {
+                if (NteOfficialLauncherInstaller.IsBilibiliSdkPath(file.Path)) continue;
                 string relative = file.Path.TrimStart('/');
                 if (relative.Replace('\\', '/').StartsWith("UserData/", StringComparison.OrdinalIgnoreCase))
                     throw new InvalidDataException("Launcher updates cannot overwrite account data.");

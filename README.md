@@ -46,13 +46,15 @@
 
 ## 安装插件
 
-需要 Windows 10／11 x64，以及支持 **Plugin Core API 0.1.6** 的 Collapse Launcher。
+需要 Windows 10／11 x64，以及支持 **Plugin Core API 0.1.6.2** 的 Collapse Launcher。
 
 1. 从本仓库下载插件压缩包 `NTE_*.zip`。开发构建可在 [Actions](https://github.com/maxinglo/Hi3Helper.Plugin.NTE/actions/workflows/build.yml) 的成功运行中下载
    `NTE-ReleasePublish-O1` 产物，解压外层后取得插件 ZIP。
 2. 打开 Collapse 的 **设置 → 插件管理**，选择添加 ZIP 或 `manifest.json`，导入插件 ZIP。
 3. 重启 Collapse，在游戏列表中选择 **异环** 及对应地区。
 4. 安装游戏，或选择已有的游戏安装目录。
+
+在游戏列表选择 **Bilibili 服** 并使用 B 服安装目录。首次安装、更新和修复通过官方 B 服启动器清单下载登录 SDK，文件位于游戏目录的 `NTELauncher/channelSdk/bilibili/`。独立启动时，游戏发起登录后会打开哔哩哔哩官方窗口。也可以在 **游戏设置 → 启动设置** 中启用官方启动器后台启动。
 
 登录窗口使用 Avalonia 与 Native AOT，随包提供原生可执行文件及渲染库，无须安装 .NET 桌面运行时。已安装旧版的用户需要先手动导入一次支持自动更新的 ZIP。之后可以在 Collapse 的 **设置 → 插件管理** 检查新版本，或启用插件自动更新。Collapse 从 GitHub Releases 或 OSS 镜像的 `manifest.json` 检查版本、下载并校验更新文件，重启后应用。账号和游戏文件保存在插件目录之外。
 

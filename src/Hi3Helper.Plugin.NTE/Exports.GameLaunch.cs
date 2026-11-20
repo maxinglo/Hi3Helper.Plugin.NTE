@@ -39,7 +39,7 @@ public partial class Exports
             NteHostRegion region = NteHostRegion.CN;
             if (context.PresetConfig is NteCNPresetConfig preset)
             {
-                region = preset.Region.IsTaiwan ? NteHostRegion.Taiwan : preset.Region.IsGlobal ? NteHostRegion.Global : NteHostRegion.CN;
+                region = preset.Region.HostRegion;
                 startArgument = preset.LaunchSettings.BuildArguments(startArgument);
             }
             int hostPid = NteLoginHostLaunch.Start(new(root, startArgument, isRunBoosted, processPriority, region, SharedStatic.PluginLocaleCode ?? "en-US"));

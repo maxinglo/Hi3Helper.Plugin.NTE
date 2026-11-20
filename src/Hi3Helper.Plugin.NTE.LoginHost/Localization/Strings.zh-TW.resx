@@ -594,4 +594,64 @@
   <data name="CnFilesMissing" xml:space="preserve"><value>遊戲安裝缺少登入所需檔案。請驗證或修復遊戲後重試。</value></data>
   <data name="CnClientRunning" xml:space="preserve"><value>遊戲或官方啟動器仍在執行。請先結束後重試。</value></data>
   <data name="CnLoginHostRunning" xml:space="preserve"><value>已有登入元件正在執行。請返回現有視窗或關閉後重試。</value></data>
+  <data name="BilibiliSdkMissing" xml:space="preserve">
+    <value>缺少嗶哩嗶哩登入元件。請修復遊戲安裝，或更新此遊戲目錄中的官方啟動器。</value>
+  </data>
+  <data name="BilibiliSdkUnsupported" xml:space="preserve">
+    <value>目前的嗶哩嗶哩 SDK 版本尚未支援，請使用官方啟動器登入。</value>
+  </data>
+  <data name="BilibiliSdkInitFailed" xml:space="preserve">
+    <value>無法啟動嗶哩嗶哩登入。請修復遊戲安裝，或使用官方啟動器。</value>
+  </data>
+  <data name="BilibiliSdkLoginFailed" xml:space="preserve">
+    <value>嗶哩嗶哩登入未完成。請在遊戲中重新發起登入。</value>
+  </data>
+  <data name="BilibiliSdkTimedOut" xml:space="preserve">
+    <value>嗶哩嗶哩登入逾時。請結束遊戲後重試。</value>
+  </data>
+  <data name="BilibiliServiceLoginFailed" xml:space="preserve">
+    <value>遊戲服務未接受本次嗶哩嗶哩登入。請重試，或使用官方啟動器。</value>
+  </data>
+  <data name="NoticeBilibiliData" xml:space="preserve">
+    <value>請在嗶哩嗶哩官方視窗中登入。外掛收到的帳號 ID 與登入權杖僅用於本次遊戲工作階段。</value>
+  </data>
+  <data name="NoticeBilibiliStorage" xml:space="preserve">
+    <value>外掛會儲存本說明的確認紀錄。嗶哩嗶哩官方 SDK 自行管理登入紀錄及本機儲存。</value>
+  </data>
+  <data name="NoticeBilibiliNetwork" xml:space="preserve">
+    <value>嗶哩嗶哩 SDK 會連線至嗶哩嗶哩服務。外掛透過 HTTPS 向遊戲發行商傳送帳號 ID、權杖及必要的裝置資訊，用於登入與登入前檢查。</value>
+  </data>
+  <data name="NoticeBilibiliTitle" xml:space="preserve">
+    <value>Bilibili 服登入說明</value>
+  </data>
+  <data name="NoticeBilibiliPurposeTitle" xml:space="preserve">
+    <value>遊戲如何登入</value>
+  </data>
+  <data name="NoticeBilibiliPurpose" xml:space="preserve">
+    <value>遊戲發起登入後，本外掛會呼叫遊戲目錄中的嗶哩嗶哩官方 SDK，將登入結果交給遊戲發行商，並在檢查通過後通知遊戲。</value>
+  </data>
+  <data name="NoticeBilibiliDataTitle" xml:space="preserve">
+    <value>如何使用帳號資訊</value>
+  </data>
+  <data name="NoticeBilibiliNetworkTitle" xml:space="preserve">
+    <value>發行商驗證</value>
+  </data>
+  <data name="NoticeBilibiliStorageTitle" xml:space="preserve">
+    <value>本機儲存哪些資料</value>
+  </data>
+  <data name="NoticeBilibiliRiskTitle" xml:space="preserve">
+    <value>相容性與帳號風險</value>
+  </data>
+  <data name="NoticeBilibiliRisk" xml:space="preserve">
+    <value>獨立啟動由第三方外掛提供，可能受啟動器更新、遊戲服務條款及帳號風險管控影響。你可以在遊戲啟動設定中改用官方啟動器。</value>
+  </data>
+  <data name="NoticeBilibiliChoiceTitle" xml:space="preserve">
+    <value>改用官方啟動器</value>
+  </data>
+  <data name="NoticeBilibiliChoice" xml:space="preserve">
+    <value>在遊戲啟動設定中啟用官方啟動器背景啟動。啟動器來自所選 Bilibili 遊戲安裝目錄，需要登入、驗證或更新時仍會顯示視窗。</value>
+  </data>
+  <data name="BilibiliOfficialLauncherConfirm" xml:space="preserve">
+    <value>改用 Bilibili 官方啟動器並關閉目前的遊戲？設定會在下次啟動時生效。官方啟動器應放在目前遊戲安裝目錄的 NTELauncher 資料夾。</value>
+  </data>
 </root>

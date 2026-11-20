@@ -21,6 +21,7 @@ public sealed record NteRegionConfig(
     IReadOnlyList<string> SupportedLanguages
 )
 {
+    internal NteHostRegion HostRegion { get; init; } = NteHostRegion.CN;
     public string AppId { get; init; } = NteRegionDefinition.CnAppId;
     public string LauncherVersionIniUrl { get; init; } = NteConfigProvider.LauncherVersionIniUrl;
     public string LauncherDirectoryName { get; init; } = NteRegionDefinition.CnLauncherDirectory;
@@ -28,9 +29,10 @@ public sealed record NteRegionConfig(
     public string[] ResourceUrls { get; init; } = NteConfigProvider.GameResBaseUrls;
     public bool IsGlobal => AppId == NteRegionDefinition.GlobalAppId;
     public bool IsTaiwan => AppId == NteRegionDefinition.TaiwanAppId;
+    internal bool IsBilibili => HostRegion == NteHostRegion.Bilibili;
     public bool IsOverseas => IsGlobal || IsTaiwan;
     public string LauncherPageUrl { get; init; } = NteConfigProvider.LauncherHtmlUrl;
-    public string StorageName => IsGlobal ? "Global" : IsTaiwan ? "Taiwan" : "";
+    public string StorageName => HostRegion == NteHostRegion.CN ? "" : HostRegion.ToString();
     public string SdkDirectory => LauncherDirectoryName + "/" + NteRegionDefinition.PatcherSdkRelativePath;
 }
 

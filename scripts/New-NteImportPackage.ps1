@@ -9,7 +9,7 @@ $archivePath = [IO.Path]::GetFullPath($ArchivePath)
 if (Test-Path -LiteralPath $archivePath) { throw "Archive already exists: $archivePath" }
 $manifestPath = Join-Path $root 'manifest.json'
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-if ($manifest.MainLibraryName -ne 'NTE.dll' -or $manifest.PluginStandardVersion -ne '0.1.6.0') { throw 'Unexpected plugin manifest.' }
+if ($manifest.MainLibraryName -ne 'NTE.dll' -or $manifest.PluginStandardVersion -ne '0.1.6.2') { throw 'Unexpected plugin manifest.' }
 $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 $assets = @($manifest.Assets) + @([pscustomobject]@{ FilePath = 'manifest.json'; FileHash = $null; Size = $null })
 foreach ($asset in $assets) {

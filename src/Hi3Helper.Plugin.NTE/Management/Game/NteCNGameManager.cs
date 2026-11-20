@@ -7,6 +7,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Net.Http;
 using System.Runtime.InteropServices.Marshalling;
+using System.Text;
 using System.Xml;
 using System.Runtime.Versioning;
 using System.Threading;
@@ -35,7 +36,7 @@ internal partial class NteGameManager : GameManagerBase
     internal bool IsGamePathCompatible(string gamePath)
     {
         NteRegionConfig? installedRegion = NteConfigProvider.DetectInstalledRegion(gamePath);
-        return installedRegion == null || installedRegion.AppId == Region.AppId ||
+        return installedRegion == null || installedRegion.HostRegion == Region.HostRegion ||
             installedRegion.IsOverseas && Region.IsOverseas && NteSharedInstallation.Contains(gamePath, Region);
     }
 
@@ -116,7 +117,7 @@ internal partial class NteGameManager : GameManagerBase
         if (!AcceptCurrentGamePath() || string.IsNullOrEmpty(CurrentGameInstallPath))
             return;
 
-        NteSharedInstallationState? shared = NteSharedInstallation.Load(CurrentGameInstallPath);
+        NteSharedInstallationState? shared = Region.IsOverseas ? NteSharedInstallation.Load(CurrentGameInstallPath) : null;
         if (shared?.Profiles.TryGetValue(Region.AppId, out NteSharedProfile? profile) == true &&
             GameVersion.TryParse(profile.Version, out GameVersion sharedVersion))
         {
@@ -183,8 +184,9 @@ internal partial class NteGameManager : GameManagerBase
             if (NteSharedInstallation.HasPendingSwitch(CurrentGameInstallPath)) return;
             if (NteSharedInstallation.Load(CurrentGameInstallPath) is { } shared && shared.ActiveAppId != Region.AppId) return;
             string configPath = Path.Combine(CurrentGameInstallPath, ".collapse_nte_config");
-            Directory.CreateDirectory(CurrentGameInstallPath);
-            File.WriteAllText(configPath, $"GameVersion={CurrentGameVersion}\n" + (Region.IsOverseas ? $"AppId={Region.AppId}\n" : ""));
+            string identity = Region.IsBilibili ? $"AppId={Region.AppId}\nRegion={Region.HostRegion}\n" :
+                Region.IsOverseas ? $"AppId={Region.AppId}\n" : "";
+            NteSharedInstallation.WriteAtomic(configPath, Encoding.UTF8.GetBytes($"GameVersion={CurrentGameVersion}\n" + identity));
 
             SharedStatic.InstanceLogger.LogInformation(
                 "[NteCNGameManager::SaveConfig] Saved config: Version={V}",

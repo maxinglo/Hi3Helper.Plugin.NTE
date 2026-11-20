@@ -72,12 +72,15 @@
     <value>Neverness to Everness</value>
   </data>
     <data name="ZoneDescription" xml:space="preserve">
-    <value>NTE China server profile.</value>
+    <value>Mainland China official server.</value>
   </data>
     <data name="ZoneFullName" xml:space="preserve">
-    <value>Neverness to Everness (Mainland China)</value>
+    <value>Neverness to Everness (Mainland China Official)</value>
   </data>
-    <data name="ZoneName" xml:space="preserve"><value>Mainland China</value></data>
+    <data name="ZoneName" xml:space="preserve"><value>Mainland China (Official)</value></data>
+    <data name="BilibiliZoneName" xml:space="preserve"><value>Bilibili</value></data>
+    <data name="BilibiliZoneFullName" xml:space="preserve"><value>Neverness to Everness (Bilibili)</value></data>
+    <data name="BilibiliZoneDescription" xml:space="preserve"><value>Sign in with the official Bilibili SDK when the game prompts you.</value></data>
     <data name="GlobalZoneName" xml:space="preserve"><value>Global</value></data>
     <data name="GlobalZoneFullName" xml:space="preserve"><value>Neverness to Everness (Global)</value></data>
     <data name="GlobalZoneDescription" xml:space="preserve"><value>International service. Supports downloading, updating, repair and account sign-in.</value></data>
@@ -141,10 +144,10 @@
     <data name="LoginExperimentalHello" xml:space="preserve"><value>Windows Hello account protection (experimental)</value></data>
     <data name="LoginExperimentalHelloHint" xml:space="preserve"><value>Require Windows Hello when saving or restoring accounts. Off by default; Windows user encryption is used instead. Disabling Hello requires one unlock for each protected account. Saved accounts remain until removed.</value></data>
   <data name="LaunchOfficialLauncher" xml:space="preserve">
-    <value>Use official launcher</value>
+    <value>Run official launcher in the background</value>
   </data>
   <data name="LaunchOfficialLauncherHint" xml:space="preserve">
-    <value>Use the official launcher from this game folder on the next launch. Sign-in or update windows may still appear.</value>
+    <value>On the next launch, run the official launcher from the selected game folder. Sign-in, verification, and update windows may still appear. Turn this off to use independent launch.</value>
   </data>
   <data name="TaiwanZoneName" xml:space="preserve"><value>Taiwan / Hong Kong / Macau</value></data>
   <data name="TaiwanZoneFullName" xml:space="preserve"><value>Neverness to Everness — Taiwan / Hong Kong / Macau</value></data>

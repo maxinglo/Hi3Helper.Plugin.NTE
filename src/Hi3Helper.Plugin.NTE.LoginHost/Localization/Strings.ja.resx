@@ -594,4 +594,64 @@ Download: {3} files ({4:F3} GB)</value></data>
   <data name="CnFilesMissing" xml:space="preserve"><value>ログインに必要なゲームファイルがありません。ゲームを検証または修復してください。</value></data>
   <data name="CnClientRunning" xml:space="preserve"><value>ゲームまたは公式ランチャーが実行中です。終了して再試行してください。</value></data>
   <data name="CnLoginHostRunning" xml:space="preserve"><value>ログイン画面が既に起動しています。その画面に戻るか、閉じて再試行してください。</value></data>
+  <data name="BilibiliSdkMissing" xml:space="preserve">
+    <value>Bilibili のログインコンポーネントが見つかりません。ゲームを修復するか、このゲームフォルダーの公式ランチャーを更新してください。</value>
+  </data>
+  <data name="BilibiliSdkUnsupported" xml:space="preserve">
+    <value>このバージョンの Bilibili SDK は未対応です。公式ランチャーでログインしてください。</value>
+  </data>
+  <data name="BilibiliSdkInitFailed" xml:space="preserve">
+    <value>Bilibili ログインを開始できませんでした。ゲームを修復するか、公式ランチャーを使用してください。</value>
+  </data>
+  <data name="BilibiliSdkLoginFailed" xml:space="preserve">
+    <value>Bilibili ログインが完了しませんでした。ゲームから再度ログインしてください。</value>
+  </data>
+  <data name="BilibiliSdkTimedOut" xml:space="preserve">
+    <value>Bilibili ログインがタイムアウトしました。ゲームを終了してから再試行してください。</value>
+  </data>
+  <data name="BilibiliServiceLoginFailed" xml:space="preserve">
+    <value>ゲームのサービスが Bilibili ログインを受け付けませんでした。再試行するか、公式ランチャーを使用してください。</value>
+  </data>
+  <data name="NoticeBilibiliData" xml:space="preserve">
+    <value>Bilibili の公式画面からログインしてください。プラグインは、受け取ったアカウント ID とトークンを今回のゲームセッションでのみ使用します。</value>
+  </data>
+  <data name="NoticeBilibiliStorage" xml:space="preserve">
+    <value>プラグインはこの案内への確認記録を保存します。公式 Bilibili SDK はログイン履歴とローカルデータを管理します。</value>
+  </data>
+  <data name="NoticeBilibiliNetwork" xml:space="preserve">
+    <value>Bilibili SDK は Bilibili と通信します。ログインと事前確認のため、プラグインはアカウント ID、トークン、必要なデバイス情報を HTTPS でゲームの運営元に送信します。</value>
+  </data>
+  <data name="NoticeBilibiliTitle" xml:space="preserve">
+    <value>Bilibili 版ログインのご案内</value>
+  </data>
+  <data name="NoticeBilibiliPurposeTitle" xml:space="preserve">
+    <value>ログインの流れ</value>
+  </data>
+  <data name="NoticeBilibiliPurpose" xml:space="preserve">
+    <value>ゲームからログインが要求されると、本プラグイン はゲームと共にインストールされた公式 Bilibili SDK を開きます。ログイン後は結果をゲームの運営元へ送信し、確認が完了してからゲームに通知します。</value>
+  </data>
+  <data name="NoticeBilibiliDataTitle" xml:space="preserve">
+    <value>アカウント情報の使用</value>
+  </data>
+  <data name="NoticeBilibiliNetworkTitle" xml:space="preserve">
+    <value>運営元による確認</value>
+  </data>
+  <data name="NoticeBilibiliStorageTitle" xml:space="preserve">
+    <value>端末への保存</value>
+  </data>
+  <data name="NoticeBilibiliRiskTitle" xml:space="preserve">
+    <value>互換性とアカウントのリスク</value>
+  </data>
+  <data name="NoticeBilibiliRisk" xml:space="preserve">
+    <value>独立起動にはサードパーティー製プラグインを使用します。ランチャーの更新、利用規約、アカウント制限の影響を受ける場合があります。ゲームの起動設定で公式ランチャーに切り替えられます。</value>
+  </data>
+  <data name="NoticeBilibiliChoiceTitle" xml:space="preserve">
+    <value>公式ランチャーを使用する</value>
+  </data>
+  <data name="NoticeBilibiliChoice" xml:space="preserve">
+    <value>ゲームの起動設定で公式ランチャーのバックグラウンド起動を有効にできます。選択した Bilibili 版のインストール先から起動し、ログイン、確認、更新が必要な場合は画面が表示されます。</value>
+  </data>
+  <data name="BilibiliOfficialLauncherConfirm" xml:space="preserve">
+    <value>次回から公式 Bilibili ランチャーを使用し、現在のゲームを終了しますか？ランチャーはゲームのインストール先の NTELauncher フォルダーに必要です。</value>
+  </data>
 </root>

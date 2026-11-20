@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 $repository = Split-Path $PSScriptRoot -Parent
 $source = (Resolve-Path -LiteralPath $HostDirectory).Path
 $harness = if ($HarnessExecutable) { (Resolve-Path -LiteralPath $HarnessExecutable).Path }
-    else { Join-Path $repository 'tools/NteLoginPresentationHarness/bin/Release/net10.0-windows/NteLoginPresentationHarness.exe' }
+    else { Join-Path $repository 'tools/NteLoginPresentationHarness/bin/Release/net11.0-windows/NteLoginPresentationHarness.exe' }
 if (-not (Test-Path -LiteralPath $harness)) { throw 'Build tools/NteLoginPresentationHarness before running the presentation fixture.' }
 $directory = Join-Path $repository ('artifacts/login-host/presentation-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
 $preview = Join-Path $directory 'host-preview'

@@ -8,6 +8,8 @@ using System.Text.RegularExpressions;
 // Research-only, ordinary HTTPS authentication. Account operations are called
 // by explicit local UI actions or an explicitly authorized saved test session.
 // No official account stores or cookies are read.
+internal sealed record BilibiliPcDeviceMetadata(string SystemVersion, string SystemCaption, string SystemName);
+
 internal sealed class ProbeAuthenticationClient : IDisposable
 {
     private readonly JsonDocument configuration;
@@ -19,6 +21,9 @@ internal sealed class ProbeAuthenticationClient : IDisposable
     private readonly string installedVersion;
     private readonly ProbeGameEnvelopeCodec? gameCodec;
     private readonly string? sessionPath;
+    private readonly bool bilibili;
+    private readonly int subchannelId;
+    private readonly BilibiliPcDeviceMetadata? bilibiliDevice;
     internal bool SessionPersistenceEnabled => sessionPath != null;
     private bool initialized;
     private DateTimeOffset nextSmsUtc;
@@ -36,32 +41,49 @@ internal sealed class ProbeAuthenticationClient : IDisposable
     internal static readonly Uri OneLoginEndpoint = new("https://apidev.laohu.com/sdkapi/v2/user/login");
     internal static readonly Uri ChannelValidationEndpoint = new("https://user.laohu.com/openApi/sdkValidate");
     internal const string ChannelUserAgent = "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/534.30 (KHTML, like Gecko) Chrome/31.0.1650.57 Safari/534.30 AsiaArcClient/1.0";
+    private static readonly string[] FailureIndicators =
+        ["required", "invalid", "signature", "sign", "missing", "token", "userId", "uid", "osType", "timestamp",
+            "parameter", "appId", "format", "json", "decrypt", "expired", "channel", "device",
+            "unsupported", "not support", "unknown", "not found", "not exist", "disabled", "mismatch", "incorrect", "wrong",
+            "check", "verify", "validation", "auth", "params", "failed", "error", "illegal", "permission", "forbidden",
+            "签名", "参数", "解密", "过期", "渠道", "令牌", "设备", "校验", "无效", "不存在", "不支持", "配置"];
 
     internal ProbePreLoginClient CreatePreLoginClient(Nte.Login.NteSdkRegistration registration)
     {
         byte[] key = ProbePreLoginProtocol.KeyFromRegistration(registration);
-        try { return new(key, deviceId, installedVersion, observe, deviceProvider: () => deviceId); }
+        try { return new(key, deviceId, installedVersion, observe, deviceProvider: () => deviceId, channelId: ChannelId); }
         finally { CryptographicOperations.ZeroMemory(key); }
     }
 
     internal ProbeAuthenticationClient(JsonElement config, Action<object> observe, HttpClient? http = null, string? installedVersion = null,
-        ReadOnlySpan<byte> applicationKeyTail = default, string? sessionPath = null, string? savedDeviceId = null)
+        ReadOnlySpan<byte> applicationKeyTail = default, string? sessionPath = null, string? savedDeviceId = null,
+        bool bilibili = false, int? bilibiliSubchannelId = null, BilibiliPcDeviceMetadata? bilibiliDevice = null)
     {
-        configuration = JsonDocument.Parse(config.GetRawText());
         this.observe = observe;
         this.sessionPath = sessionPath;
+        this.bilibili = bilibili;
+        if (bilibili && sessionPath != null) throw new InvalidDataException("Bilibili identities cannot use CN session persistence.");
         if (savedDeviceId != null)
         {
             if (!Regex.IsMatch(savedDeviceId, @"\A[0-9a-f]{32}\z")) throw new InvalidDataException("Invalid saved device identifier.");
             deviceId = savedDeviceId;
         }
-        this.installedVersion = installedVersion ?? configuration.RootElement.GetProperty("meta").GetProperty("version").GetString()!;
+        JsonElement meta = config.GetProperty("meta");
+        this.installedVersion = installedVersion ?? meta.GetProperty("version").GetString()!;
         if (!Regex.IsMatch(this.installedVersion, @"\A[0-9]+(?:\.[0-9]+){1,3}\z")) throw new InvalidDataException("Unverified installed version.");
-        _ = ProbeAnonymousInit.BuildParameters(configuration.RootElement, DateTimeOffset.UtcNow, deviceId);
-        JsonElement meta = configuration.RootElement.GetProperty("meta");
         Platform = meta.GetProperty("platform").GetInt32();
         ChannelId = meta.GetProperty("channelId").GetInt32();
-        if (Platform != 4 || ChannelId != 9) throw new InvalidDataException("Unverified PC authentication channel.");
+        if (Platform != 4 || ChannelId != (bilibili ? 123 : 9)) throw new InvalidDataException("Unverified PC authentication channel.");
+        if (bilibiliSubchannelId != null && (!bilibili || bilibiliSubchannelId <= 0))
+            throw new InvalidDataException("Invalid Bilibili subchannel attribution.");
+        subchannelId = bilibiliSubchannelId ?? ChannelId;
+        if (bilibiliDevice != null && (!bilibili || !Regex.IsMatch(bilibiliDevice.SystemVersion, @"\A[0-9]+\.[0-9]+\z") ||
+            !IsSystemLabel(bilibiliDevice.SystemCaption) || !IsSystemLabel(bilibiliDevice.SystemName)))
+            throw new InvalidDataException("Invalid Bilibili PC system metadata.");
+        this.bilibiliDevice = bilibiliDevice;
+        if (bilibili) _ = ProbeAnonymousInit.BuildGameDevice(meta, deviceId);
+        else _ = ProbeAnonymousInit.BuildParameters(config, DateTimeOffset.UtcNow, deviceId);
+        configuration = JsonDocument.Parse(config.GetRawText());
         if (!applicationKeyTail.IsEmpty) gameCodec = new(applicationKeyTail);
         ownsHttp = http == null;
         this.http = http ?? new HttpClient(new HttpClientHandler
@@ -72,6 +94,7 @@ internal sealed class ProbeAuthenticationClient : IDisposable
 
     internal async Task InitializeAsync(CancellationToken token)
     {
+        RequireCnChannel();
         using AuthenticationResponse response = await RequestAsync("anonymous-init", ProbeAnonymousInit.Endpoint,
             Parameters(), false, token).ConfigureAwait(false);
         RequireSuccess(response.RootElement);
@@ -85,7 +108,7 @@ internal sealed class ProbeAuthenticationClient : IDisposable
     internal void PersistSession(ProbeIdentityEnvelope channel)
     {
         if (sessionPath == null) return;
-        if (channel.Stage != ProbeIdentityStage.Channel || !channel.IdentityAvailable || gameCodec == null)
+        if (channel.Stage != ProbeIdentityStage.Channel || !channel.IdentityAvailable || channel.IsBilibiliSdkIdentity || gameCodec == null)
             throw new ProbeAuthenticationException("session-save-unavailable", null);
         (byte[] uid, byte[] token) = channel.CopyIdentity(); byte[] key = gameCodec.CopyKey();
         try
@@ -172,11 +195,25 @@ internal sealed class ProbeAuthenticationClient : IDisposable
     internal async Task<ProbeIdentityEnvelope> ExchangeGameIdentityAsync(ProbeIdentityEnvelope channel, CancellationToken token)
     {
         RequireInitialized();
-        if (channel.Stage != ProbeIdentityStage.Channel || !channel.IdentityAvailable)
+        return await ExchangeAsync(channel, token).ConfigureAwait(false);
+    }
+
+    internal async Task<ProbeIdentityEnvelope> ExchangeBilibiliGameIdentityAsync(ProbeIdentityEnvelope channel, CancellationToken token)
+    {
+        if (!bilibili) throw new ProbeAuthenticationException("bilibili-channel-required", null);
+        return await ExchangeAsync(channel, token).ConfigureAwait(false);
+    }
+
+    private async Task<ProbeIdentityEnvelope> ExchangeAsync(ProbeIdentityEnvelope channel, CancellationToken token)
+    {
+        if (channel.Stage != ProbeIdentityStage.Channel || !channel.IdentityAvailable || channel.IsBilibiliSdkIdentity != bilibili)
             throw new ProbeAuthenticationException("channel-identity-unavailable", null);
+        token.ThrowIfCancellationRequested();
         SortedDictionary<string, string> values = BuildExchangeParameters(channel);
         using AuthenticationResponse response = await RequestAsync("game-login", OneLoginEndpoint, values, true, token).ConfigureAwait(false);
-        return ParseIdentity(ProbeIdentityStage.Game, response.RootElement);
+        ProbeIdentityEnvelope game = ParseIdentity(ProbeIdentityStage.Game, response.RootElement);
+        if (bilibili) game.MarkBilibiliGameExchange();
+        return game;
     }
 
     internal void RestoreDeviceContext(string savedDeviceId, int platform, int channelId)
@@ -190,6 +227,7 @@ internal sealed class ProbeAuthenticationClient : IDisposable
 
     internal async Task InitializeRestoredContextAsync(string savedDeviceId, int platform, int channelId, CancellationToken token)
     {
+        RequireCnChannel();
         // A failed saved-account initialization must not strand an already
         // initialized SMS session. Callers serialize attempts and await their
         // cancellation before starting a new one.
@@ -237,7 +275,9 @@ internal sealed class ProbeAuthenticationClient : IDisposable
 
     internal SortedDictionary<string, string> BuildChannelValidationParameters(ProbeIdentityEnvelope channel)
     {
-        if (channel.Stage != ProbeIdentityStage.Channel || !channel.IdentityAvailable) throw new InvalidDataException("Channel identity is required.");
+        RequireCnChannel();
+        if (channel.Stage != ProbeIdentityStage.Channel || !channel.IdentityAvailable || channel.IsBilibiliSdkIdentity)
+            throw new InvalidDataException("CN channel identity is required.");
         (byte[] uid, byte[] token) = channel.CopyIdentity();
         try
         {
@@ -251,6 +291,7 @@ internal sealed class ProbeAuthenticationClient : IDisposable
 
     internal SortedDictionary<string, string> BuildSmsLoginParameters(string phone, string captcha, string type)
     {
+        RequireCnChannel();
         ValidatePhone(phone);
         if (!Regex.IsMatch(captcha, @"\A[0-9]{4,8}\z") || type is not ("16" or "18"))
             throw new InvalidDataException("Invalid SMS authentication input.");
@@ -266,7 +307,8 @@ internal sealed class ProbeAuthenticationClient : IDisposable
 
     internal SortedDictionary<string, string> BuildExchangeParameters(ProbeIdentityEnvelope channel)
     {
-        if (channel.Stage != ProbeIdentityStage.Channel || !channel.IdentityAvailable) throw new InvalidDataException("Channel identity is required.");
+        if (channel.Stage != ProbeIdentityStage.Channel || !channel.IdentityAvailable || channel.IsBilibiliSdkIdentity != bilibili)
+            throw new InvalidDataException("Identity must match the configured authentication channel.");
         (byte[] uid, byte[] token) = channel.CopyIdentity();
         try
         {
@@ -277,26 +319,37 @@ internal sealed class ProbeAuthenticationClient : IDisposable
 
     private SortedDictionary<string, string> ExchangeFields(string uid, string token)
     {
-        SortedDictionary<string, string> device = ProbeAnonymousInit.BuildParameters(configuration.RootElement, DateTimeOffset.UtcNow, deviceId);
-        foreach (string field in new[] { "appId", "channelId", "t", "sign" }) device.Remove(field);
-        // NTEGame 0x3F4060 builds a compact JSON string with string-valued
-        // channelId/subchannelId. In this verified RCC mode, with no media
-        // attribution override, 0x3F4BA6 falls back to the same channel ID.
+        SortedDictionary<string, string> device = ProbeAnonymousInit.BuildGameDevice(configuration.RootElement.GetProperty("meta"), deviceId);
+        if (bilibiliDevice != null)
+        {
+            device["appVersion"] = installedVersion;
+            device["deviceSys"] = bilibiliDevice.SystemVersion;
+            device["deviceModel"] = bilibiliDevice.SystemCaption;
+            device["deviceType"] = bilibiliDevice.SystemName;
+        }
+        // The publisher uses the channel for authentication and includes
+        // launcher media attribution as a separate subchannel in extraJson.
         string channelId = ChannelId.ToString(CultureInfo.InvariantCulture);
         string extra = JsonSerializer.Serialize(new SortedDictionary<string, string>(StringComparer.Ordinal)
-            { ["channelId"] = channelId, ["subchannelId"] = channelId }, NteJsonContext.Default.SortedDictionaryStringString);
+            { ["channelId"] = channelId, ["subchannelId"] = subchannelId.ToString(CultureInfo.InvariantCulture) },
+            NteJsonContext.Default.SortedDictionaryStringString);
         // The fixed producer returns device as a QString containing JSON,
         // then inserts that string into the outer QVariantMap.
         return new(StringComparer.Ordinal)
         {
             ["appId"] = Nte.Login.NteRegionDefinition.CnAppId, ["channelId"] = channelId,
             ["channelUid"] = uid, ["channelToken"] = token, ["extraJson"] = extra,
-            ["platformId"] = Platform.ToString(CultureInfo.InvariantCulture), ["version"] = "2", ["device"] = JsonSerializer.Serialize(device, NteJsonContext.Default.SortedDictionaryStringString)
+            ["platformId"] = Platform.ToString(CultureInfo.InvariantCulture), ["version"] = bilibili ? "pc" : "2",
+            ["device"] = JsonSerializer.Serialize(device, NteJsonContext.Default.SortedDictionaryStringString)
         };
     }
 
+    private static bool IsSystemLabel(string value) =>
+        value.Length is > 0 and <= 128 && !string.IsNullOrWhiteSpace(value) && !value.Any(char.IsControl);
+
     internal async Task<object> InspectGameEnvelopeWithoutIdentityAsync(CancellationToken token)
     {
+        RequireCnChannel();
         SortedDictionary<string, string> values = ExchangeFields("", "");
         values.Remove("channelUid"); values.Remove("channelToken");
         try
@@ -408,10 +461,14 @@ internal sealed class ProbeAuthenticationClient : IDisposable
             using HttpRequestMessage request = new(queryParameters ? HttpMethod.Get : HttpMethod.Post, destination)
                 { Content = queryParameters ? null : content };
             request.Headers.Accept.ParseAdd("application/json");
-            // The fixed client's CURL transport sets this public header at
-            // RVA 0xC187C2 (CURLOPT_USERAGENT). Validate the same wire context.
-            if (endpoint == ChannelValidationEndpoint) request.Headers.UserAgent.ParseAdd(ChannelUserAgent);
-            if (oneLogin) request.Headers.Add("appId", Nte.Login.NteRegionDefinition.CnAppId);
+            if (oneLogin || endpoint == ChannelValidationEndpoint)
+                request.Headers.UserAgent.ParseAdd(ChannelUserAgent);
+            if (oneLogin)
+            {
+                request.Headers.Add("appId", Nte.Login.NteRegionDefinition.CnAppId);
+                // The official transport sends the complete encrypted POST body immediately.
+                request.Headers.ExpectContinue = false;
+            }
             using HttpResponseMessage response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
             status = (int)response.StatusCode;
             if (response.Content.Headers.ContentLength > 1024 * 1024) throw new InvalidDataException("Authentication response size bound.");
@@ -431,7 +488,7 @@ internal sealed class ProbeAuthenticationClient : IDisposable
             if (!response.IsSuccessStatusCode)
             {
                 string diagnosticText = Encoding.UTF8.GetString(body);
-                failureIndicators = new[] { "required", "invalid", "signature", "sign", "missing", "token", "userId", "uid", "osType", "timestamp", "parameter", "appId", "format", "json", "decrypt", "签名", "参数", "解密", "过期" }
+                failureIndicators = FailureIndicators
                     .Where(word => diagnosticText.Contains(word, StringComparison.OrdinalIgnoreCase)).ToArray();
                 // Keep only a numeric API code and a known required field name.
                 // Error text can echo an account or credential: never log it.
@@ -463,9 +520,23 @@ internal sealed class ProbeAuthenticationClient : IDisposable
                 CryptographicOperations.ZeroMemory(body); body = decoded;
             }
             JsonDocument document = JsonDocument.Parse(body, new JsonDocumentOptions { MaxDepth = 32 });
+            bool oneLoginIdentityFieldsPresent = oneLogin && document.RootElement.ValueKind == JsonValueKind.Object &&
+                document.RootElement.TryGetProperty("uid", out _) && document.RootElement.TryGetProperty("token", out _);
             if (document.RootElement.ValueKind == JsonValueKind.Object && document.RootElement.TryGetProperty("code", out JsonElement value) &&
                 value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out int number)) code = number;
-            observe(new { stage, httpStatus = status, serverCode = code, responseParsed = true });
+            if (code is int rejected && rejected != 0)
+            {
+                // The service may echo input even in an HTTP 200 response.
+                // Trace a fixed vocabulary and never the response message.
+                string[] messages = new[] { "message", "msg", "error" }
+                    .Where(field => document.RootElement.TryGetProperty(field, out JsonElement value) &&
+                        value.ValueKind == JsonValueKind.String)
+                    .Select(field => document.RootElement.GetProperty(field).GetString() ?? "").ToArray();
+                failureIndicators = FailureIndicators.Where(word =>
+                    messages.Any(message => message.Contains(word, StringComparison.OrdinalIgnoreCase))).ToArray();
+            }
+            observe(new { stage, httpStatus = status, serverCode = code, responseParsed = true, failureIndicators,
+                oneLoginIdentityFieldsPresent });
             AuthenticationResponse result = new(document, body);
             body = []; // Transfer ownership; JsonDocument still reads this memory.
             return result;
@@ -498,7 +569,16 @@ internal sealed class ProbeAuthenticationClient : IDisposable
         finally { CryptographicOperations.ZeroMemory(bytes); }
     }
 
-    private void RequireInitialized() { if (!initialized) throw new ProbeAuthenticationException("not-initialized", null); }
+    private void RequireCnChannel()
+    {
+        if (bilibili) throw new ProbeAuthenticationException("cn-channel-required", null);
+    }
+
+    private void RequireInitialized()
+    {
+        RequireCnChannel();
+        if (!initialized) throw new ProbeAuthenticationException("not-initialized", null);
+    }
     private static void ValidatePhone(string phone)
     {
         if (!Regex.IsMatch(phone, @"\A1[0-9]{10}\z")) throw new ProbeAuthenticationException("invalid-mainland-phone", null);

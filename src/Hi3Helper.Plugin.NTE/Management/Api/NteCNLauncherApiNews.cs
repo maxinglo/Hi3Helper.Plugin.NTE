@@ -42,7 +42,7 @@ internal partial class NteCNLauncherApiNews : LauncherApiNewsBase
         new PluginHttpClientBuilder().AllowRedirections().Create(),
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "CollapseLauncher", "Plugins", "NTE",
-            region.IsOverseas ? region.StorageName + "/Media/icons" : "Media/icons"), region)
+            region.StorageName, "Media", "icons"), region)
     {
     }
 

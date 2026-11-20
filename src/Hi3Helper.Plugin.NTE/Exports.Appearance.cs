@@ -17,7 +17,7 @@ public partial class Exports
         if (presetConfig is not NteCNPresetConfig nte) return null;
         GameSettingsPage appearance = nte.Appearance.GetPage();
         List<GameSettingsSection> sections = [nte.LaunchSettings.GetSection()];
-        sections.Add(nte.LoginSettings.GetSection());
+        if (nte.LoginSettings is { } loginSettings) sections.Add(loginSettings.GetSection());
         if (nte.Region.IsOverseas) sections.Add(nte.ServerSettings.GetSection());
         sections.AddRange(appearance.Sections);
         return new(sections) { Title = NteResourceProvider.GetString("GameSettingsTitle") };
@@ -30,7 +30,7 @@ public partial class Exports
             if (key == NteServerSettings.TargetKey && nte.Region.IsOverseas) nte.ServerSettings.SetTarget(value);
             else if (key == NteLaunchSettings.GraphicsKey) nte.LaunchSettings.SetValue(value);
             else if (key == NteLaunchSettings.OfficialLauncherKey) nte.LaunchSettings.SetOfficialLauncher(bool.Parse(value));
-            else if (key == NteLoginSettings.HelloKey) nte.LoginSettings.SetHello(bool.Parse(value));
+            else if (key == NteLoginSettings.HelloKey) nte.LoginSettings?.SetHello(bool.Parse(value));
             else nte.Appearance.SetValue(key, value);
         }
     }
@@ -41,7 +41,7 @@ public partial class Exports
         {
             nte.Appearance.Apply();
             nte.LaunchSettings.Apply();
-            nte.LoginSettings.Apply();
+            nte.LoginSettings?.Apply();
             if (nte.Region.IsOverseas)
             {
                 string? selected = null;

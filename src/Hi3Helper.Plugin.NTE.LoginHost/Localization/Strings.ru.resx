@@ -594,4 +594,64 @@ Download: {3} files ({4:F3} GB)</value></data>
   <data name="CnFilesMissing" xml:space="preserve"><value>Отсутствуют файлы игры, необходимые для входа. Проверьте или восстановите игру.</value></data>
   <data name="CnClientRunning" xml:space="preserve"><value>Игра или официальный лаунчер ещё запущены. Закройте их и повторите попытку.</value></data>
   <data name="CnLoginHostRunning" xml:space="preserve"><value>Компонент входа уже запущен. Вернитесь в его окно или закройте его и повторите попытку.</value></data>
+  <data name="BilibiliSdkMissing" xml:space="preserve">
+    <value>Отсутствуют компоненты входа Bilibili. Восстановите игру или обновите официальный лаунчер в её папке.</value>
+  </data>
+  <data name="BilibiliSdkUnsupported" xml:space="preserve">
+    <value>Эта версия SDK Bilibili пока не поддерживается. Войдите через официальный лаунчер.</value>
+  </data>
+  <data name="BilibiliSdkInitFailed" xml:space="preserve">
+    <value>Не удалось запустить вход через Bilibili. Восстановите игру или воспользуйтесь официальным лаунчером.</value>
+  </data>
+  <data name="BilibiliSdkLoginFailed" xml:space="preserve">
+    <value>Вход через Bilibili не завершён. Попробуйте снова из игры.</value>
+  </data>
+  <data name="BilibiliSdkTimedOut" xml:space="preserve">
+    <value>Время ожидания входа через Bilibili истекло. Выйдите из игры и повторите попытку.</value>
+  </data>
+  <data name="BilibiliServiceLoginFailed" xml:space="preserve">
+    <value>Игровая служба отклонила вход через Bilibili. Повторите попытку или воспользуйтесь официальным лаунчером.</value>
+  </data>
+  <data name="NoticeBilibiliData" xml:space="preserve">
+    <value>Войдите в официальном окне Bilibili. Плагин использует полученные идентификатор учётной записи и токен только в текущем сеансе игры.</value>
+  </data>
+  <data name="NoticeBilibiliStorage" xml:space="preserve">
+    <value>Плагин сохраняет подтверждение этого уведомления. Официальный SDK Bilibili управляет журналом входа и локальными данными.</value>
+  </data>
+  <data name="NoticeBilibiliNetwork" xml:space="preserve">
+    <value>SDK Bilibili связывается с Bilibili. Для входа и проверок плагин передаёт издателю игры идентификатор учётной записи, токен и необходимые сведения об устройстве по HTTPS.</value>
+  </data>
+  <data name="NoticeBilibiliTitle" xml:space="preserve">
+    <value>Вход на сервер Bilibili</value>
+  </data>
+  <data name="NoticeBilibiliPurposeTitle" xml:space="preserve">
+    <value>Как выполняется вход</value>
+  </data>
+  <data name="NoticeBilibiliPurpose" xml:space="preserve">
+    <value>По запросу игры плагин открывает официальный SDK Bilibili из папки с игрой. После входа плагин передаёт результат издателю и сообщает игре о входе, когда проверки пройдены.</value>
+  </data>
+  <data name="NoticeBilibiliDataTitle" xml:space="preserve">
+    <value>Использование данных аккаунта</value>
+  </data>
+  <data name="NoticeBilibiliNetworkTitle" xml:space="preserve">
+    <value>Проверки издателя</value>
+  </data>
+  <data name="NoticeBilibiliStorageTitle" xml:space="preserve">
+    <value>Локальное хранение</value>
+  </data>
+  <data name="NoticeBilibiliRiskTitle" xml:space="preserve">
+    <value>Совместимость и риски для аккаунта</value>
+  </data>
+  <data name="NoticeBilibiliRisk" xml:space="preserve">
+    <value>Независимый запуск использует сторонний плагин. На него могут влиять обновления лаунчера, условия сервиса и ограничения аккаунта. В настройках запуска игры можно включить официальный лаунчер.</value>
+  </data>
+  <data name="NoticeBilibiliChoiceTitle" xml:space="preserve">
+    <value>Официальный лаунчер</value>
+  </data>
+  <data name="NoticeBilibiliChoice" xml:space="preserve">
+    <value>Включите официальный лаунчер в настройках запуска игры. Он запускается в фоне из выбранной папки Bilibili и при необходимости показывает окна входа, проверки или обновления.</value>
+  </data>
+  <data name="BilibiliOfficialLauncherConfirm" xml:space="preserve">
+    <value>Использовать официальный лаунчер Bilibili при следующем запуске и закрыть текущую игру? Лаунчер должен находиться в папке NTELauncher этой установки.</value>
+  </data>
 </root>

@@ -63,8 +63,29 @@ try {
         New-Item -ItemType Directory -Force -Path $packageDirectory | Out-Null
         $effectiveVersion = if ($Version) { $Version } else { ([xml](Get-Content -LiteralPath $project -Raw)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1 }
         $packageName = 'NTE_{0}_{1}' -f $effectiveVersion, $effectiveOutputName
-        & $indexer $outputDirectory
-        if ($LASTEXITCODE -ne 0) { throw "Indexing failed ($LASTEXITCODE)." }
+        # Indexer 1.3 reads plugin metadata correctly but flattens nested asset
+        # paths. Give it only the entry point, then index the actual bundle.
+        $indexDirectory = [IO.Directory]::CreateTempSubdirectory('nte-index-').FullName
+        try {
+            Copy-Item -LiteralPath (Join-Path $outputDirectory 'NTE.dll') -Destination $indexDirectory
+            & $indexer $indexDirectory
+            if ($LASTEXITCODE -ne 0) { throw "Indexing failed ($LASTEXITCODE)." }
+            $manifest = Get-Content -LiteralPath (Join-Path $indexDirectory 'manifest.json') -Raw | ConvertFrom-Json
+        } finally {
+            Get-ChildItem -LiteralPath $indexDirectory -File | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force }
+            [IO.Directory]::Delete($indexDirectory)
+        }
+        $manifest.Assets = @(
+            Get-ChildItem -LiteralPath $outputDirectory -Recurse -File | Sort-Object FullName | ForEach-Object {
+                [ordered]@{
+                    FilePath = [IO.Path]::GetRelativePath($outputDirectory, $_.FullName)
+                    Size = $_.Length
+                    FileHash = [Convert]::ToBase64String([Convert]::FromHexString(
+                        (Get-FileHash -LiteralPath $_.FullName -Algorithm MD5).Hash))
+                }
+            }
+        )
+        $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $outputDirectory 'manifest.json') -Encoding utf8NoBOM
         # Preserve manifest path separators in ZIP entry names: the Collapse
         # importer compares FullName to manifest FilePath without normalization.
         & (Join-Path $PSScriptRoot 'New-NteImportPackage.ps1') -PublishDirectory $outputDirectory -ArchivePath (Join-Path $packageDirectory "$packageName.zip") | Out-Host
