@@ -18,20 +18,45 @@ on:
           - ReleaseNoReflectionPublish-O1
           - ReleaseNoReflectionPublish-O2
       mirror_existing_release:
-        description: Repair the OSS mirror from an existing formal GitHub Release
+        description: Repair the OSS mirror from an existing formal GitHub Release (stable only)
         type: boolean
         default: false
+
+  repository_dispatch:
+    types: [nte-stable-oss-mirror]
 
 permissions:
   contents: read
 
 concurrency:
-  group: nte-release
+  group: nte-release-${{ github.event_name }}
   cancel-in-progress: false
 
 jobs:
+  validate:
+    name: Validate the release branch
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+      MIRROR_EXISTING_RELEASE: ${{ inputs.mirror_existing_release }}
+    steps:
+      - name: Check dispatch options
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -cnotin @('refs/heads/stable', 'refs/heads/preview')) {
+            throw 'Run this workflow on stable for a formal release or preview for a prerelease.'
+          }
+          if ($env:MIRROR_EXISTING_RELEASE -eq 'true' -and $env:GITHUB_REF -cne 'refs/heads/stable') {
+            throw 'Repairing the OSS mirror is only supported on stable.'
+          }
+          if ($env:RELEASE_VERSION -notmatch '\A[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?\z') {
+            throw 'Version must contain three or four numeric components.'
+          }
+
   release:
-    if: "!inputs.mirror_existing_release"
+    needs: validate
+    if: "${{ !inputs.mirror_existing_release }}"
     runs-on: windows-latest
     permissions:
       contents: write
@@ -54,12 +79,22 @@ jobs:
       - name: Publish, verify native ABI and package
         shell: pwsh
         run: ./scripts/Publish.ps1 -Profile $env:PUBLISH_PROFILE -Version $env:RELEASE_VERSION -Package
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: artifacts/packages/NTE_${{ inputs.version }}_${{ inputs.publish_profile }}.zip
+          archive: false
+          if-no-files-found: error
       - name: Publish the GitHub Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = "v$env:RELEASE_VERSION"
+          $releaseFlag = '--latest'
+          if ($env:GITHUB_REF -ceq 'refs/heads/preview') {
+            $tag += '-preview'
+            $releaseFlag = '--prerelease'
+          }
           git show-ref --verify --quiet "refs/tags/$tag"
           if ($LASTEXITCODE -eq 0) {
             $tagCommit = git rev-parse "refs/tags/$tag^{}"
@@ -71,11 +106,12 @@ jobs:
           }
           $packageName = "NTE_${env:RELEASE_VERSION}_${env:PUBLISH_PROFILE}"
           $package = "artifacts/packages/$packageName.zip"
-          gh release create $tag $package --target $env:GITHUB_SHA --title "NTE Plugin $tag" --generate-notes --latest
+          gh release create $tag $package --target $env:GITHUB_SHA --title "NTE Plugin $tag" --generate-notes $releaseFlag
           if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publication failed.' }
 
   update-feed:
     name: Publish the GitHub auto-update feed
+    if: github.ref == 'refs/heads/stable'
     needs: release
     runs-on: windows-latest
     permissions:
@@ -101,20 +137,46 @@ jobs:
           ./scripts/New-NteUpdateAssets.ps1 -PublishDirectory $extracted -UpdateDirectory artifacts/update-feed
           ./scripts/Publish-GitHubUpdateFeed.ps1 -Repository $env:GITHUB_REPOSITORY -UpdateDirectory artifacts/update-feed -Version $env:RELEASE_VERSION -Commit $env:GITHUB_SHA
 
+  request-mirror:
+    name: Request the stable OSS mirror
+    if: >-
+      ${{ !cancelled() && github.event_name == 'workflow_dispatch' &&
+          github.ref == 'refs/heads/stable' && needs.validate.result == 'success' &&
+          (needs.update-feed.result == 'success' ||
+           (inputs.mirror_existing_release && needs.update-feed.result == 'skipped')) }}
+    needs: [validate, update-feed]
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_VERSION: ${{ inputs.version }}
+      PUBLISH_PROFILE: ${{ inputs.publish_profile }}
+    steps:
+      - name: Dispatch the mirror on the default branch
+        shell: pwsh
+        run: |
+          # The Alibaba Cloud OIDC role trusts this repository's main branch.
+          $request = @{
+            event_type = 'nte-stable-oss-mirror'
+            client_payload = @{
+              version = $env:RELEASE_VERSION
+              publish_profile = $env:PUBLISH_PROFILE
+            }
+          } | ConvertTo-Json -Compress
+          $request | gh api --method POST "repos/$env:GITHUB_REPOSITORY/dispatches" --input -
+          if ($LASTEXITCODE -ne 0) { throw 'Could not dispatch the OSS mirror.' }
+
   mirror:
     name: Mirror the installer and auto-update feed to OSS via ESA
-    if: >-
-      ${{ !cancelled() && github.ref == 'refs/heads/main' &&
-          (needs.release.result == 'success' ||
-           (inputs.mirror_existing_release && needs.release.result == 'skipped')) }}
-    needs: release
+    if: github.event_name == 'repository_dispatch' && github.ref == 'refs/heads/main'
     runs-on: windows-latest
     permissions:
       contents: read
       id-token: write
     env:
-      RELEASE_VERSION: ${{ inputs.version }}
-      PUBLISH_PROFILE: ${{ inputs.publish_profile }}
+      RELEASE_VERSION: ${{ github.event.client_payload.version }}
+      PUBLISH_PROFILE: ${{ github.event.client_payload.publish_profile }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -125,7 +187,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          if ($env:RELEASE_VERSION -notmatch '\A[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?\z') {
+            throw 'Version must contain three or four numeric components.'
+          }
+          if ($env:PUBLISH_PROFILE -cnotin @(
+            'ReleasePublish-O1', 'ReleasePublish-O2',
+            'ReleaseNoReflectionPublish-O1', 'ReleaseNoReflectionPublish-O2')) {
+            throw 'An official publish profile is required.'
+          }
           $tag = "v$env:RELEASE_VERSION"
+          git merge-base --is-ancestor "refs/tags/$tag" refs/remotes/origin/stable
+          if ($LASTEXITCODE -ne 0) { throw "Git tag $tag must point to a commit in stable history." }
           $packageName = "NTE_${env:RELEASE_VERSION}_${env:PUBLISH_PROFILE}.zip"
           $release = gh release view $tag --json isDraft,isPrerelease,assets
           if ($LASTEXITCODE -ne 0) { throw 'Could not verify the formal GitHub Release.' }

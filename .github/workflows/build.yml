@@ -2,9 +2,9 @@ name: Build and Package NTE Plugin
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, preview, stable ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, preview, stable ]
   workflow_dispatch:
 
 permissions:
